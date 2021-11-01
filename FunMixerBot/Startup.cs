@@ -1,0 +1,82 @@
+﻿using System;
+using System.Threading;
+using System.Threading.Tasks;
+using Database;
+using Discord;
+using Discord.Commands;
+using Discord.WebSocket;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Services;
+
+namespace Core
+{
+    public class Startup
+    {
+        private const string ConfigPath = @"data\config.json";
+
+        public IConfiguration Configuration { get; }
+
+
+        public Startup(string[] args)
+        {
+            var builder = new ConfigurationBuilder()
+                .SetBasePath(AppContext.BaseDirectory)
+                .AddJsonFile(ConfigPath, false, true);
+
+            Configuration = builder.Build();
+        }
+
+
+        public async Task RunAsync()
+        {
+            var services = new ServiceCollection();
+            ConfigureServices(services);
+
+            var provider = services.BuildServiceProvider();
+            provider.GetRequiredService<LoggingService>();
+            provider.GetRequiredService<CommandHandler>();
+
+            await provider.GetRequiredService<SetupService>().ConfigureAsync();
+
+            await Task.Delay(Timeout.Infinite);
+        }
+
+
+        private void ConfigureServices(IServiceCollection services)
+        {
+            services.AddDbContext<BotContext>(options =>
+               options.UseSqlServer(Configuration.GetConnectionString("DefaultSQLServer")));
+
+            services.AddSingleton(new DiscordSocketClient(new DiscordSocketConfig
+            {
+                LogLevel = LogSeverity.Verbose,
+                MessageCacheSize = 1000,
+                ExclusiveBulkDelete = true,
+                GatewayIntents =
+                  GatewayIntents.Guilds
+                | GatewayIntents.GuildBans
+                | GatewayIntents.GuildEmojis
+                | GatewayIntents.GuildMembers
+                | GatewayIntents.GuildMessages
+                | GatewayIntents.GuildPresences
+                | GatewayIntents.GuildVoiceStates
+                | GatewayIntents.GuildMessageReactions
+                | GatewayIntents.DirectMessageReactions
+            }))
+            .AddSingleton(new CommandService(new CommandServiceConfig
+            {
+                LogLevel = LogSeverity.Verbose,
+                DefaultRunMode = RunMode.Async,
+                CaseSensitiveCommands = false,
+                SeparatorChar = '.'
+            }))
+            .AddSingleton<CommandHandler>()
+            .AddSingleton<SetupService>()
+            .AddSingleton<LoggingService>()
+            .AddSingleton<Random>()
+            .AddSingleton(Configuration);
+        }
+    }
+}
