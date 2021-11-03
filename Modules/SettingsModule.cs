@@ -25,7 +25,7 @@ namespace Modules
 
         [Command("префикс")]
         [Alias("prefix")]
-        public async Task UpdatePrefixAsync(string newPrefix)
+        public async Task UpdatePrefixAsync(string? newPrefix)
         {
             if (string.IsNullOrWhiteSpace(newPrefix))
             {

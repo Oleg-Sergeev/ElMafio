@@ -1,6 +1,6 @@
 ﻿namespace Database.Data.Models
 {
-    public abstract class GameStats
+    public abstract class GameStats : IResetableStat
     {
         public int GamesCount { get; set; }
         public int WinsCount { get; set; }
@@ -12,9 +12,16 @@
         }
 
         public ulong UserId { get; set; }
-        public User User { get; set; }
+        public User User { get; set; } = null!;
 
         public ulong GuildId { get; set; }
-        public GuildSettings Guild { get; set; }
+        public GuildSettings Guild { get; set; } = null!;
+
+
+        public virtual void Reset()
+        {
+            GamesCount = 0;
+            WinsCount = 0;
+        }
     }
 }

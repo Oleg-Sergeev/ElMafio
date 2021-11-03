@@ -37,5 +37,20 @@
             get => (WinRate + MurderRating + DoctorRating + CommissionerRating) / 4;
             private set { }
         }
+
+
+        public override void Reset()
+        {
+            base.Reset();
+
+            MurderGamesCount = 0;
+            MurderWinsCount = 0;
+
+            DoctorMovesCount = 0;
+            DoctorSuccessfullMovesCount = 0;
+
+            CommissionerMovesCount = 0;
+            CommissionerSuccessfullMovesCount = 0;
+        }
     }
 }

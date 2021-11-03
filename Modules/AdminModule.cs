@@ -33,7 +33,9 @@ namespace Modules
         {
             if (Context.Channel is not ITextChannel textChannel) return;
 
+
             secs = Math.Clamp(secs, 0, 300);
+
 
             await textChannel.ModifyAsync(props => props.SlowModeInterval = secs);
 
@@ -51,11 +53,13 @@ namespace Modules
         {
             if (Context.Channel is not ITextChannel textChannel) return;
 
+
             count = Math.Clamp(count, 0, 100);
 
             var messagesToDelete = await textChannel.GetMessagesAsync(count + 1).FlattenAsync();
 
             await textChannel.DeleteMessagesAsync(messagesToDelete);
+
 
             var msg = await textChannel.SendMessageAsync("Сообщения успешно удалены");
 
@@ -71,7 +75,7 @@ namespace Modules
         [Summary("Забанить указанного пользователя")]
         [RequireBotPermission(GuildPermission.BanMembers)]
         [RequireUserPermission(GuildPermission.BanMembers)]
-        public async Task BanAsync(IGuildUser guildUser, int pruneDays = 0, [Remainder] string reason = "")
+        public async Task BanAsync(IGuildUser guildUser, int pruneDays = 0, [Remainder] string? reason = null)
         {
             await Context.Guild.AddBanAsync(guildUser, pruneDays, reason);
 
@@ -85,7 +89,7 @@ namespace Modules
         [Summary("Разбанить указанного пользователя")]
         [RequireBotPermission(GuildPermission.BanMembers)]
         [RequireUserPermission(GuildPermission.BanMembers)]
-        public async Task UnbanAsync(string? str = null)
+        public async Task UnbanAsync(string? str)
         {
             if (string.IsNullOrWhiteSpace(str))
             {
@@ -128,7 +132,7 @@ namespace Modules
         [Summary("Выгнать указанного пользователя")]
         [RequireBotPermission(GuildPermission.KickMembers)]
         [RequireUserPermission(GuildPermission.KickMembers)]
-        public async Task KickAsync(IGuildUser guildUser, [Remainder] string reason = "")
+        public async Task KickAsync(IGuildUser guildUser, [Remainder] string? reason)
         {
             await guildUser.KickAsync(reason);
 

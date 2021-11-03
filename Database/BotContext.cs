@@ -5,10 +5,10 @@ namespace Database
 {
     public class BotContext : DbContext
     {
-        public DbSet<User> Users { get; set; }
-        public DbSet<GuildSettings> GuildSettings { get; set; }
-        public DbSet<MafiaStats> MafiaStats { get; set; }
-        public DbSet<RussianRouletteStats> RussianRouletteStats { get; set; }
+        public DbSet<User> Users => Set<User>();
+        public DbSet<GuildSettings> GuildSettings => Set<GuildSettings>();
+        public DbSet<MafiaStats> MafiaStats => Set<MafiaStats>();
+        public DbSet<RussianRouletteStats> RussianRouletteStats => Set<RussianRouletteStats>();
 
 
         public BotContext(DbContextOptions<BotContext> options) : base(options)

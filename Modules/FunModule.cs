@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Threading.Tasks;
 using Discord;
 using Discord.Commands;
@@ -46,7 +47,7 @@ namespace Modules
 
 
         [Command("данет")]
-        public async Task SayYesOrNo([Remainder] string _)
+        public async Task SayYesOrNo()
         {
             bool answer = _random.Next(2) > 0;
 
@@ -56,7 +57,7 @@ namespace Modules
 
 
         [Command("кто")]
-        public async Task SayWhoIs([Remainder] string message)
+        public async Task SayWhoIs([Remainder] string? message = null)
         {
             int num = _random.Next(0, Context.Guild.Users.Count);
 
@@ -68,7 +69,7 @@ namespace Modules
 
         [Command("Голосование")]
         [Alias("голос", "гс")]
-        private async Task MakeVotingAsync([Remainder] string text)
+        public async Task MakeVotingAsync([Remainder] string text)
         {
             var content = text.Split("|");
 
@@ -102,9 +103,8 @@ namespace Modules
             await response.AddReactionsAsync(emotes.ToArray());
         }
 
-        [Command("Смайлы")]
-        [Alias("буквы")]
-        private async void TransferToLetterSmiles([Remainder] string text)
+        [Command("буквы")]
+        public async Task TransferToLetterSmilesAsync([Remainder] string text)
         {
             var letters = "";
 
@@ -116,7 +116,87 @@ namespace Modules
                 letters += '\u202F';
             }
 
-            if (!string.IsNullOrWhiteSpace(letters)) await ReplyAsync(letters);
+            if (!string.IsNullOrWhiteSpace(letters)) await ReplyAsync(letters, messageReference: Context.Message.Reference);
+        }
+
+        [Command("эхобуквы")]
+        public async Task TransferToLetterSmilesAsyncAndEcho([Remainder] string text)
+        {
+            await TransferToLetterSmilesAsync(text);
+
+            await Context.Message.DeleteAsync();
+        }
+
+
+        [Command("аватар")]
+        public async Task GetAvatarAsync()
+            => await GetAvatarAsync(Context.User);
+
+        [Command("аватар")]
+        public async Task GetAvatarAsync(IUser user)
+        {
+            //if (!await HasBotChannelPermAsync(message, ChannelPermission.AttachFiles, "Эта команда требует разрешения <AttachFiles>")) return;
+
+            var request = user.GetAvatarUrl(size: 2048);
+
+            var resp = await new HttpClient().GetAsync(request);
+            var stream = await resp.Content.ReadAsStreamAsync();
+
+            if (resp is null)
+            {
+                await ReplyAsync("Не удалось загрузить аватар");
+
+                return;
+            }
+
+            var avatarExtension = resp.Content.Headers.ContentType!.MediaType!.Split('/')[1];
+
+            await Context.Channel.SendFileAsync(stream, $"avatar.{avatarExtension}");
+        }
+
+
+        [Command("смайл")]
+        public async Task GetSmileAsync(string emoteId)
+        {
+            //if (!await HasBotChannelPermAsync(message, ChannelPermission.AttachFiles, "Эта команда требует разрешения <AttachFiles>")) return;
+
+            if (Emote.TryParse(emoteId, out var emote))
+            {
+                var resp = await new HttpClient().GetAsync($"https://cdn.discordapp.com/emojis/{emote.Id}.png");
+
+                if (resp is not null && resp.IsSuccessStatusCode)
+                {
+                    var stream = await resp.Content.ReadAsStreamAsync();
+
+                    var smileExtension = resp.Content.Headers.ContentType!.MediaType!.Split('/')[1];
+
+                    await Context.Channel.SendFileAsync(stream, $"smile.{smileExtension}");
+
+                    return;
+                }
+            }
+
+            await ReplyAsync("Не удалось распознать пользовательский смайлик");
+        }
+
+
+        [Command("смайлайди")]
+        public async Task GetSmileByIdAsync(ulong smileId)
+        {
+            var resp = await new HttpClient().GetAsync($"https://cdn.discordapp.com/emojis/{smileId}.png");
+
+            if (resp.IsSuccessStatusCode)
+            {
+                var stream = await resp.Content.ReadAsStreamAsync();
+
+                var smileExtension = resp.Content.Headers.ContentType!.MediaType!.Split('/')[1];
+
+                await Context.Channel.SendFileAsync(stream, $"smile.{smileExtension}");
+
+                return;
+            }
+
+            await ReplyAsync("Не удалось распознать пользовательский смайлик");
         }
 
     }

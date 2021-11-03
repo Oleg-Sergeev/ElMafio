@@ -14,7 +14,7 @@ namespace Core
 {
     public class Startup
     {
-        private const string ConfigPath = @"data\config.json";
+        private const string ConfigPath = @"Data\Configs\DefaultConfig.json";
 
         public IConfiguration Configuration { get; }
 
@@ -35,7 +35,7 @@ namespace Core
             ConfigureServices(services);
 
             var provider = services.BuildServiceProvider();
-            provider.GetRequiredService<LoggingService>();
+            provider.GetRequiredService<LoggingService>().Configure();
             provider.GetRequiredService<CommandHandler>();
 
             await provider.GetRequiredService<SetupService>().ConfigureAsync();
@@ -70,6 +70,7 @@ namespace Core
                 LogLevel = LogSeverity.Verbose,
                 DefaultRunMode = RunMode.Async,
                 CaseSensitiveCommands = false,
+                IgnoreExtraArgs = true,
                 SeparatorChar = '.'
             }))
             .AddSingleton<CommandHandler>()

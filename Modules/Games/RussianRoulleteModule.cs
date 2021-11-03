@@ -15,11 +15,8 @@ namespace Modules.Games
     [Alias("р")]
     public class RussianRoulleteModule : GameModule
     {
-        private readonly BotContext _db;
-
-        public RussianRoulleteModule(Random random, BotContext db) : base(random)
+        public RussianRoulleteModule(Random random, BotContext db) : base(random, db)
         {
-            _db = db;
         }
 
 
@@ -27,13 +24,18 @@ namespace Modules.Games
             => new("Русская рулетка", 2, creator);
 
 
+        public override async Task ResetStatAsync(IGuildUser guildUser)
+            => await ResetStatAsync<RussianRouletteStats>(guildUser);
+
+
+
         public override async Task StartAsync()
         {
             GameData = GetGameData();
 
-            if (!CanStart())
+            if (!CanStart(out var msg))
             {
-                await ReplyAsync("Невозможно начать игру");
+                await ReplyAsync(msg);
 
                 return;
             }
@@ -59,7 +61,7 @@ namespace Modules.Games
                 await ReplyAsync($"И абсолютным чемпионом русской рулетки становится {winner.Mention}! Поздравляем!");
 
 
-                var delay = Task.Delay(2000);
+                var delay = Task.Delay(1000);
 
                 await AddNewUsersAsync(playersId);
 
@@ -105,7 +107,8 @@ namespace Modules.Games
         {
             var allStats = await _db.RussianRouletteStats
                 .AsNoTracking()
-                .OrderByDescending(stat => (float)stat.WinsCount / stat.GamesCount)
+                .Where(s => s.GuildId == Context.Guild.Id)
+                .OrderByDescending(stat => stat.WinRate)
                 .ThenByDescending(stat => stat.WinsCount)
                 .Include(stat => stat.User)
                 .ToListAsync();
@@ -249,35 +252,6 @@ namespace Modules.Games
 
             winnerStat.WinsCount++;
 
-
-            await _db.SaveChangesAsync();
-        }
-
-
-        // To GameStats
-        private async Task AddNewUsersAsync(HashSet<ulong> playersId)
-        {
-            var existingPlayersId = await _db.Users
-                .AsNoTracking()
-                .Where(u => playersId.Contains(u.Id))
-                .Select(u => u.Id)
-                .ToListAsync();
-
-            if (existingPlayersId.Count == playersId.Count) return;
-
-
-            var newPlayersId = playersId.Except(existingPlayersId);
-
-            var newUsers = GameData!.Players
-                .Where(u => newPlayersId.Contains(u.Id))
-                .Select(u => new User
-                {
-                    Id = u.Id,
-                    JoinedAt = u.JoinedAt!.Value.DateTime
-                })
-                .ToList();
-
-            await _db.Users.AddRangeAsync(newUsers);
 
             await _db.SaveChangesAsync();
         }

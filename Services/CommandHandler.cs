@@ -9,11 +9,14 @@ using Discord.WebSocket;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Modules;
+using Serilog;
 
 namespace Services
 {
     public class CommandHandler
     {
+        private const string PrefixSectionPath = "DefaultSettings:Guild:Prefix";
+
         private static readonly Dictionary<ulong, string> _prefixes = new();
 
         private readonly BotContext _db;
@@ -36,48 +39,16 @@ namespace Services
             _client.MessageReceived += OnMessageReceivedAsync;
             _client.JoinedGuild += OnJoinedGuildAsync;
 
+
             SettingsModule.PrefixUpdated += OnPrefixUpdated;
         }
 
 
         private async Task OnReadyAsync()
         {
-            var guildsCount = await _db.GuildSettings
-                .AsNoTracking()
-                .CountAsync();
+            var loadGuildSettingsTask = LoadGuildSettingsAsync();
 
-            var existingGuildsSettings = await _db.GuildSettings
-                .AsNoTracking()
-                .Select(g => new { g.Id, g.Prefix })
-                .ToListAsync();
-
-
-            foreach (var guildSettings in existingGuildsSettings)
-                _prefixes.Add(guildSettings.Id, guildSettings.Prefix);
-
-
-            if (guildsCount == _client.Guilds.Count) return;
-
-
-            var allGuildsId = _client.Guilds.Select(g => g.Id);
-
-            var newGuildsId = allGuildsId.Except(existingGuildsSettings.Select(gs => gs.Id));
-
-            var newGuildsSettings = newGuildsId
-                .Select(id => new GuildSettings
-                {
-                    Id = id,
-                    Prefix = _config["DefaultSettings:Guild:Prefix"]
-                })
-                .ToList();
-
-            await _db.GuildSettings.AddRangeAsync(newGuildsSettings);
-
-            await _db.SaveChangesAsync();
-
-
-            foreach (var guildSettings in newGuildsSettings)
-                _prefixes.Add(guildSettings.Id, guildSettings.Prefix);
+            await loadGuildSettingsTask;
         }
 
         private async Task OnJoinedGuildAsync(SocketGuild guild)
@@ -88,13 +59,12 @@ namespace Services
             await _db.GuildSettings.AddAsync(new GuildSettings
             {
                 Id = guild.Id,
-                Prefix = _config["DefaultSettings:Guild:Prefix"]
+                Prefix = _config[PrefixSectionPath]
             });
 
 
             await _db.SaveChangesAsync();
         }
-
 
 
         private async Task OnMessageReceivedAsync(SocketMessage socketMessage)
@@ -113,10 +83,57 @@ namespace Services
         }
 
 
-
         private void OnPrefixUpdated(ulong guildId, string oldPrefix, string newPrefix)
         {
             _prefixes[guildId] = newPrefix;
+        }
+
+
+
+        private async Task LoadGuildSettingsAsync()
+        {
+            var guildsCount = await _db.GuildSettings
+                .AsNoTracking()
+                .CountAsync();
+
+            var existingGuildsSettings = await _db.GuildSettings
+                .AsNoTracking()
+                .Select(g => new { g.Id, g.Prefix })
+                .ToListAsync();
+
+
+            foreach (var guildSettings in existingGuildsSettings)
+                _prefixes.Add(guildSettings.Id, guildSettings.Prefix);
+
+
+            if (guildsCount != _client.Guilds.Count)
+            {
+                var allGuildsId = _client.Guilds.Select(g => g.Id);
+
+                var newGuildsId = allGuildsId.Except(existingGuildsSettings.Select(gs => gs.Id));
+
+
+                await AddNewGuildsAsync(newGuildsId);
+            }
+        }
+
+        private async Task AddNewGuildsAsync(IEnumerable<ulong> newGuildsId)
+        {
+            var newGuildsSettings = newGuildsId
+                .Select(id => new GuildSettings
+                {
+                    Id = id,
+                    Prefix = _config[PrefixSectionPath]
+                })
+                .ToList();
+
+            await _db.GuildSettings.AddRangeAsync(newGuildsSettings);
+
+            await _db.SaveChangesAsync();
+
+
+            foreach (var guildSettings in newGuildsSettings)
+                _prefixes.Add(guildSettings.Id, guildSettings.Prefix);
         }
     }
 }

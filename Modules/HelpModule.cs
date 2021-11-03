@@ -55,8 +55,9 @@ namespace Modules
             await ReplyAsync("", false, builder.Build());
         }
 
+
         [Command("помощь")]
-        [Alias("help", "команды")]
+        [Alias("help", "команда")]
         public async Task HelpAsync(string command)
         {
             var result = _commandService.Search(Context, command);

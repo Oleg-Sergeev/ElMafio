@@ -19,8 +19,6 @@ namespace Modules.Games
     {
         private MafiaData? _mafiaData;
 
-        private readonly BotContext _db;
-
 
         private OverwritePermissions _allowWrite;
         private OverwritePermissions _denyWrite;
@@ -28,15 +26,20 @@ namespace Modules.Games
         private OverwritePermissions _denySpeak;
 
 
-        public MafiaModule(Random random, BotContext db) : base(random)
+        public MafiaModule(Random random, BotContext db) : base(random, db)
         {
-            _db = db;
+
         }
 
 
 
         protected override GameModuleData CreateGameData(IGuildUser creator)
             => new("Мафия", 3, creator);
+
+
+
+        public override async Task ResetStatAsync(IGuildUser guildUser)
+            => await ResetStatAsync<MafiaStats>(guildUser);
 
 
         public override async Task ShowStatsAsync()
@@ -63,10 +66,19 @@ namespace Modules.Games
         {
             var allStats = await _db.MafiaStats
                 .AsNoTracking()
+                .Where(s => s.GuildId == Context.Guild.Id)
                 .OrderByDescending(stat => stat.TotalRating)
                 .ThenByDescending(stat => stat.WinsCount)
                 .Include(stat => stat.User)
                 .ToListAsync();
+
+
+            if (allStats.Count == 0)
+            {
+                await ReplyAsync("Рейтинг отсутствует");
+                
+                return;
+            }
 
 
             var playersId = allStats
@@ -92,9 +104,9 @@ namespace Modules.Games
         {
             GameData = GetGameData();
 
-            if (!CanStart())
+            if (!CanStart(out var msg))
             {
-                await ReplyAsync("Невозможно начать игру");
+                await ReplyAsync(msg);
 
                 return;
             }
@@ -117,16 +129,9 @@ namespace Modules.Games
             await PlayAsync();
 
             await ReplyAsync("Игра закончена");
-            await _mafiaData!.GeneralTextChannel.SendMessageAsync("Игра закончена");
 
-            var isMafiaWon = _mafiaData.Murders.Count > 0;
-            if (GameData.IsPlaying)
-            {
-                await ReplyAsync($"{(isMafiaWon ? "Мафия победила!" : "Мирные жители победили!")} Благодарим за участие!");
 
-                await ReplyAsync($"Участники и их роли:\n{_mafiaData.PlayerGameRoles}");
-
-            }
+            var isMafiaWon = _mafiaData!.Murders.Count > 0;
 
             for (int i = _mafiaData.AlivePlayers.Count - 1; i >= 0; i--)
             {
@@ -153,19 +158,32 @@ namespace Modules.Games
             {
                 await player.RemoveRoleAsync(_mafiaData.WatcherRole);
 
-                if (_mafiaData.Murders.Contains(player))
+                if (GameData.IsPlaying)
                 {
-                    if (isMafiaWon)
+                    if (_mafiaData.Murders.Contains(player))
                     {
-                        _mafiaData.PlayerStats[player.Id].MurderWinsCount++;
-                        _mafiaData.PlayerStats[player.Id].WinsCount++;
+                        if (isMafiaWon)
+                        {
+                            _mafiaData.PlayerStats[player.Id].MurderWinsCount++;
+                            _mafiaData.PlayerStats[player.Id].WinsCount++;
+                        }
                     }
+                    else if (!isMafiaWon) _mafiaData.PlayerStats[player.Id].WinsCount++;
                 }
-                else if (!isMafiaWon) _mafiaData.PlayerStats[player.Id].WinsCount++;
             }
 
 
-            await SaveStatsAsync();
+            await _mafiaData.GeneralTextChannel.SendMessageAsync("Игра закончена");
+
+            if (GameData.IsPlaying)
+            {
+                await ReplyAsync($"{(isMafiaWon ? "Мафия победила!" : "Мирные жители победили!")} Благодарим за участие!");
+
+                await ReplyAsync($"Участники и их роли:\n{_mafiaData.PlayerGameRoles}");
+            }
+
+            if (GameData.IsPlaying) 
+                await SaveStatsAsync();
 
 
             DeleteGameData();
@@ -693,10 +711,7 @@ namespace Modules.Games
 
         private async Task EjectPlayerAsync(IGuildUser player, bool isKill = true)
         {
-            if (_mafiaData is null)
-                throw new NullReferenceException($"{nameof(_mafiaData)} is null");
-
-            await _mafiaData.MurderTextChannel.RemovePermissionOverwriteAsync(player);
+            await _mafiaData!.MurderTextChannel.RemovePermissionOverwriteAsync(player);
 
             _mafiaData.AlivePlayers.Remove(player);
             _mafiaData.Murders.Remove(player);
@@ -820,34 +835,6 @@ namespace Modules.Games
         }
 
 
-
-
-        private async Task AddNewUsersAsync(HashSet<ulong> playersId)
-        {
-            var existingPlayersId = await _db.Users
-                .AsNoTracking()
-                .Where(u => playersId.Contains(u.Id))
-                .Select(u => u.Id)
-                .ToListAsync();
-
-            if (existingPlayersId.Count == playersId.Count) return;
-
-
-            var newPlayersId = playersId.Except(existingPlayersId);
-
-            var newUsers = GameData!.Players
-                .Where(u => newPlayersId.Contains(u.Id))
-                .Select(u => new User
-                {
-                    Id = u.Id,
-                    JoinedAt = u.JoinedAt!.Value.DateTime
-                })
-                .ToList();
-
-            await _db.Users.AddRangeAsync(newUsers);
-
-            await _db.SaveChangesAsync();
-        }
 
 
         private class MafiaData

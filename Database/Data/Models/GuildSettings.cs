@@ -7,6 +7,6 @@ namespace Database.Data.Models
         [DatabaseGenerated(DatabaseGeneratedOption.None)]
         public ulong Id { get; set; }
 
-        public string Prefix { get; set; }
+        public string Prefix { get; set; } = null!;
     }
 }

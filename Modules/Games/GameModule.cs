@@ -1,20 +1,26 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
+using Database;
+using Database.Data.Models;
 using Discord;
 using Discord.Commands;
+using Microsoft.EntityFrameworkCore;
 using Modules.Extensions;
 
 namespace Modules.Games
 {
     public abstract class GameModule : ModuleBase<SocketCommandContext>
     {
-        protected Random Random { get; }
-
-
         protected static Dictionary<ulong, Dictionary<Type, GameModuleData>> GamesData { get; }
 
+
+        protected readonly BotContext _db;
+
         protected GameModuleData? GameData { get; set; }
+
+        protected Random Random { get; }
 
 
         static GameModule()
@@ -22,9 +28,10 @@ namespace Modules.Games
             GamesData = new();
         }
 
-        public GameModule(Random random)
+        public GameModule(Random random, BotContext db)
         {
             Random = random;
+            _db = db;
         }
 
 
@@ -34,13 +41,9 @@ namespace Modules.Games
             GameData = GetGameData();
 
             if (GameData is not null)
-            {
-                await ReplyAsync($"Создатель - {GameData.Creator.GetFullName()}");
-            }
+                await ReplyAsync($"Создатель - **{GameData.Creator.GetFullName()}**");
             else
-            {
-                await ReplyAsync("{GameData.Name} еще не создана");
-            }
+                await ReplyAsync("Игра еще не создана");
         }
 
 
@@ -65,6 +68,7 @@ namespace Modules.Games
         }
 
 
+
         [Priority(1)]
         [Command("игра")]
         public async Task JoinAsync()
@@ -73,6 +77,7 @@ namespace Modules.Games
 
             await JoinAsync(guildUser);
         }
+
 
         [Priority(0)]
         [Command("игра")]
@@ -86,6 +91,7 @@ namespace Modules.Games
                 GameData = CreateGameData(guildUser);
                 AddGameDataToGamesList(Context.Guild.Id, GameData);
             }
+
 
             if (GameData!.IsPlaying)
             {
@@ -126,7 +132,7 @@ namespace Modules.Games
                 {
                     await ReplyAsync($"{guildUser.GetFullMention()} покинул игру. Количество участников: {GameData.Players.Count}");
 
-                    if (GameData.Players.Count == 0) { /*Stop(message);*/}
+                    if (GameData.Players.Count == 0) await StopAsync();
                     else if (GameData.Creator.Id == guildUser.Id) GameData.Creator = GameData.Players[0];
                 }
                 else await ReplyAsync("Вы не можете выйти: вы не участник");
@@ -150,7 +156,7 @@ namespace Modules.Games
             if (GameData.IsPlaying) GameData.IsPlaying = false;
             else DeleteGameData();
 
-            await ReplyAsync($"{GameData.Name} остановлена администратором");
+            await ReplyAsync($"{GameData.Name} остановлена");
         }
 
 
@@ -160,7 +166,7 @@ namespace Modules.Games
 
 
         [Command("статистика")]
-        [Alias("стат")]
+        [Alias("стат", "стата")]
         public abstract Task ShowStatsAsync();
 
 
@@ -176,19 +182,31 @@ namespace Modules.Games
 
         protected abstract GameModuleData CreateGameData(IGuildUser creator);
 
-
-        protected bool CanStart()
+        protected async Task AddNewUsersAsync(HashSet<ulong> playersId)
         {
-            if (GameData is null) return false;
+            var existingPlayersId = await _db.Users
+                .AsNoTracking()
+                .Where(u => playersId.Contains(u.Id))
+                .Select(u => u.Id)
+                .ToListAsync();
 
-            if (GameData.Players.Count < GameData.MinPlayersCount) return false;
-
-            if (GameData.IsPlaying) return false;
-
-            if (GameData.Creator.Id != Context.User.Id && Context.User.Id != Context.Guild.OwnerId) return false;
+            if (existingPlayersId.Count == playersId.Count) return;
 
 
-            return true;
+            var newPlayersId = playersId.Except(existingPlayersId);
+
+            var newUsers = GameData!.Players
+                .Where(u => newPlayersId.Contains(u.Id))
+                .Select(u => new User
+                {
+                    Id = u.Id,
+                    JoinedAt = u.JoinedAt!.Value.DateTime
+                })
+                .ToList();
+
+            await _db.Users.AddRangeAsync(newUsers);
+
+            await _db.SaveChangesAsync();
         }
 
         protected GameModuleData? GetGameData()
@@ -199,6 +217,43 @@ namespace Modules.Games
                 return null;
 
             return games.GetValueOrDefault(type);
+        }
+
+        protected bool CanStart(out string? failMessage)
+        {
+            failMessage = null;
+
+
+            if (GameData is null)
+            {
+                failMessage = "Игра еще не создана";
+
+                return false;
+            }
+
+            if (GameData.Players.Count < GameData.MinPlayersCount)
+            {
+                failMessage = "Недостаточно игроков";
+
+                return false;
+            }
+
+            if (GameData.IsPlaying)
+            {
+                failMessage = $"{GameData.Name} уже запущена";
+
+                return false;
+            }
+
+            if (GameData.Creator.Id != Context.User.Id && Context.User.Id != Context.Guild.OwnerId)
+            {
+                failMessage = "Вы не являетесь создателем";
+
+                return false;
+            }
+
+
+            return true;
         }
 
         protected void AddGameDataToGamesList(ulong guildId, GameModuleData gameData)
@@ -214,12 +269,34 @@ namespace Modules.Games
                 });
         }
 
-
-
         protected void DeleteGameData()
         {
             GamesData.Remove(Context.Guild.Id);
         }
+
+
+        [Command("статасброс")]
+        public abstract Task ResetStatAsync(IGuildUser guildUser);
+
+        protected async Task ResetStatAsync<T>(IGuildUser guildUser) where T : GameStats
+        {
+            var userStat = await _db.Set<T>().FindAsync(guildUser.Id, Context.Guild.Id);
+
+            if (userStat is null)
+            {
+                await ReplyAsync($"Статистика игрока {guildUser.GetFullName()} не найдена");
+
+                return;
+            }
+
+            userStat.Reset();
+
+
+            await _db.SaveChangesAsync();
+
+            await ReplyAsync($"Статистика игрока {guildUser.GetFullName()} успешно сброшена");
+        }
+
 
 
         protected class GameModuleData
