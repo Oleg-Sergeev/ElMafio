@@ -3,11 +3,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using System;
 
-namespace Database
+namespace Infrastructure.Data
 {
     public class BotDbContextFactory : IDesignTimeDbContextFactory<BotContext>
     {
-        private const string ConfigPath = @"data\config.json";
+        private const string ConfigPath = @"Data\Configs\DefaultConfig.json";
 
 
         public BotContext CreateDbContext(string[] args)

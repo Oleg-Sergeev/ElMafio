@@ -1,12 +1,13 @@
 ﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
-using Database;
-using Database.Data.Models;
+using Infrastructure.Data.Models;
 using Discord;
 using Discord.Commands;
 using Microsoft.EntityFrameworkCore;
 using Modules.Extensions;
+using Infrastructure;
+using Infrastructure.Data;
 
 namespace Modules
 {
@@ -89,15 +90,8 @@ namespace Modules
         [Summary("Разбанить указанного пользователя")]
         [RequireBotPermission(GuildPermission.BanMembers)]
         [RequireUserPermission(GuildPermission.BanMembers)]
-        public async Task UnbanAsync(string? str)
+        public async Task UnbanAsync(string str)
         {
-            if (string.IsNullOrWhiteSpace(str))
-            {
-                await ReplyAsync($"Строка не может быть пустой, пожалуйста, укажите имя пользователя и его тег. Пример: @{Context.User.GetFullName()}");
-
-                return;
-            }
-
             var arr = str.Replace("@", null).Split('#');
 
             if (arr.Length < 2)
@@ -132,13 +126,90 @@ namespace Modules
         [Summary("Выгнать указанного пользователя")]
         [RequireBotPermission(GuildPermission.KickMembers)]
         [RequireUserPermission(GuildPermission.KickMembers)]
-        public async Task KickAsync(IGuildUser guildUser, [Remainder] string? reason)
+        public async Task KickAsync(IGuildUser guildUser, [Remainder] string? reason = null)
         {
             await guildUser.KickAsync(reason);
 
             await ReplyAsync($"Пользователь {guildUser.GetFullName()} успешно выгнан");
         }
 
+        [Command("мьют")]
+        [Alias("мут")]
+        [RequireUserPermission(GuildPermission.KickMembers)]
+        public async Task MuteAsync(IGuildUser guildUser)
+        {
+            var settings = await _db.GuildSettings.FindAsync(Context.Guild.Id);
+
+            if (settings is null)
+                throw new NullReferenceException("Guild id was not found in database");
+
+            IRole? roleMute;
+
+            if (settings.RoleMuteId is not null)
+                roleMute = Context.Guild.GetRole(settings.RoleMuteId.Value);
+            else
+            {
+                roleMute = await Context.Guild.CreateRoleAsync(
+                    "Muted",
+                    new GuildPermissions(sendMessages: false),
+                    Color.DarkerGrey,
+                    false,
+                    true
+                    );
+
+                foreach (var channel in Context.Guild.Channels)
+                    await channel.AddPermissionOverwriteAsync(roleMute, OverwritePermissions.DenyAll(channel).Modify(
+                        readMessageHistory: PermValue.Inherit,
+                        viewChannel: PermValue.Inherit));
+
+                settings.RoleMuteId = roleMute.Id;
+
+                await _db.SaveChangesAsync();
+            }
+
+            await guildUser.AddRoleAsync(roleMute);
+
+            await ReplyAsync($"Пользователь {guildUser.GetFullMention()} успешно замьючен");
+        }
+
+        [Command("размьют")]
+        [Alias("размут")]
+        [RequireUserPermission(GuildPermission.KickMembers)]
+        public async Task UnmuteAsync(IGuildUser guildUser)
+        {
+            var settings = await _db.GuildSettings.FindAsync(Context.Guild.Id);
+
+            if (settings is null)
+                throw new NullReferenceException("Guild id was not found in database");
+
+            if (settings.RoleMuteId is null)
+                throw new NullReferenceException($"[Guild {settings.Id}] Role id is null");
+
+
+            if (!guildUser.RoleIds.Contains(settings.RoleMuteId.Value))
+            {
+                await ReplyAsync("Пользователь не замьючен");
+
+                return;
+            }
+
+            await guildUser.RemoveRoleAsync(settings.RoleMuteId.Value);
+
+            await ReplyAsync($"Пользователь {guildUser.GetFullMention()} успешно размьючен");
+        }
+
+
+        [RequireOwner]
+        [Command("getlogtoday")]
+        public async Task GetFileLogAsync()
+        {
+            var filepath = LoggingService.GetGuildLogFilePathToday(Context.Guild.Id);
+
+            if (filepath is not null)
+                await Context.User.SendFileAsync(filepath);
+            else
+                await Context.User.SendMessageAsync($"File not found. Filepath: {filepath}");
+        }
 
 
         [RequireOwner]
@@ -224,7 +295,7 @@ namespace Modules
 
             await ReplyAsync("Found");
 
-            await ReplyAsync($"{mafiaStat.TotalRating.ToPercent()}");
+            await ReplyAsync($"{mafiaStat.TotalWinRate.ToPercent()}");
         }
 
         [RequireOwner]

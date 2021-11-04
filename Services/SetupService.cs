@@ -6,10 +6,10 @@ using Discord;
 using Discord.Commands;
 using Discord.WebSocket;
 using Microsoft.Extensions.Configuration;
-using Modules;
-using Serilog;
+using Infrastructure.TypeReaders;
+using Infrastructure.ViewModels;
 
-namespace Services
+namespace Infrastructure
 {
     public class SetupService
     {
@@ -39,7 +39,12 @@ namespace Services
             await _client.LoginAsync(TokenType.Bot, discordToken);
             await _client.StartAsync();
 
-            await _commandService.AddModulesAsync(Assembly.GetAssembly(typeof(HelpModule)), _provider);
+            _commandService.AddTypeReader<bool>(new BooleanTypeReader(), true);
+            _commandService.AddTypeReader<Emoji>(new EmojiTypeReader());
+            _commandService.AddTypeReader<Emote>(new EmoteTypeReader());
+            _commandService.AddTypeReader<MafiaSettingsViewModel>(new MafiaSettingsTypeReader());
+
+            await _commandService.AddModulesAsync(Assembly.LoadFrom("Modules"), _provider);
 
             if (!_commandService.Modules.Any())
                 throw new InvalidOperationException("Modules not loaded");

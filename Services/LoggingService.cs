@@ -1,16 +1,14 @@
 ﻿using System;
-using System.Linq;
 using System.IO;
 using System.Threading.Tasks;
 using Discord;
 using Discord.Commands;
 using Discord.WebSocket;
-using Modules.Extensions;
 using Serilog;
 using Serilog.Events;
 using Serilog.Filters;
 
-namespace Services
+namespace Infrastructure
 {
     public class LoggingService
     {
@@ -69,6 +67,32 @@ namespace Services
         }
 
 
+        public static FileStream? GetLogFile(string path)
+        {
+            if (!File.Exists(path)) return null;
+
+            return File.OpenRead(path);
+        }
+
+        public static FileStream? GetGuildLogFileToday(ulong guildId, out string path)
+        {
+            path = Path.Combine(GuildLogsDirectory, guildId.ToString(), $"log_{DateTime.Now:yyyyMMdd}.txt");
+
+            return GetLogFile(path);
+        }
+
+        public static string? GetGuildLogFilePathToday(ulong guildId)
+        {
+            var path = Path.Combine(GuildLogsDirectory, guildId.ToString(), $"log_{DateTime.Now:yyyyMMdd}.txt");
+
+            if (!File.Exists(path))
+                return null;
+
+            return path;
+        }
+
+
+
         private async Task OnCommandExecutedAsync(Optional<CommandInfo> commandInfo, ICommandContext context, IResult result)
         {
             var guildLog = Log.ForContext(PropertyGuildName, context.Guild.Id);
@@ -76,19 +100,19 @@ namespace Services
             guildLog.Verbose("({0:l}): Executed {1} for {2} in {3}. Raw message: {4}",
                 nameof(OnCommandExecutedAsync),
                 commandInfo.IsSpecified ? commandInfo.Value.Name : "NULL",
-                context.User.GetFullName(),
+                context.User.Username,
                 $"{context.Guild.Name}/{context.Channel.Name}",
                 context.Message.Content);
 
             if (result.IsSuccess) return;
-
 
             switch (result.Error)
             {
                 case CommandError.ParseFailed or CommandError.BadArgCount or CommandError.ObjectNotFound:
                     var parseResult = (ParseResult)result;
 
-                    guildLog.Verbose("{0:l}. Error parameter: {1}; Arg values: {2}; Param values: {3}",
+                    guildLog.Verbose("({0:l}): {1:l}. Error parameter: {2}; Arg values: {3}; Param values: {4}",
+                        nameof(OnCommandExecutedAsync),
                         parseResult.ToString(),
                         parseResult.ErrorParameter?.ToString(),
                         parseResult.ArgValues,

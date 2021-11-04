@@ -1,4 +1,4 @@
-﻿namespace Database.Data.Models
+﻿namespace Infrastructure.Data.Models
 {
     public class RussianRouletteStats : GameStats
     {

@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Threading.Tasks;
-using Database;
 using Discord;
 using Discord.Commands;
+using Infrastructure.Data;
 
 namespace Modules
 {
@@ -11,9 +11,6 @@ namespace Modules
     [Alias("н", "settings", "s")]
     public class SettingsModule : ModuleBase<SocketCommandContext>
     {
-        public static event Action<ulong, string, string>? PrefixUpdated;
-
-
         private readonly BotContext _db;
 
 
@@ -47,9 +44,6 @@ namespace Modules
 
 
             await ReplyAsync($"Префикс успешно изменен с **{oldPrefix}** на **{newPrefix}**");
-
-
-            PrefixUpdated?.Invoke(Context.Guild.Id, oldPrefix, newPrefix);
         }
     }
 }

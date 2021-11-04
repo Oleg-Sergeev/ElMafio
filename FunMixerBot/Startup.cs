@@ -1,14 +1,14 @@
 ﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Database;
 using Discord;
 using Discord.Commands;
 using Discord.WebSocket;
+using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Services;
+using Infrastructure;
 
 namespace Core
 {
@@ -49,7 +49,9 @@ namespace Core
             services.AddDbContext<BotContext>(options =>
                options.UseSqlServer(Configuration.GetConnectionString("DefaultSQLServer")));
 
-            services.AddSingleton(new DiscordSocketClient(new DiscordSocketConfig
+            services
+            .AddSingleton<LoggingService>()
+            .AddSingleton(new DiscordSocketClient(new DiscordSocketConfig
             {
                 LogLevel = LogSeverity.Verbose,
                 MessageCacheSize = 1000,
@@ -75,7 +77,6 @@ namespace Core
             }))
             .AddSingleton<CommandHandler>()
             .AddSingleton<SetupService>()
-            .AddSingleton<LoggingService>()
             .AddSingleton<Random>()
             .AddSingleton(Configuration);
         }

@@ -2,15 +2,16 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Database;
-using Database.Data.Models;
+using Infrastructure.Data.Models;
 using Discord;
 using Discord.Commands;
 using Microsoft.EntityFrameworkCore;
 using Modules.Extensions;
+using Infrastructure.Data;
 
 namespace Modules.Games
 {
+    [RequireContext(ContextType.Guild)]
     public abstract class GameModule : ModuleBase<SocketCommandContext>
     {
         protected static Dictionary<ulong, Dictionary<Type, GameModuleData>> GamesData { get; }
@@ -69,7 +70,7 @@ namespace Modules.Games
 
 
 
-        [Priority(1)]
+        [Priority(0)]
         [Command("игра")]
         public async Task JoinAsync()
         {
@@ -79,7 +80,7 @@ namespace Modules.Games
         }
 
 
-        [Priority(0)]
+        [Priority(1)]
         [Command("игра")]
         [RequireOwner()]
         public virtual async Task JoinAsync(IGuildUser guildUser)
@@ -160,24 +161,137 @@ namespace Modules.Games
         }
 
 
+        [Command("выгнать")]
+        public virtual async Task KickAsync(IGuildUser guildUser)
+        {
+            GameData = GetGameData();
+
+
+            if (GameData is null)
+            {
+                await ReplyAsync("Игра еще не создана");
+
+                return;
+            }
+
+            if (GameData.Creator.Id != Context.User.Id)
+            {
+                var ownerId = (await Context.Client.GetApplicationInfoAsync()).Owner.Id;
+
+                if (ownerId != Context.User.Id)
+                {
+                    await ReplyAsync("Вы не являетесь создателем игры");
+
+                    return;
+                }
+            }
+
+            if (!GameData.Players.Contains(guildUser))
+            {
+                await ReplyAsync($"{guildUser.GetFullName()} не участвует в игре");
+
+                return;
+            }
+
+            if (Context.User.Id == guildUser.Id)
+            {
+                await LeaveAsync();
+
+                return;
+            }
+
+            if (GameData.IsPlaying)
+            {
+                await ReplyAsync($"{GameData.Name} уже началась, выгнать игрока невозможно");
+
+                return;
+            }
+
+            if (GameData.Players.Remove(guildUser))
+                await ReplyAsync($"{guildUser.GetFullMention()} выгнан из игры. Количество участников: {GameData.Players.Count}");
+            else
+                await ReplyAsync($"Не удалось выгнать {guildUser.GetFullName()}");
+        }
+
+
 
         [Command("старт")]
         public abstract Task StartAsync();
 
 
-        [Command("статистика")]
-        [Alias("стат", "стата")]
-        public abstract Task ShowStatsAsync();
-
-
-        [Command("статистика")]
-        [Alias("стат")]
-        public abstract Task ShowStatsAsync(IUser user);
-
 
         [Command("рейтинг")]
         [Alias("топ", "рейт")]
         public abstract Task ShowRating();
+
+        [Command("рейтингсброс")]
+        [Alias("топсброс", "рейтсброс")]
+        [RequireOwner]
+        public abstract Task ResetRatingAsync();
+
+        protected async Task ResetRatingAsync<T>() where T : GameStats
+        {
+            var userStats = await _db.Set<T>()
+                .AsTracking()
+                .Where(s => s.GuildId == Context.Guild.Id)
+                .ToListAsync();
+
+            if (userStats is null || userStats.Count == 0)
+            {
+                await ReplyAsync("Рейтинг отсутствует");
+
+                return;
+            }
+
+            foreach (var userStat in userStats)
+                userStat.Reset();
+
+            await _db.SaveChangesAsync();
+
+            await ReplyAsync("Рейтинг успешно сброшен");
+        }
+
+
+        [Command("статистика")]
+        [Alias("стат", "стата")]
+        [Priority(0)]
+        public abstract Task ShowStatsAsync();
+
+        [Command("статистика")]
+        [Alias("стат")]
+        [Priority(1)]
+        public abstract Task ShowStatsAsync(IUser user);
+
+
+        [Command("статасброс")]
+        public Task ResetStatAsync()
+            => ResetStatAsync((IGuildUser)Context.User);
+
+        [Command("статасброс")]
+        [RequireOwner()]
+        public abstract Task ResetStatAsync(IGuildUser guildUser);
+
+        protected async Task ResetStatAsync<T>(IGuildUser guildUser) where T : GameStats
+        {
+            var userStat = await _db.Set<T>().FindAsync(guildUser.Id, Context.Guild.Id);
+
+            if (userStat is null)
+            {
+                await ReplyAsync($"Статистика игрока {guildUser.GetFullName()} не найдена");
+
+                return;
+            }
+
+            userStat.Reset();
+
+
+            await _db.SaveChangesAsync();
+
+            await ReplyAsync($"Статистика игрока {guildUser.GetFullName()} успешно сброшена");
+        }
+
+
+
 
 
         protected abstract GameModuleData CreateGameData(IGuildUser creator);
@@ -274,28 +388,6 @@ namespace Modules.Games
             GamesData.Remove(Context.Guild.Id);
         }
 
-
-        [Command("статасброс")]
-        public abstract Task ResetStatAsync(IGuildUser guildUser);
-
-        protected async Task ResetStatAsync<T>(IGuildUser guildUser) where T : GameStats
-        {
-            var userStat = await _db.Set<T>().FindAsync(guildUser.Id, Context.Guild.Id);
-
-            if (userStat is null)
-            {
-                await ReplyAsync($"Статистика игрока {guildUser.GetFullName()} не найдена");
-
-                return;
-            }
-
-            userStat.Reset();
-
-
-            await _db.SaveChangesAsync();
-
-            await ReplyAsync($"Статистика игрока {guildUser.GetFullName()} успешно сброшена");
-        }
 
 
 

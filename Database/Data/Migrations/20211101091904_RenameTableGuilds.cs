@@ -1,6 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore.Migrations;
 
-namespace Database.Migrations
+namespace Infrastructure.Migrations
 {
     public partial class RenameTableGuilds : Migration
     {

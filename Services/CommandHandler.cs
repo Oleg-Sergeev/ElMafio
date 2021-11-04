@@ -2,16 +2,14 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Database;
-using Database.Data.Models;
+using Infrastructure.Data.Models;
 using Discord.Commands;
 using Discord.WebSocket;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using Modules;
-using Serilog;
+using Infrastructure.Data;
 
-namespace Services
+namespace Infrastructure
 {
     public class CommandHandler
     {
@@ -39,8 +37,7 @@ namespace Services
             _client.MessageReceived += OnMessageReceivedAsync;
             _client.JoinedGuild += OnJoinedGuildAsync;
 
-
-            SettingsModule.PrefixUpdated += OnPrefixUpdated;
+            _db.SavedChanges += OnDbUpdated;
         }
 
 
@@ -83,9 +80,24 @@ namespace Services
         }
 
 
-        private void OnPrefixUpdated(ulong guildId, string oldPrefix, string newPrefix)
+        private void OnDbUpdated(object? sender, SavedChangesEventArgs args)
         {
-            _prefixes[guildId] = newPrefix;
+            if (sender is null || sender is not BotContext db || args.EntitiesSavedCount != 1) return;
+
+
+            var lastGuildSettingsEntry = db.ChangeTracker.Entries<GuildSettings>().ToList().LastOrDefault();
+
+            if (lastGuildSettingsEntry is not null)
+            {
+                var settings = lastGuildSettingsEntry.Entity;
+
+                if (_prefixes[settings.Id] != settings.Prefix)
+                {
+                    _prefixes[settings.Id] = settings.Prefix;
+
+                    lastGuildSettingsEntry.State = EntityState.Detached;
+                }
+            }
         }
 
 

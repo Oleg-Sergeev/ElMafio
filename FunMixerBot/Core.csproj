@@ -22,7 +22,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Database\Database.csproj" />
+    <ProjectReference Include="..\Database\Infrastructure.csproj" />
+    <ProjectReference Include="..\Modules\Modules.csproj" />
     <ProjectReference Include="..\Services\Services.csproj" />
   </ItemGroup>
 
