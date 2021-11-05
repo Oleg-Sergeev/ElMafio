@@ -1,4 +1,6 @@
 ﻿using Infrastructure.Data.Models;
+using Infrastructure.Data.Models.Games.Settings;
+using Infrastructure.Data.Models.Games.Stats;
 using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Data
@@ -25,6 +27,15 @@ namespace Infrastructure.Data
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+
+            modelBuilder.Entity<MafiaSettings>()
+                .Property(s => s.SendWelcomeMessage)
+                    .HasDefaultValue(true);
+
+            modelBuilder.Entity<MafiaSettings>()
+                .Property(s => s.ReplyMessagesOnError)
+                    .HasDefaultValue(true);
 
             modelBuilder.Entity<RussianRouletteSettings>()
                 .Property(s => s.UnicodeSmileKilled)

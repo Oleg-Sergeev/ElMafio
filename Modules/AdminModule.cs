@@ -1,18 +1,21 @@
 ﻿using System;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
-using Infrastructure.Data.Models;
 using Discord;
 using Discord.Commands;
-using Microsoft.EntityFrameworkCore;
-using Modules.Extensions;
 using Infrastructure;
 using Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
+using Modules.Extensions;
+using Serilog;
+using Serilog.Core;
+using Serilog.Events;
 
 namespace Modules
 {
-    [Group("админ")]
-    [Alias("а", "admin", "a")]
+    [Group("Администрирование")]
+    [Alias("админ", "а")]
     [RequireContext(ContextType.Guild)]
     public class AdminModule : ModuleBase<SocketCommandContext>
     {
@@ -25,12 +28,12 @@ namespace Modules
         }
 
 
-        [Command("слоумод")]
-        [Alias("slowmode")]
+        [Command("Слоумод")]
+        [Alias("смод")]
         [Summary("Установить слоумод для канала (от 0 до 300 секунд)")]
         [RequireBotPermission(GuildPermission.ManageChannels)]
         [RequireUserPermission(GuildPermission.ManageChannels)]
-        public async Task SetSlowMode(int secs)
+        public async Task SetSlowMode([Summary("Количество секунд")] int secs)
         {
             if (Context.Channel is not ITextChannel textChannel) return;
 
@@ -45,12 +48,12 @@ namespace Modules
 
 
 
-        [Command("очистить")]
-        [Alias("clear")]
+        [Command("Очистить")]
+        [Alias("оч")]
         [Summary("Удалить сообщения из канала (от 0 до 100 сообщений)")]
         [RequireBotPermission(GuildPermission.ManageMessages)]
         [RequireUserPermission(GuildPermission.Administrator)]
-        public async Task ClearAsync(int count)
+        public async Task ClearAsync([Summary("Количество удаляемых сообщений")] int count)
         {
             if (Context.Channel is not ITextChannel textChannel) return;
 
@@ -71,8 +74,7 @@ namespace Modules
 
 
 
-        [Command("бан")]
-        [Alias("ban")]
+        [Command("Бан")]
         [Summary("Забанить указанного пользователя")]
         [RequireBotPermission(GuildPermission.BanMembers)]
         [RequireUserPermission(GuildPermission.BanMembers)]
@@ -84,9 +86,7 @@ namespace Modules
         }
 
 
-
-        [Command("разбан")]
-        [Alias("unban")]
+        [Command("Разбан")]
         [Summary("Разбанить указанного пользователя")]
         [RequireBotPermission(GuildPermission.BanMembers)]
         [RequireUserPermission(GuildPermission.BanMembers)]
@@ -121,8 +121,7 @@ namespace Modules
 
 
 
-        [Command("кик")]
-        [Alias("kick")]
+        [Command("Кик")]
         [Summary("Выгнать указанного пользователя")]
         [RequireBotPermission(GuildPermission.KickMembers)]
         [RequireUserPermission(GuildPermission.KickMembers)]
@@ -133,8 +132,10 @@ namespace Modules
             await ReplyAsync($"Пользователь {guildUser.GetFullName()} успешно выгнан");
         }
 
-        [Command("мьют")]
+
+        [Command("Мьют")]
         [Alias("мут")]
+        [Summary("Замьютить указанного пользователя")]
         [RequireUserPermission(GuildPermission.KickMembers)]
         public async Task MuteAsync(IGuildUser guildUser)
         {
@@ -172,8 +173,9 @@ namespace Modules
             await ReplyAsync($"Пользователь {guildUser.GetFullMention()} успешно замьючен");
         }
 
-        [Command("размьют")]
+        [Command("Размьют")]
         [Alias("размут")]
+        [Summary("Размьютить указанного пользователя")]
         [RequireUserPermission(GuildPermission.KickMembers)]
         public async Task UnmuteAsync(IGuildUser guildUser)
         {
@@ -200,123 +202,38 @@ namespace Modules
 
 
         [RequireOwner]
-        [Command("getlogtoday")]
-        public async Task GetFileLogAsync()
+        [Command("лог")]
+        public async Task GetFileLogTodayAsync()
         {
-            var filepath = LoggingService.GetGuildLogFilePathToday(Context.Guild.Id);
+            using var filestream = LoggingService.GetGuildLogFileToday(Context.Guild.Id);
 
-            if (filepath is not null)
-                await Context.User.SendFileAsync(filepath);
-            else
-                await Context.User.SendMessageAsync($"File not found. Filepath: {filepath}");
-        }
-
-
-        [RequireOwner]
-        [Command("add")]
-        public async Task AddUserToDb(IGuildUser guildUser)
-        {
-            if (_db.Users.Any(u => u.Id == guildUser.Id))
+            if (filestream is null)
             {
-                await ReplyAsync($"{guildUser.Id} already exists");
+                await ReplyAsync("Файл не найден");
 
                 return;
             }
 
-            var user = new User
-            {
-                Id = guildUser.Id,
-                JoinedAt = guildUser.JoinedAt!.Value.DateTime
-            };
+            await ReplyAsync("Файл успешно отправлен");
 
-            await _db.Users.AddAsync(user);
-
-            await ReplyAsync("Add user");
-
-
-            if (!_db.MafiaStats.Any(s => s.UserId == guildUser.Id))
-            {
-                await _db.MafiaStats.AddAsync(new MafiaStats
-                {
-                    User = user
-                });
-
-                await ReplyAsync("Add mafia stats");
-            }
-
-            if (!_db.RussianRouletteStats.Any(s => s.UserId == guildUser.Id))
-            {
-                await _db.RussianRouletteStats.AddAsync(new RussianRouletteStats
-                {
-                    User = user
-                });
-
-                await ReplyAsync("Add russian roullete stats");
-            }
-
-
-            await _db.SaveChangesAsync();
-
-
-            await ReplyAsync("Saved");
+            await Context.User.SendFileAsync(filestream, filestream.Name);
         }
 
-        [RequireOwner]
-        [Command("get")]
-        public async Task GetUserInfo(IGuildUser guildUser)
-        {
-            var user = await _db.Users.FindAsync(guildUser.Id);
-
-            if (user is null)
-            {
-                await ReplyAsync("User not found");
-
-                return;
-            }
-
-            await ReplyAsync($"Found user\nID: [{user.Id}]\nJoined at: {user.JoinedAt}");
-        }
 
         [RequireOwner]
-        [Command("getm")]
-        public async Task GetMafiaStat(IGuildUser guildUser)
+        [Command("рестарт")]
+        public async Task RestartAsync()
         {
-            var mafiaStat = await _db.MafiaStats
-                .AsNoTracking()
-                .Include(s => s.User)
-                .FirstOrDefaultAsync(s => s.UserId == guildUser.Id);
+            await ReplyAsync("Перезапуск...");
 
-            if (mafiaStat is null)
-            {
-                await ReplyAsync("Mafia stats not found");
+            Log.Debug("({0:l}): Restart request received from server {1} by user {2}",
+                      nameof(RestartAsync),
+                      Context.Guild.Name,
+                      Context.User.GetFullName());
 
-                return;
-            }
+            System.Diagnostics.Process.Start(Assembly.GetEntryAssembly()!.Location.Replace("dll", "exe"));
 
-            await ReplyAsync("Found");
-
-            await ReplyAsync($"{mafiaStat.TotalWinRate.ToPercent()}");
-        }
-
-        [RequireOwner]
-        [Command("getrr")]
-        public async Task GetRussianRoulleteStat(IGuildUser guildUser)
-        {
-            var rrStat = await _db.RussianRouletteStats
-                .AsNoTracking()
-                .Include(s => s.User)
-                .FirstOrDefaultAsync(s => s.UserId == guildUser.Id);
-
-            if (rrStat is null)
-            {
-                await ReplyAsync("Roullete stats not found");
-
-                return;
-            }
-
-            await ReplyAsync("Found");
-
-            await ReplyAsync($"{rrStat}");
+            Environment.Exit(0);
         }
     }
 }

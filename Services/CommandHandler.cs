@@ -2,12 +2,12 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Infrastructure.Data.Models;
 using Discord.Commands;
 using Discord.WebSocket;
+using Infrastructure.Data;
+using Infrastructure.Data.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using Infrastructure.Data;
 
 namespace Infrastructure
 {
@@ -74,9 +74,7 @@ namespace Infrastructure
 
             int argPos = 0;
             if (userMessage.HasStringPrefix(_prefixes[context.Guild.Id], ref argPos) || userMessage.HasMentionPrefix(_client.CurrentUser, ref argPos))
-            {
                 await _commandService.ExecuteAsync(context, argPos, _provider);
-            }
         }
 
 

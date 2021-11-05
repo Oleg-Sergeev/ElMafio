@@ -21,7 +21,7 @@ namespace Modules
         }
 
 
-        [Command("шанс")]
+        [Command("Шанс")]
         public async Task CalculateChanceAsync([Remainder] string text)
         {
             if (string.IsNullOrWhiteSpace(text))
@@ -37,7 +37,7 @@ namespace Modules
         }
 
 
-        [Command("эхо")]
+        [Command("Эхо")]
         public async Task Echo([Remainder] string message)
         {
             await Context.Message.DeleteAsync();
@@ -46,7 +46,7 @@ namespace Modules
         }
 
 
-        [Command("данет")]
+        [Command("Данет")]
         public async Task SayYesOrNo()
         {
             bool answer = _random.Next(2) > 0;
@@ -56,7 +56,7 @@ namespace Modules
         }
 
 
-        [Command("кто")]
+        [Command("Кто")]
         public async Task SayWhoIs([Remainder] string? message = null)
         {
             int num = _random.Next(0, Context.Guild.Users.Count);
@@ -103,7 +103,7 @@ namespace Modules
             await response.AddReactionsAsync(emotes.ToArray());
         }
 
-        [Command("буквы")]
+        [Command("Буквы")]
         public async Task TransferToLetterSmilesAsync([Remainder] string text)
         {
             var letters = "";
@@ -119,7 +119,7 @@ namespace Modules
             if (!string.IsNullOrWhiteSpace(letters)) await ReplyAsync(letters, messageReference: Context.Message.Reference);
         }
 
-        [Command("эхобуквы")]
+        [Command("Эхобуквы")]
         public async Task TransferToLetterSmilesAsyncAndEcho([Remainder] string text)
         {
             await TransferToLetterSmilesAsync(text);
@@ -128,11 +128,13 @@ namespace Modules
         }
 
 
-        [Command("аватар")]
+        [Command("Аватар")]
+        [Priority(0)]
         public async Task GetAvatarAsync()
             => await GetAvatarAsync(Context.User);
 
-        [Command("аватар")]
+        [Command("Аватар")]
+        [Priority(1)]
         public async Task GetAvatarAsync(IUser user)
         {
             //if (!await HasBotChannelPermAsync(message, ChannelPermission.AttachFiles, "Эта команда требует разрешения <AttachFiles>")) return;
@@ -155,7 +157,7 @@ namespace Modules
         }
 
 
-        [Command("смайл")]
+        [Command("Смайл")]
         public async Task GetSmileAsync(string emoteId)
         {
             //if (!await HasBotChannelPermAsync(message, ChannelPermission.AttachFiles, "Эта команда требует разрешения <AttachFiles>")) return;
@@ -180,7 +182,7 @@ namespace Modules
         }
 
 
-        [Command("смайлайди")]
+        [Command("Смайлайди")]
         public async Task GetSmileByIdAsync(ulong smileId)
         {
             var resp = await new HttpClient().GetAsync($"https://cdn.discordapp.com/emojis/{smileId}.png");

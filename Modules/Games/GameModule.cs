@@ -2,19 +2,21 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Infrastructure.Data.Models;
 using Discord;
 using Discord.Commands;
+using Infrastructure.Data;
+using Infrastructure.Data.Models;
+using Infrastructure.Data.Models.Games.Settings;
+using Infrastructure.Data.Models.Games.Stats;
 using Microsoft.EntityFrameworkCore;
 using Modules.Extensions;
-using Infrastructure.Data;
 
 namespace Modules.Games
 {
     [RequireContext(ContextType.Guild)]
     public abstract class GameModule : ModuleBase<SocketCommandContext>
     {
-        protected static Dictionary<ulong, Dictionary<Type, GameModuleData>> GamesData { get; }
+        protected static Dictionary<ulong, Dictionary<Type, GameModuleData>> GamesData { get; } = new();
 
 
         protected readonly BotContext _db;
@@ -24,11 +26,6 @@ namespace Modules.Games
         protected Random Random { get; }
 
 
-        static GameModule()
-        {
-            GamesData = new();
-        }
-
         public GameModule(Random random, BotContext db)
         {
             Random = random;
@@ -36,7 +33,9 @@ namespace Modules.Games
         }
 
 
-        [Command("создатель")]
+        [Command("Создатель")]
+        [Summary("Показать создателя игры")]
+        [Remarks("Только создатель может запустить игру")]
         public virtual async Task ShowCreator()
         {
             GameData = GetGameData();
@@ -48,7 +47,8 @@ namespace Modules.Games
         }
 
 
-        [Command("список")]
+        [Command("Список")]
+        [Summary("Показать список игроков")]
         public virtual async Task ShowPlayerList()
         {
             GameData = GetGameData();
@@ -63,7 +63,7 @@ namespace Modules.Games
             var text = $"Кол-во игроков: {GameData.Players.Count}. Список:\n";
 
             foreach (var player in GameData.Players)
-                text += $"{player.GetFullName()} - {(GameData.Creator.Id == player.Id ? "создатель" : "участник")}\n";
+                text += $"**{player.GetFullName()}** - {(GameData.Creator.Id == player.Id ? "создатель" : "участник")}\n";
 
             await ReplyAsync(text);
         }
@@ -71,7 +71,9 @@ namespace Modules.Games
 
 
         [Priority(0)]
-        [Command("игра")]
+        [Command("Играть")]
+        [Alias("игра")]
+        [Summary("Создать новую игру или присоединиться к текущей")]
         public async Task JoinAsync()
         {
             var guildUser = (IGuildUser)Context.User;
@@ -79,10 +81,10 @@ namespace Modules.Games
             await JoinAsync(guildUser);
         }
 
-
-        [Priority(1)]
-        [Command("игра")]
         [RequireOwner()]
+        [Priority(1)]
+        [Command("Играть")]
+        [Alias("игра")]
         public virtual async Task JoinAsync(IGuildUser guildUser)
         {
             GameData = GetGameData();
@@ -112,7 +114,8 @@ namespace Modules.Games
         }
 
 
-        [Command("выход")]
+        [Command("Выход")]
+        [Summary("Покинуть игру")]
         public virtual async Task LeaveAsync()
         {
             GameData = GetGameData();
@@ -141,7 +144,8 @@ namespace Modules.Games
         }
 
 
-        [Command("стоп")]
+        [Command("Стоп")]
+        [Summary("Остановить игру")]
         [RequireUserPermission(GuildPermission.Administrator)]
         public virtual async Task StopAsync()
         {
@@ -161,8 +165,10 @@ namespace Modules.Games
         }
 
 
-        [Command("выгнать")]
-        public virtual async Task KickAsync(IGuildUser guildUser)
+        [Command("Выгнать")]
+        [Summary("Выгнать пользователя из игры")]
+        [Remarks("Попытка выгнать себя приравнивается выходу из игры")]
+        public virtual async Task KickAsync([Summary("Пользователь, которого вы хотите выгнать")] IGuildUser guildUser)
         {
             GameData = GetGameData();
 
@@ -215,12 +221,15 @@ namespace Modules.Games
 
 
 
-        [Command("старт")]
+        [Command("Старт")]
+        [Summary("Запустить игру")]
         public abstract Task StartAsync();
 
 
 
-        [Command("рейтинг")]
+
+
+        [Command("Рейтинг")]
         [Alias("топ", "рейт")]
         public abstract Task ShowRating();
 
@@ -252,12 +261,12 @@ namespace Modules.Games
         }
 
 
-        [Command("статистика")]
+        [Command("Статистика")]
         [Alias("стат", "стата")]
         [Priority(0)]
         public abstract Task ShowStatsAsync();
 
-        [Command("статистика")]
+        [Command("Статистика")]
         [Alias("стат")]
         [Priority(1)]
         public abstract Task ShowStatsAsync(IUser user);
@@ -388,6 +397,42 @@ namespace Modules.Games
             GamesData.Remove(Context.Guild.Id);
         }
 
+
+        protected static async Task<T> GetSettingsAsync<T>(BotContext db, ulong guildId, bool isTracking = true) where T : GameSettings, new()
+        {
+            T? rrSettings;
+
+            if (isTracking)
+                rrSettings = await db.Set<T>()
+                   .AsTracking()
+                   .FirstOrDefaultAsync(s => s.GuildSettingsId == guildId);
+            else
+                rrSettings = await db.Set<T>()
+                   .AsNoTracking()
+                   .FirstOrDefaultAsync(s => s.GuildSettingsId == guildId);
+
+
+            if (rrSettings is null)
+                rrSettings = await AddSettingsToDb<T>(db, guildId);
+
+
+            return rrSettings;
+        }
+
+        protected static async Task<T> AddSettingsToDb<T>(BotContext db, ulong guildId) where T : GameSettings, new()
+        {
+            var settings = new T()
+            {
+                GuildSettingsId = guildId
+            };
+
+            await db.Set<T>().AddAsync(settings);
+
+
+            await db.SaveChangesAsync();
+
+            return settings;
+        }
 
 
 

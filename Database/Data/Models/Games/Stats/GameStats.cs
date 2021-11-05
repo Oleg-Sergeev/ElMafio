@@ -1,4 +1,4 @@
-﻿namespace Infrastructure.Data.Models
+﻿namespace Infrastructure.Data.Models.Games.Stats
 {
     public abstract class GameStats : IResetableStat
     {

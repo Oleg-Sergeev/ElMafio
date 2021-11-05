@@ -9,22 +9,25 @@ namespace Modules
     [Name("Помощь")]
     public class HelpModule : ModuleBase<SocketCommandContext>
     {
-        private readonly IConfiguration _config;
         private readonly CommandService _commandService;
+        private readonly IConfiguration _config;
 
 
-        public HelpModule(IConfiguration config, CommandService commands)
+        public HelpModule(CommandService commands, IConfiguration config)
         {
-            _config = config;
             _commandService = commands;
+            _config = config;
         }
 
 
-        [Command("помощь")]
+        [Priority(0)]
+        [Command("Помощь")]
         [Alias("help", "команды")]
+        [Summary("Получить список доступных команд")]
+        [Remarks("Список содержит только те команды, которые доступны вам")]
         public async Task HelpAsync()
         {
-            string prefix = _config["prefix"];
+            string prefix = "";
             var builder = new EmbedBuilder()
             {
                 Color = new Color(114, 137, 218),
@@ -56,9 +59,11 @@ namespace Modules
         }
 
 
-        [Command("помощь")]
+        [Priority(1)]
+        [Command("Помощь")]
         [Alias("help", "команда")]
-        public async Task HelpAsync(string command)
+        [Summary("Получить подробности указанной команды")]
+        public async Task HelpAsync([Summary("Указанная команда")] string command)
         {
             var result = _commandService.Search(Context, command);
 
@@ -68,7 +73,6 @@ namespace Modules
                 return;
             }
 
-            string prefix = _config["prefix"];
             var builder = new EmbedBuilder()
             {
                 Color = new Color(114, 137, 218),
@@ -88,7 +92,15 @@ namespace Modules
                 });
             }
 
-            await ReplyAsync("", false, builder.Build());
+            await ReplyAsync(embed: builder.Build());
+        }
+
+
+        [Command("Контакты")]
+        [Summary("Показать контакты для связи")]
+        public async Task ShowContactsAsync()
+        {
+            await ReplyAsync("Ok");
         }
     }
 }

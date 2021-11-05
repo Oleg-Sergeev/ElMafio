@@ -6,9 +6,10 @@ using Infrastructure.Data;
 
 namespace Modules
 {
+    [Group("Настройки")]
+    [Alias("н")]
+    [RequireContext(ContextType.Guild)]
     [RequireUserPermission(GuildPermission.Administrator)]
-    [Group("настройки")]
-    [Alias("н", "settings", "s")]
     public class SettingsModule : ModuleBase<SocketCommandContext>
     {
         private readonly BotContext _db;
@@ -20,18 +21,11 @@ namespace Modules
         }
 
 
-        [Command("префикс")]
-        [Alias("prefix")]
-        public async Task UpdatePrefixAsync(string? newPrefix)
+        [Command("Префикс")]
+        [Alias("преф", "п")]
+        [Summary("Изменить префикс бота")]
+        public async Task UpdatePrefixAsync([Summary("Новый префикс бота")] string newPrefix)
         {
-            if (string.IsNullOrWhiteSpace(newPrefix))
-            {
-                await ReplyAsync("Префикс не может быть пустой строкой");
-
-                return;
-            }
-
-
             var guildSettings = await _db.GuildSettings.FindAsync(Context.Guild.Id);
 
             if (guildSettings is null)

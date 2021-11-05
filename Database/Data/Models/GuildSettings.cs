@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations.Schema;
+using Infrastructure.Data.Models.Games.Settings;
 
 namespace Infrastructure.Data.Models
 {

@@ -20,6 +20,9 @@ namespace Infrastructure.TypeReaders
             if (input.ToLower() == "нет" || input.ToLower() == "no" || input.ToLower() == "n" || input[0] == '-')
                 return Task.FromResult(TypeReaderResult.FromSuccess(false));
 
+            if (input.ToLower() == "x" || input.ToLower() == "х" || input.ToLower() == "=") 
+                return Task.FromResult(TypeReaderResult.FromSuccess(null));
+
 
             return Task.FromResult(TypeReaderResult.FromError(CommandError.ParseFailed, $"Input cannot be parsed as Boolean"));
         }

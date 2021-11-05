@@ -3,17 +3,18 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using Infrastructure.Data.Models;
 using Discord;
 using Discord.Commands;
+using Infrastructure.Data;
+using Infrastructure.Data.Models.Games.Settings;
+using Infrastructure.Data.Models.Games.Stats;
 using Microsoft.EntityFrameworkCore;
 using Modules.Extensions;
-using Infrastructure.Data;
 
 namespace Modules.Games
 {
-    [Group("рулетка")]
-    [Alias("р")]
+    [Group("РусскаяРулетка")]
+    [Alias("рулетка", "р")]
     public class RussianRoulleteModule : GameModule
     {
         public RussianRoulleteModule(Random random, BotContext db) : base(random, db)
@@ -22,9 +23,9 @@ namespace Modules.Games
 
 
         // Maybe add complex adding
-        [Group("смайлы")]
+        [Group("Смайлы")]
         [RequireUserPermission(GuildPermission.Administrator)]
-        public class SetSmile : ModuleBase
+        public class SetSmile : ModuleBase<SocketCommandContext>
         {
             private readonly BotContext _db;
 
@@ -45,7 +46,7 @@ namespace Modules.Games
             [Command("удалитьубил")]
             public async Task RemoveCustomSmileKilled()
             {
-                var settings = await GetSettingsAsync(_db, Context.Guild.Id);
+                var settings = await GetSettingsAsync<RussianRouletteSettings>(_db, Context.Guild.Id);
 
                 settings.CustomSmileKilled = null;
 
@@ -55,7 +56,7 @@ namespace Modules.Games
             [Command("удалитьвыжил")]
             public async Task RemoveCustomSmileSurvived()
             {
-                var settings = await GetSettingsAsync(_db, Context.Guild.Id);
+                var settings = await GetSettingsAsync<RussianRouletteSettings>(_db, Context.Guild.Id);
 
                 settings.CustomSmileSurvived = null;
 
@@ -68,7 +69,7 @@ namespace Modules.Games
             [Command("убил")]
             public async Task SetSmileKilledAsync(Emoji emoji)
             {
-                var settings = await GetSettingsAsync(_db, Context.Guild.Id);
+                var settings = await GetSettingsAsync<RussianRouletteSettings>(_db, Context.Guild.Id);
 
                 settings.UnicodeSmileKilled = emoji.ToString();
 
@@ -84,7 +85,7 @@ namespace Modules.Games
             [Command("убил")]
             public async Task SetSmileKilledAsync(Emote emote)
             {
-                var settings = await GetSettingsAsync(_db, Context.Guild.Id);
+                var settings = await GetSettingsAsync<RussianRouletteSettings>(_db, Context.Guild.Id);
 
                 settings.CustomSmileKilled = emote.ToString();
 
@@ -102,7 +103,7 @@ namespace Modules.Games
             [Command("выжил")]
             public async Task SetSmileSuvivedAsync(Emoji emoji)
             {
-                var settings = await GetSettingsAsync(_db, Context.Guild.Id);
+                var settings = await GetSettingsAsync<RussianRouletteSettings>(_db, Context.Guild.Id);
 
                 settings.UnicodeSmileSurvived = emoji.ToString();
 
@@ -118,7 +119,7 @@ namespace Modules.Games
             [Command("выжил")]
             public async Task SetSmileSuvivedAsync(Emote emote)
             {
-                var settings = await GetSettingsAsync(_db, Context.Guild.Id);
+                var settings = await GetSettingsAsync<RussianRouletteSettings>(_db, Context.Guild.Id);
 
                 settings.CustomSmileSurvived = emote.ToString();
 
@@ -191,8 +192,16 @@ namespace Modules.Games
         public override Task ResetRatingAsync()
             => ResetRatingAsync<RussianRouletteStats>();
 
+        [RequireBotPermission(GuildPermission.AddReactions,
+            ErrorMessage = "У меня нет права добавлять реакции к сообщениям. Пожалуйста, добавьте это право, или используйте команду **стартбез**")]
+        public override async Task StartAsync() => await StartGameAsync(true);
 
-        public override async Task StartAsync()
+        [Command("стартбез")]
+        [Summary("Запустить игру без добавления реакций к сообщениям")]
+        public async Task StartWithoutReactionsAsync() => await StartGameAsync(false);
+
+
+        private async Task StartGameAsync(bool canAddReactions)
         {
             GameData = GetGameData();
 
@@ -216,7 +225,7 @@ namespace Modules.Games
 
             await delay;
 
-            var winner = await PlayAsync(rrData);
+            var winner = await PlayAsync(rrData, canAddReactions);
 
 
             if (GameData.IsPlaying && winner is not null)
@@ -246,7 +255,7 @@ namespace Modules.Games
             DeleteGameData();
         }
 
-        private async Task<IGuildUser?> PlayAsync(RussianRoulleteData rrData)
+        private async Task<IGuildUser?> PlayAsync(RussianRoulleteData rrData, bool canAddReactions)
         {
             await ReplyAsync("Крутим барабан...");
 
@@ -293,10 +302,14 @@ namespace Modules.Games
                         var msg = await ReplyAsync($"{alivePlayers[i].Mention} жмет на курок и {messages[Random.Next(messages.Length)]}");
 
 
-                        if (hasCustomSmileKilled && Context.Guild.Emotes.Contains(rrData.CustomEmoteKilled))
-                            await msg.AddReactionAsync(rrData.CustomEmoteKilled);
-                        else
-                            await msg.AddReactionAsync(rrData.UnicodeEmojiKilled);
+                        if (canAddReactions)
+                        {
+                            if (hasCustomSmileKilled && Context.Guild.Emotes.Contains(rrData.CustomEmoteKilled))
+                                await msg.AddReactionAsync(rrData.CustomEmoteKilled);
+                            else
+                                await msg.AddReactionAsync(rrData.UnicodeEmojiKilled);
+                        }
+
 
 
                         alivePlayers.RemoveAt(i);
@@ -329,10 +342,14 @@ namespace Modules.Games
                         var msg = await ReplyAsync($"{alivePlayers[i].Mention} жмет на курок и {messages[Random.Next(messages.Length)]}");
 
 
-                        if (hasCustomSmileSurvived && Context.Guild.Emotes.Contains(rrData.CustomEmoteSurvived))
-                            await msg.AddReactionAsync(rrData.CustomEmoteSurvived);
-                        else
-                            await msg.AddReactionAsync(rrData.UnicodeEmojiSurvived);
+                        if (canAddReactions)
+                        {
+                            if (hasCustomSmileSurvived && Context.Guild.Emotes.Contains(rrData.CustomEmoteSurvived))
+                                await msg.AddReactionAsync(rrData.CustomEmoteSurvived);
+                            else
+                                await msg.AddReactionAsync(rrData.UnicodeEmojiSurvived);
+                        }
+
 
 
                         await ReplyAsync("А мы идем дальше");
@@ -388,7 +405,7 @@ namespace Modules.Games
 
         private async Task<RussianRoulleteData> CreateRussianRoulleteDataAsync()
         {
-            var rrSettings = await GetSettingsAsync(_db, Context.Guild.Id, false);
+            var rrSettings = await GetSettingsAsync<RussianRouletteSettings>(_db, Context.Guild.Id, false);
 
             var rrdata = new RussianRoulleteData(new Emoji(rrSettings.UnicodeSmileKilled), new Emoji(rrSettings.UnicodeSmileSurvived))
             {
@@ -397,42 +414,6 @@ namespace Modules.Games
             };
 
             return rrdata;
-        }
-
-        private static async Task<RussianRouletteSettings> GetSettingsAsync(BotContext db, ulong guildId, bool isTracking = true)
-        {
-            RussianRouletteSettings? rrSettings;
-
-            if (isTracking)
-                rrSettings = await db.RussianRouletteSettings
-                   .AsTracking()
-                   .FirstOrDefaultAsync(s => s.GuildSettingsId == guildId);
-            else
-                rrSettings = await db.RussianRouletteSettings
-                   .AsNoTracking()
-                   .FirstOrDefaultAsync(s => s.GuildSettingsId == guildId);
-
-
-            if (rrSettings is null)
-                rrSettings = await AddSettingsToDb(db, guildId);
-
-
-            return rrSettings;
-        }
-
-        private static async Task<RussianRouletteSettings> AddSettingsToDb(BotContext db, ulong guildId)
-        {
-            var settings = new RussianRouletteSettings()
-            {
-                GuildSettingsId = guildId
-            };
-
-            await db.RussianRouletteSettings.AddAsync(settings);
-
-
-            await db.SaveChangesAsync();
-
-            return settings;
         }
 
 

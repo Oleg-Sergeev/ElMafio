@@ -17,7 +17,7 @@ namespace Infrastructure
         private const string LogsDirectory = @"Data\Logs";
         private const string GuildLogsDirectory = LogsDirectory + @"\Guilds";
         private const string GuildLogsDefaultName = "_UnidentifiedGuilds";
-        private const string OutputConsoleTemplate = "{Timestamp:HH:mm:ss:fff} [{Level:u3}] {Message:j}{NewLine}{Exception}";
+        private const string OutputConsoleTemplate = "{Timestamp:HH:mm:ss:fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}";
         private const string OutputFileTemplate = "{Timestamp:dd.MM.yyyy HH:mm:ss:fff} [{Level:u3}] {Message:j}{NewLine}{Exception}";
 
 
@@ -35,6 +35,11 @@ namespace Infrastructure
             _commandService.Log += OnLog;
             _commandService.CommandExecuted += OnCommandExecutedAsync;
 
+        }
+
+        ~LoggingService()
+        {
+            Log.Information("Shutting down the application");
         }
 
 
@@ -64,6 +69,9 @@ namespace Infrastructure
                                              rollingInterval: RollingInterval.Day,
                                              shared: true))))
                 .CreateLogger();
+
+            Log.Information(new string('-', 64));
+            Log.Information("Application started");
         }
 
 
@@ -74,30 +82,21 @@ namespace Infrastructure
             return File.OpenRead(path);
         }
 
-        public static FileStream? GetGuildLogFileToday(ulong guildId, out string path)
-        {
-            path = Path.Combine(GuildLogsDirectory, guildId.ToString(), $"log_{DateTime.Now:yyyyMMdd}.txt");
-
-            return GetLogFile(path);
-        }
-
-        public static string? GetGuildLogFilePathToday(ulong guildId)
+        public static FileStream? GetGuildLogFileToday(ulong guildId)
         {
             var path = Path.Combine(GuildLogsDirectory, guildId.ToString(), $"log_{DateTime.Now:yyyyMMdd}.txt");
 
-            if (!File.Exists(path))
-                return null;
-
-            return path;
+            return GetLogFile(path);
         }
-
 
 
         private async Task OnCommandExecutedAsync(Optional<CommandInfo> commandInfo, ICommandContext context, IResult result)
         {
             var guildLog = Log.ForContext(PropertyGuildName, context.Guild.Id);
 
-            guildLog.Verbose("({0:l}): Executed {1} for {2} in {3}. Raw message: {4}",
+            const string infoPattern = "({0:l}): Executed {1} for {2} in {3}. Raw message: {4}";
+
+            guildLog.Verbose(infoPattern,
                 nameof(OnCommandExecutedAsync),
                 commandInfo.IsSpecified ? commandInfo.Value.Name : "NULL",
                 context.User.Username,
@@ -138,9 +137,20 @@ namespace Infrastructure
 
                 default:
                     if (result is ExecuteResult exeResult)
-                        guildLog.Error(exeResult.Exception, result.ToString());
+                        guildLog.Error(exeResult.Exception, infoPattern,
+                                       nameof(OnCommandExecutedAsync),
+                                       commandInfo.Value,
+                                       context.User.Username,
+                                       $"{context.Guild.Name}/{context.Channel.Name}",
+                                       context.Message.Content);
                     else
-                        guildLog.Warning(result.ToString());
+                        guildLog.Warning($"{infoPattern}. Warning: {{5}}",
+                                         nameof(OnCommandExecutedAsync),
+                                         commandInfo.IsSpecified ? commandInfo.Value.Name : "NULL",
+                                         context.User.Username,
+                                         $"{context.Guild.Name}/{context.Channel.Name}",
+                                         context.Message.Content,
+                                         result.ToString());
 
 
                     await context.Channel.SendMessageAsync("Произошла непредвиденная ошибка");
@@ -151,11 +161,9 @@ namespace Infrastructure
 
         private Task OnLog(LogMessage log)
         {
-            var logText = $"({log.Source}): {log.Message}";
-
             var logLevel = ConvertSeverity(log.Severity);
 
-            Log.Write(logLevel, log.Exception, logText);
+            Log.Write(logLevel, log.Exception, $"({{0:l}}): {log.Message}", log.Source);
 
             return Task.CompletedTask;
         }

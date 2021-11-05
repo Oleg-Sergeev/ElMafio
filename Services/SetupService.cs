@@ -5,9 +5,9 @@ using System.Threading.Tasks;
 using Discord;
 using Discord.Commands;
 using Discord.WebSocket;
-using Microsoft.Extensions.Configuration;
+using Infrastructure.Data.ViewModels;
 using Infrastructure.TypeReaders;
-using Infrastructure.ViewModels;
+using Microsoft.Extensions.Configuration;
 
 namespace Infrastructure
 {
