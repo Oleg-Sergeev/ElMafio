@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net5.0</TargetFramework>
+    <TargetFramework>net6.0</TargetFramework>
 	  <Nullable>enable</Nullable>
 	  <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
@@ -14,6 +14,12 @@
   <ItemGroup>
     <ProjectReference Include="..\Database\Infrastructure.csproj" />
     <ProjectReference Include="..\Services\Services.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Discord.Addons.Interactive">
+      <HintPath>..\..\Discord.Addons.Interactive-8eccd40d05c054b2304d9e5ef6e2fe340df528be\Discord.Addons.Interactive\bin\Debug\netstandard2.0\Discord.Addons.Interactive.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
 </Project>

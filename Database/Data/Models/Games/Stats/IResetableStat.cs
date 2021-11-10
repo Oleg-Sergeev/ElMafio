@@ -1,7 +1,6 @@
-﻿namespace Infrastructure.Data.Models.Games.Stats
+﻿namespace Infrastructure.Data.Models.Games.Stats;
+
+public interface IResetableStat
 {
-    public interface IResetableStat
-    {
-        void Reset();
-    }
+    void Reset();
 }

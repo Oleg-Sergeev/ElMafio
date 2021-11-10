@@ -3,24 +3,23 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
 
-namespace Infrastructure.Data
+namespace Infrastructure.Data;
+
+public class BotDbContextFactory : IDesignTimeDbContextFactory<BotContext>
 {
-    public class BotDbContextFactory : IDesignTimeDbContextFactory<BotContext>
+    private const string ConfigPath = @"Data\Configs\AppConfig.json";
+
+
+    public BotContext CreateDbContext(string[] args)
     {
-        private const string ConfigPath = @"Data\Configs\DefaultConfig.json";
+        IConfiguration config = new ConfigurationBuilder()
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile(ConfigPath)
+            .Build();
 
+        var optionsBuilder = new DbContextOptionsBuilder<BotContext>();
+        optionsBuilder.UseSqlServer(config.GetConnectionString("DefaultSQLServer"));
 
-        public BotContext CreateDbContext(string[] args)
-        {
-            IConfiguration config = new ConfigurationBuilder()
-                .SetBasePath(AppContext.BaseDirectory)
-                .AddJsonFile(ConfigPath)
-                .Build();
-
-            var optionsBuilder = new DbContextOptionsBuilder<BotContext>();
-            optionsBuilder.UseSqlServer(config.GetConnectionString("DefaultSQLServer"));
-
-            return new BotContext(optionsBuilder.Options);
-        }
+        return new BotContext(optionsBuilder.Options);
     }
 }

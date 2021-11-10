@@ -124,13 +124,25 @@ namespace Infrastructure.Migrations
                     b.Property<decimal>("GuildId")
                         .HasColumnType("decimal(20,0)");
 
+                    b.Property<int>("BlacksGamesCount")
+                        .HasColumnType("int");
+
+                    b.Property<float>("BlacksWinRate")
+                        .HasColumnType("real");
+
+                    b.Property<int>("BlacksWinsCount")
+                        .HasColumnType("int");
+
+                    b.Property<float>("CommissionerEfficiency")
+                        .HasColumnType("real");
+
                     b.Property<int>("CommissionerMovesCount")
                         .HasColumnType("int");
 
                     b.Property<int>("CommissionerSuccessfullMovesCount")
                         .HasColumnType("int");
 
-                    b.Property<float>("CommissionerWinRate")
+                    b.Property<float>("DoctorEfficiency")
                         .HasColumnType("real");
 
                     b.Property<int>("DoctorMovesCount")
@@ -139,8 +151,14 @@ namespace Infrastructure.Migrations
                     b.Property<int>("DoctorSuccessfullMovesCount")
                         .HasColumnType("int");
 
-                    b.Property<float>("DoctorWinRate")
+                    b.Property<float>("DonEfficiency")
                         .HasColumnType("real");
+
+                    b.Property<int>("DonMovesCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DonSuccessfullMovesCount")
+                        .HasColumnType("int");
 
                     b.Property<float>("ExtraScores")
                         .HasColumnType("real");
@@ -148,22 +166,13 @@ namespace Infrastructure.Migrations
                     b.Property<int>("GamesCount")
                         .HasColumnType("int");
 
-                    b.Property<int>("MurderGamesCount")
-                        .HasColumnType("int");
-
-                    b.Property<float>("MurderWinRate")
+                    b.Property<float>("PenaltyScores")
                         .HasColumnType("real");
-
-                    b.Property<int>("MurderWinsCount")
-                        .HasColumnType("int");
 
                     b.Property<float>("Rating")
                         .HasColumnType("real");
 
                     b.Property<float>("Scores")
-                        .HasColumnType("real");
-
-                    b.Property<float>("TotalWinRate")
                         .HasColumnType("real");
 
                     b.Property<float>("WinRate")

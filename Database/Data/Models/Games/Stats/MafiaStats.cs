@@ -1,72 +1,86 @@
-﻿namespace Infrastructure.Data.Models.Games.Stats
+﻿namespace Infrastructure.Data.Models.Games.Stats;
+
+public class MafiaStats : GameStats
 {
-    public class MafiaStats : GameStats
+    public int BlacksGamesCount { get; set; }
+    public int BlacksWinsCount { get; set; }
+
+    public float BlacksWinRate
     {
-        public int MurderGamesCount { get; set; }
-        public int MurderWinsCount { get; set; }
-
-        public float MurderWinRate
-        {
-            get => MurderGamesCount != 0 ? (float)MurderWinsCount / MurderGamesCount : 0;
-            private set { }
-        }
+        get => BlacksGamesCount != 0 ? (float)BlacksWinsCount / BlacksGamesCount : 0;
+        private set { }
+    }
 
 
-        public int DoctorMovesCount { get; set; }
-        public int DoctorSuccessfullMovesCount { get; set; }
+    public int DoctorMovesCount { get; set; }
+    public int DoctorSuccessfullMovesCount { get; set; }
 
-        public float DoctorWinRate
-        {
-            get => DoctorMovesCount != 0 ? (float)DoctorSuccessfullMovesCount / DoctorMovesCount : 0;
-            private set { }
-        }
-
-
-        public int CommissionerMovesCount { get; set; }
-        public int CommissionerSuccessfullMovesCount { get; set; }
-
-        public float CommissionerWinRate
-        {
-            get => CommissionerMovesCount != 0 ? (float)CommissionerSuccessfullMovesCount / CommissionerMovesCount : 0;
-            private set { }
-        }
+    public float DoctorEfficiency
+    {
+        get => DoctorMovesCount != 0 ? (float)DoctorSuccessfullMovesCount / DoctorMovesCount : 0;
+        private set { }
+    }
 
 
-        public float ExtraScores { get; set; }
+    public int CommissionerMovesCount { get; set; }
+    public int CommissionerSuccessfullMovesCount { get; set; }
+
+    public float CommissionerEfficiency
+    {
+        get => CommissionerMovesCount != 0 ? (float)CommissionerSuccessfullMovesCount / CommissionerMovesCount : 0;
+        private set { }
+    }
 
 
-        public float TotalWinRate
-        {
-            get => (WinRate + MurderWinRate + DoctorWinRate + CommissionerWinRate) / 4;
-            private set { }
-        }
+    public int DonMovesCount { get; set; }
+    public int DonSuccessfullMovesCount { get; set; }
+
+    public float DonEfficiency
+    {
+        get => DonMovesCount != 0 ? (float)DonSuccessfullMovesCount / DonMovesCount : 0;
+        private set { }
+    }
 
 
-        public float Scores
-        {
-            get => WinsCount + MurderWinsCount + DoctorSuccessfullMovesCount + CommissionerSuccessfullMovesCount + ExtraScores;
-            private set { }
-        }
 
-        public float Rating
-        {
-            get => 100f * Scores / GamesCount * 0.25f * GamesCount;
-            private set { }
-        }
+    public float ExtraScores { get; set; }
+
+    public float PenaltyScores { get; set; }
 
 
-        public override void Reset()
-        {
-            base.Reset();
+    public float Scores
+    {
+        get => WinsCount + BlacksWinsCount + DoctorSuccessfullMovesCount + CommissionerSuccessfullMovesCount + DonSuccessfullMovesCount + ExtraScores - PenaltyScores;
+        private set { }
+    }
 
-            MurderGamesCount = 0;
-            MurderWinsCount = 0;
+    public float Rating
+    {
+        get => GamesCount != 0 ? 100f * Scores / GamesCount : 0;
+        private set { }
+    }
 
-            DoctorMovesCount = 0;
-            DoctorSuccessfullMovesCount = 0;
 
-            CommissionerMovesCount = 0;
-            CommissionerSuccessfullMovesCount = 0;
-        }
+
+    public override void Reset()
+    {
+        base.Reset();
+
+        ExtraScores = 0;
+
+        PenaltyScores = 0;
+
+
+        BlacksGamesCount = 0;
+        BlacksWinsCount = 0;
+
+        DoctorMovesCount = 0;
+        DoctorSuccessfullMovesCount = 0;
+
+        CommissionerMovesCount = 0;
+        CommissionerSuccessfullMovesCount = 0;
+
+        DonMovesCount = 0;
+        DonSuccessfullMovesCount = 0;
     }
 }

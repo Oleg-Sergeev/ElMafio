@@ -1,6 +1,5 @@
-﻿namespace Infrastructure.Data.Models.Games.Stats
+﻿namespace Infrastructure.Data.Models.Games.Stats;
+
+public class RussianRouletteStats : GameStats
 {
-    public class RussianRouletteStats : GameStats
-    {
-    }
 }
