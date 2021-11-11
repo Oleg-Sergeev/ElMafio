@@ -50,13 +50,13 @@ public class MafiaStats : GameStats
 
     public float Scores
     {
-        get => WinsCount + BlacksWinsCount + DoctorSuccessfullMovesCount + CommissionerSuccessfullMovesCount + DonSuccessfullMovesCount + ExtraScores - PenaltyScores;
+        get => WinsCount + BlacksWinsCount + DoctorSuccessfullMovesCount + CommissionerSuccessfullMovesCount + DonSuccessfullMovesCount;
         private set { }
     }
 
     public float Rating
     {
-        get => GamesCount != 0 ? 100f * Scores / GamesCount : 0;
+        get => GamesCount != 0 ? 100f * (Scores + ExtraScores - PenaltyScores) / GamesCount : 0;
         private set { }
     }
 

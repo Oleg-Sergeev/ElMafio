@@ -130,6 +130,7 @@ public class HelpModule : InteractiveBase
     }
 
 
+
     [Priority(1)]
     [Command("Помощь")]
     [Alias("help", "команда")]
@@ -183,6 +184,7 @@ public class HelpModule : InteractiveBase
         if (!hasAnyAvailableCommand)
             await ReplyAsync($"У вас нет прав на использование команды {command}");
     }
+
 
 
 

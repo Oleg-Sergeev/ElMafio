@@ -262,19 +262,51 @@ public abstract class GameModule : GuildModuleBase
 
     [Command("рейтингсброс")]
     [Alias("топсброс", "рейтсброс")]
-    [RequireOwner]
+    [RequireUserPermission(GuildPermission.Administrator)]
     public abstract Task ResetRatingAsync();
 
     protected async Task ResetRatingAsync<T>() where T : GameStats
     {
+        var confirmed = await ConfirmActionAsync("Сброс рейтинга");
+
+        if (confirmed is null)
+        {
+            await ReplyEmbedAndDeleteAsync(EmbedType.Warning, "Вы не подтвердили действие", true, "Сброс рейтинга", true);
+
+            return;
+        }
+        else if (confirmed is false)
+        {
+            await ReplyEmbedAndDeleteAsync(EmbedType.Error, "Вы отклонили действие", true, "Сброс рейтинга", true);
+
+            return;
+        }
+
+        var msg = await ReplyEmbedAndDeleteAsync(EmbedType.Successfull, "Вы подтвердили действие", true, "Сброс рейтинга", true);
+
+        var guildSettings = await Db.GuildSettings.FindAsync(Context.Guild.Id);
+
+        if (guildSettings.LogChannelId is not null)
+        {
+            var logChannel = Context.Guild.GetTextChannel(guildSettings.LogChannelId.Value);
+
+            if (logChannel is not null)
+            {
+                var embed = (Embed)msg.Embeds.First();
+
+                await logChannel.SendMessageAsync(
+                        $"{Context.Guild.EveryoneRole.Mention} Пользователь **{Context.User.GetFullName()}** выполнил команду **{embed.Title}**", embed: embed);
+            }
+        }
+
         var userStats = await Db.Set<T>()
             .AsTracking()
-            .Where(s => s.GuildId == Context.Guild.Id)
+            .Where(s => s.GuildId == Context.Guild.Id && s.GamesCount > 0)
             .ToListAsync();
 
         if (userStats is null || userStats.Count == 0)
         {
-            await ReplyAsync("Рейтинг отсутствует");
+            await ReplyEmbedAsync(EmbedType.Information, "Рейтинг отсутствует");
 
             return;
         }
@@ -284,7 +316,7 @@ public abstract class GameModule : GuildModuleBase
 
         await Db.SaveChangesAsync();
 
-        await ReplyAsync("Рейтинг успешно сброшен");
+        await ReplyEmbedAsync(EmbedType.Successfull, "Рейтинг успешно сброшен", withDefaultFooter: true);
     }
 
 
@@ -422,7 +454,7 @@ public abstract class GameModule : GuildModuleBase
 
     protected void DeleteGameData()
     {
-        GamesData.Remove(Context.Guild.Id);
+        GamesData[Context.Guild.Id].Remove(GetType());
     }
 
 

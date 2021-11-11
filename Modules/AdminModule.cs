@@ -15,7 +15,7 @@ namespace Modules;
 [Group("Админ")]
 [Alias("а")]
 [RequireContext(ContextType.Guild)]
-public class AdminModule : ModuleBase<SocketCommandContext>
+public class AdminModule : GuildModuleBase
 {
     private readonly BotContext _db;
 
@@ -57,19 +57,17 @@ public class AdminModule : ModuleBase<SocketCommandContext>
         if (Context.Channel is not ITextChannel textChannel)
             return;
 
-
         count = Math.Clamp(count, 0, 100);
 
-        var messagesToDelete = await textChannel.GetMessagesAsync(count + 1).FlattenAsync();
+        var messagesToDelete = (await textChannel
+            .GetMessagesAsync(count + 1)
+            .FlattenAsync())
+            .Where(msg => (DateTime.UtcNow - msg.Timestamp).TotalDays <= 14);
 
         await textChannel.DeleteMessagesAsync(messagesToDelete);
 
 
-        var msg = await textChannel.SendMessageAsync("Сообщения успешно удалены");
-
-        await Task.Delay(2000);
-
-        await textChannel.DeleteMessageAsync(msg);
+        await ReplyEmbedAndDeleteAsync(EmbedType.Successfull, $"Сообщения успешно удалены ({count} шт)", withDefaultFooter: true);
     }
 
 
@@ -80,9 +78,21 @@ public class AdminModule : ModuleBase<SocketCommandContext>
     [RequireUserPermission(GuildPermission.BanMembers)]
     public async Task BanAsync(IGuildUser guildUser, int pruneDays = 0, [Remainder] string? reason = null)
     {
-        await Context.Guild.AddBanAsync(guildUser, pruneDays, reason);
+        var settings = await _db.GuildSettings.FindAsync(Context.Guild.Id);
 
-        await ReplyAsync($"Пользователь {guildUser.GetFullName()} успешно забанен");
+        var confirmed = await ConfirmActionWithHandlingAsync($"Забанить {guildUser.GetFullName()}", settings.LogChannelId);
+
+        if (confirmed)
+        {
+            if (Context.Guild.GetUser(guildUser.Id) is not null)
+            {
+                await Context.Guild.AddBanAsync(guildUser, pruneDays, reason);
+
+                await ReplyEmbedAsync(EmbedType.Successfull, $"Пользователь {guildUser.GetFullName()} успешно забанен", withDefaultFooter: true);
+            }
+            else
+                await ReplyEmbedAsync(EmbedType.Error, $"Пользователь {guildUser.GetFullName()} не найден", withDefaultFooter: true);
+        }
     }
 
 
@@ -96,7 +106,7 @@ public class AdminModule : ModuleBase<SocketCommandContext>
 
         if (arr.Length < 2)
         {
-            await ReplyAsync($"Пожалуйста, укажите имя пользователя и его тег. Пример: @{Context.User.GetFullName()}");
+            await ReplyEmbedAsync(EmbedType.Warning, $"Пожалуйста, укажите имя пользователя и его тег. Пример: @{Context.User.GetFullName()}");
 
             return;
         }
@@ -109,14 +119,41 @@ public class AdminModule : ModuleBase<SocketCommandContext>
 
         if (user == null)
         {
-            await ReplyAsync($"Пользователь с именем {userName.Item1}#{userName.Item2} не найден в списке банов.");
+            await ReplyEmbedAsync(EmbedType.Error, $"Пользователь с именем {userName.Item1}#{userName.Item2} не найден в списке банов.");
 
             return;
         }
 
-        await Context.Guild.RemoveBanAsync(user);
+        await UnbanAsync(user.Id);
+    }
+    [Command("Разбан")]
+    [Summary("Разбанить указанного пользователя")]
+    [RequireBotPermission(GuildPermission.BanMembers)]
+    [RequireUserPermission(GuildPermission.BanMembers)]
+    public async Task UnbanAsync(ulong id)
+    {
+        var bans = await Context.Guild.GetBansAsync();
 
-        await ReplyAsync($"Пользователь {user.GetFullName()} успешно разбанен");
+        var user = bans.FirstOrDefault(ban => ban.User.Id == id)?.User;
+
+        if (user == null)
+        {
+            await ReplyEmbedAsync(EmbedType.Error, $"Пользователь с айди {id} не найден в списке банов.");
+
+            return;
+        }
+
+        var settings = await _db.GuildSettings.FindAsync(Context.Guild.Id);
+
+        var confirmed = await ConfirmActionWithHandlingAsync($"Разбанить {user.GetFullName()}", settings.LogChannelId);
+
+
+        if (confirmed)
+        {
+            await Context.Guild.RemoveBanAsync(user);
+
+            await ReplyEmbedAsync(EmbedType.Successfull, $"Пользователь {user.GetFullName()} успешно разбанен", withDefaultFooter: true);
+        }
     }
 
 
@@ -127,9 +164,17 @@ public class AdminModule : ModuleBase<SocketCommandContext>
     [RequireUserPermission(GuildPermission.KickMembers)]
     public async Task KickAsync(IGuildUser guildUser, [Remainder] string? reason = null)
     {
-        await guildUser.KickAsync(reason);
+        var settings = await _db.GuildSettings.FindAsync(Context.Guild.Id);
 
-        await ReplyAsync($"Пользователь {guildUser.GetFullName()} успешно выгнан");
+        var confirmed = await ConfirmActionWithHandlingAsync($"Выгнать {guildUser.GetFullName()}", settings.LogChannelId);
+
+
+        if (confirmed)
+        {
+            await guildUser.KickAsync(reason);
+
+            await ReplyAsync($"Пользователь {guildUser.GetFullName()} успешно выгнан");
+        }
     }
 
 
@@ -137,12 +182,16 @@ public class AdminModule : ModuleBase<SocketCommandContext>
     [Alias("мут")]
     [Summary("Замьютить указанного пользователя")]
     [RequireUserPermission(GuildPermission.KickMembers)]
+    [RequireBotPermission(GuildPermission.ManageRoles)]
     public async Task MuteAsync(IGuildUser guildUser)
     {
         var settings = await _db.GuildSettings.FindAsync(Context.Guild.Id);
 
-        if (settings is null)
-            throw new NullReferenceException("Guild id was not found in database");
+
+        var confirmed = await ConfirmActionWithHandlingAsync($"Замутить {guildUser.GetFullName()}", settings.LogChannelId);
+
+        if (!confirmed)
+            return;
 
         IRole? roleMute;
 
@@ -154,7 +203,7 @@ public class AdminModule : ModuleBase<SocketCommandContext>
                 "Muted",
                 new GuildPermissions(sendMessages: false),
                 Color.DarkerGrey,
-                false,
+                true,
                 true
                 );
 
@@ -170,8 +219,10 @@ public class AdminModule : ModuleBase<SocketCommandContext>
 
         await guildUser.AddRoleAsync(roleMute);
 
-        await ReplyAsync($"Пользователь {guildUser.GetFullMention()} успешно замьючен");
+
+        await ReplyEmbedAsync(EmbedType.Successfull, $"Пользователь {guildUser.GetFullMention()} успешно замьючен", withDefaultFooter: true);
     }
+
 
     [Command("Размьют")]
     [Alias("размут")]
@@ -195,9 +246,16 @@ public class AdminModule : ModuleBase<SocketCommandContext>
             return;
         }
 
-        await guildUser.RemoveRoleAsync(settings.RoleMuteId.Value);
 
-        await ReplyAsync($"Пользователь {guildUser.GetFullMention()} успешно размьючен");
+        var confirmed = await ConfirmActionWithHandlingAsync($"Замутить {guildUser.GetFullName()}", settings.LogChannelId);
+
+
+        if (confirmed)
+        {
+            await guildUser.RemoveRoleAsync(settings.RoleMuteId.Value);
+
+            await ReplyEmbedAsync(EmbedType.Successfull, $"Пользователь {guildUser.GetFullMention()} успешно размьючен", withDefaultFooter: true);
+        }
     }
 
 
@@ -224,7 +282,7 @@ public class AdminModule : ModuleBase<SocketCommandContext>
     [Command("рестарт")]
     public async Task RestartAsync()
     {
-        await ReplyAsync("Перезапуск...");
+        await ReplyEmbedAsync(EmbedType.Information, "Перезапуск...");
 
         Log.Debug("({0:l}): Restart request received from server {1} by user {2}",
                   nameof(RestartAsync),

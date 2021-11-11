@@ -140,7 +140,7 @@ public class MafiaModule : GameModule
 
             await _db.SaveChangesAsync();
 
-            await ReplyAsync("Каналы успешно установлены");
+            await ReplyEmbedAsync(EmbedType.Successfull, "Каналы успешно установлены");
         }
 
 
@@ -169,7 +169,7 @@ public class MafiaModule : GameModule
 
             await _db.SaveChangesAsync();
 
-            await ReplyAsync("Роли успешно установлены");
+            await ReplyEmbedAsync(EmbedType.Successfull, "Роли успешно установлены");
         }
 
         [Priority(1)]
@@ -186,7 +186,7 @@ public class MafiaModule : GameModule
             await _db.SaveChangesAsync();
 
 
-            await ReplyAsync("Категория успешно установлена");
+            await ReplyEmbedAsync(EmbedType.Successfull, "Категория успешно установлена");
         }
 
 
@@ -259,17 +259,17 @@ public class MafiaModule : GameModule
             Title = "Статистика",
             Color = Color.Gold
         }
-        .AddField("Победы за красные роли", $"{userStat.WinRate:F2}%", true)
-        .AddField("Победы за черные роли", $"{userStat.WinRate:F2}%", true)
-        .AddField("Суммарные победы", $"{(userStat.WinRate / 2 + userStat.BlacksWinRate / 2):F2}%", true)
-        .AddField("Эффективность доктора", $"{userStat.DoctorEfficiency:F2}%", true)
-        .AddField("Эффективность шерифа", $"{userStat.CommissionerEfficiency:F2}%", true)
-        .AddField("Эффективность дона", $"{userStat.DonEfficiency:F2}%", true)
-        .AddField("Кол-во основных очков", $"{userStat.Scores:F2}%", true)
-        .AddField("Кол-во доп. очков", $"{userStat.ExtraScores:F2}%", true)
-        .AddField("Кол-во штрафных очков", $"{userStat.PenaltyScores:F2}%", true)
+        .AddField("Победы за красные роли", $"{userStat.WinRate:P}", true)
+        .AddField("Победы за черные роли", $"{userStat.BlacksWinRate:P}", true)
+        .AddField("Суммарные победы", $"{(userStat.WinRate / 2) + userStat.BlacksWinRate / 2:P}", true)
+        .AddField("Эффективность доктора", $"{userStat.DoctorEfficiency:P}", true)
+        .AddField("Эффективность шерифа", $"{userStat.CommissionerEfficiency:P}", true)
+        .AddField("Эффективность дона", $"{userStat.DonEfficiency:P}", true)
+        .AddField("Кол-во основных очков", $"{userStat.Scores:0.##}", true)
+        .AddField("Кол-во доп. очков", $"{userStat.ExtraScores:0.##}", true)
+        .AddField("Кол-во штрафных очков", $"{userStat.PenaltyScores:0.##}", true)
         .AddEmptyField(true)
-        .AddField("Рейтинг", $"{userStat.Rating:F2} баллов")
+        .AddField("Рейтинг", $"{userStat.Rating:0.##} баллов")
         .WithCurrentTimestamp();
 
         await ReplyAsync(embed: embedBuilder.Build());
@@ -311,24 +311,27 @@ public class MafiaModule : GameModule
             Pages = pages
         };
 
-        var builder = new EmbedBuilder()
-        {
-            Title = "Рейтинг мафии",
-            Color = Color.Gold
-        };
+        var ratingsPerPage = 10;
 
-        var message = "";
-        for (int i = 0; i < allStats.Count; i++)
+        var page = "";
+        for (int i = 0, j = 0; i < allStats.Count; i++, j++)
         {
             if (!players.TryGetValue(allStats[i].UserId, out var user))
                 continue;
 
-            message += $"{i + 1}. **{user.GetFullName()}** – {allStats[i].Rating:F2}\n";
+            page += $"{i + 1}. **{user.GetFullName()}** – {allStats[i].Rating:0.##}\n";
+
+            if ((j+1) % ratingsPerPage == 0)
+            {
+                pages.Add(page);
+                page = "";
+            }
         }
 
-        builder.WithDescription(message);
+        if (!string.IsNullOrEmpty(page)) 
+            pages.Add(page);
 
-        await ReplyAsync(embed: builder.Build());
+        await PagedReplyAsync(msg);
     }
 
     public override Task ResetRatingAsync()
@@ -401,7 +404,7 @@ public class MafiaModule : GameModule
             }
 
 
-            if (GameData.IsPlaying && _settings.IsRatingGame)
+            if (GameData.IsPlaying && _mafiaData.Has3MurdersInGame && _settings.IsRatingGame)
                 await SaveStatsAsync();
 
             await ReplyAsync("Игра завершена");
@@ -791,16 +794,26 @@ public class MafiaModule : GameModule
 
             if (GameData!.IsPlaying)
             {
+                GuildLogger.Verbose(LogTemplate, nameof(FinishAsync), $"Begin update game stat to {player.GetFullName()}...");
+               
                 if (_mafiaData.Murders.Contains(player))
                 {
+                    GuildLogger.Verbose(LogTemplate, nameof(FinishAsync), $"Updating murder stat to {player.GetFullName()}...");
+
                     if (isMafiaWon)
                     {
                         _mafiaData.PlayerStats[player.Id].BlacksWinsCount++;
                         _mafiaData.PlayerStats[player.Id].ExtraScores += 0.5f;
+
+                        GuildLogger.Verbose(LogTemplate, nameof(FinishAsync), $"Added blacks wins stat to {player.GetFullName()}");
                     }
+
+                    GuildLogger.Verbose(LogTemplate, nameof(FinishAsync), $"Murder stat updated to {player.GetFullName()}");
                 }
                 else if (!isMafiaWon)
                     _mafiaData.PlayerStats[player.Id].WinsCount++;
+
+                GuildLogger.Verbose(LogTemplate, nameof(FinishAsync), $"End update game stat to {player.GetFullName()}");
             }
 
             await EjectPlayerAsync(player, false);
@@ -817,16 +830,26 @@ public class MafiaModule : GameModule
 
             if (GameData!.IsPlaying)
             {
+                GuildLogger.Verbose(LogTemplate, nameof(FinishAsync), $"Begin update game stat to {player.GetFullName()}...");
+
                 if (_mafiaData.KilledMurders.Contains(player))
                 {
+                    GuildLogger.Verbose(LogTemplate, nameof(FinishAsync), $"Updating murder stat to {player.GetFullName()}...");
+
                     if (isMafiaWon)
                     {
                         _mafiaData.PlayerStats[player.Id].BlacksWinsCount++;
                         _mafiaData.PlayerStats[player.Id].ExtraScores += 0.5f;
+
+                        GuildLogger.Verbose(LogTemplate, nameof(FinishAsync), $"Added blacks wins stat to {player.GetFullName()}");
                     }
+
+                    GuildLogger.Verbose(LogTemplate, nameof(FinishAsync), $"Murder stat updated to {player.GetFullName()}");
                 }
                 else if (!isMafiaWon)
                     _mafiaData.PlayerStats[player.Id].WinsCount++;
+
+                GuildLogger.Verbose(LogTemplate, nameof(FinishAsync), $"End update game stat to {player.GetFullName()}");
             }
         }
 
@@ -1083,11 +1106,9 @@ public class MafiaModule : GameModule
     {
         GuildLogger!.Debug(LogTemplate, nameof(DoMurdersMove), "Begin do murders move...");
 
-        await _mafiaData!.MurderTextChannel.RemovePermissionOverwriteAsync(_mafiaData.WatcherRole);
-
 
         var extraTime = 0;
-        if (_mafiaData.Murders.Count > 1)
+        if (_mafiaData!.Murders.Count > 1)
         {
             await ChangePermissionsMurderChannelsAsync(_allowWrite, _allowSpeak);
             await _mafiaData.MurderTextChannel.SendMessageAsync($"Кто же погибнет этой ночью? Обсуждайте ({nightTime}с)");
@@ -1103,6 +1124,8 @@ public class MafiaModule : GameModule
 
         await ChangePermissionsMurderChannelsAsync(_denyWrite, _denySpeak);
 
+        await _mafiaData!.MurderTextChannel.RemovePermissionOverwriteAsync(_mafiaData.WatcherRole);
+
         (_mafiaData.MurdersMove, var isSkip) = await WaitForVotingAsync(
             _mafiaData.MurderTextChannel,
             nightMurderVoteTime + extraTime,
@@ -1110,7 +1133,7 @@ public class MafiaModule : GameModule
             _mafiaData.AlivePlayers.Select(user => user.GetFullName()).ToList());
 
 
-        await _mafiaData.GeneralTextChannel.AddPermissionOverwriteAsync(_mafiaData.WatcherRole, _denyWrite);
+        await _mafiaData.MurderTextChannel.AddPermissionOverwriteAsync(_mafiaData.WatcherRole, _denyWrite);
 
 
         if (_mafiaData.MurdersMove is not null)

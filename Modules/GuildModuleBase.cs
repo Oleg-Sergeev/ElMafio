@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using Discord;
 using Discord.Addons.Interactive;
 using Discord.Net;
+using Discord.WebSocket;
+using Modules.EnsureCriterias;
 using Modules.Extensions;
 
 namespace Modules;
@@ -55,7 +57,7 @@ public abstract class GuildModuleBase : InteractiveBase
     }
 
 
-    public async Task<(T?, bool)> WaitForVotingAsync<T>(IMessageChannel channel, int voteTime, IList<T> options, IList<string>? displayOptions = null, CancellationToken? token = null)
+    public async Task<(T?, bool)> WaitForVotingAsync<T>(IMessageChannel channel, int voteTime, IList<T> options, IList<string>? displayOptions = null, CancellationToken? token = null) where T : notnull
     {
         if (options.Count == 0)
         {
@@ -78,7 +80,7 @@ public abstract class GuildModuleBase : InteractiveBase
         var text = "";
         var emojis = new Emoji[options.Count + 1];
 
-        var listToDisplay = displayOptions is null ? options.Select(o => o?.ToString() ?? "NULL").ToList() : displayOptions;
+        var listToDisplay = displayOptions is null ? options.Select(o => o.ToString()).ToList()! : displayOptions;
 
         var digitVotesCount = Math.Min(options.Count, 9);
 
@@ -148,7 +150,7 @@ public abstract class GuildModuleBase : InteractiveBase
     }
 
 
-    public async Task BroadcastMessagesAsync(
+    public async Task<IEnumerable<IUserMessage>> BroadcastMessagesAsync(
         IEnumerable<IMessageChannel> channels,
         string? text = null,
         bool isTTS = false,
@@ -157,27 +159,30 @@ public abstract class GuildModuleBase : InteractiveBase
         AllowedMentions? mentions = null,
         MessageReference? reference = null)
     {
+        var messages = new List<IUserMessage>();
         foreach (var channel in channels)
         {
             try
             {
-                await channel.SendMessageAsync(text, isTTS, embed, options, mentions, reference);
+                messages.Add(await channel.SendMessageAsync(text, isTTS, embed, options, mentions, reference));
             }
             catch (HttpException e)
             {
                 await ReplyAsync($"Не удалось отправить сообщение в канал {channel.Name}. Причина: {e.Reason}");
             }
         }
+
+        return messages;
     }
 
 
-    public async Task ReplyEmbedAsync(
+    public async Task<IUserMessage> ReplyEmbedAsync(
         EmbedType embedType,
         string description,
         bool addSmilesToDescription = true,
         string? title = null,
-        EmbedFooterBuilder? embedFooter = null,
-        EmbedAuthorBuilder? embedAuthor = null,
+        bool withDefaultFooter = false,
+        bool withDefaultAuthor = false,
         EmbedBuilder? embedBuilder = null)
     {
         embedBuilder ??= new EmbedBuilder();
@@ -193,15 +198,143 @@ public abstract class GuildModuleBase : InteractiveBase
         };
 
         if (title is not null)
-            embedBuilder = embedBuilder.WithTitle(title);
+            embedBuilder.WithTitle(title);
 
-        if (embedFooter is not null)
-            embedBuilder.WithFooter(embedFooter);
+        if (withDefaultFooter)
+            embedBuilder
+                .WithCurrentTimestamp()
+                .WithUserInfoFooter(Context.User);
 
-        if (embedAuthor is not null)
-            embedBuilder.WithAuthor(embedAuthor);
+        if (withDefaultAuthor)
+            embedBuilder.WithAuthor(Context.User);
 
 
-        await ReplyAsync(embed: embedBuilder.Build());
+        return await ReplyAsync(embed: embedBuilder.Build());
+    }
+
+    public async Task<IUserMessage> ReplyEmbedAndDeleteAsync(
+        EmbedType embedType,
+        string description,
+        bool addSmilesToDescription = true,
+        string? title = null,
+        bool withDefaultFooter = false,
+        bool withDefaultAuthor = false,
+        EmbedBuilder? embedBuilder = null,
+        TimeSpan? timeout = null)
+    {
+        var msg = await ReplyEmbedAsync(embedType, description, addSmilesToDescription, title, withDefaultFooter, withDefaultAuthor, embedBuilder);
+
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(timeout ?? TimeSpan.FromSeconds(10));
+
+            await msg.DeleteAsync();
+        });
+
+        return msg;
+    }
+
+
+    public async Task<bool?> ConfirmActionAsync(string title, TimeSpan? timeout = null)
+    {
+        var msg = await ReplyEmbedAsync(EmbedType.Information, "Подтвердите действие", false, title, true);
+
+        var res = await ConfirmActionAsync(msg, timeout);
+
+        return res;
+    }
+
+    public async Task<bool?> ConfirmActionAsync(IUserMessage message, TimeSpan? timeout = null)
+    {
+        timeout ??= TimeSpan.FromSeconds(15);
+
+        var emotes = new IEmote[] { new Emoji("✅"), new Emoji("❌") };
+
+        var criterion = new Criteria<SocketReaction>()
+            .AddCriterion(new EnsureReactionFromSourceUserCriterion())
+            .AddCriterion(new EnsureReactionFromMessageCriterion(message));
+
+        var eventTrigger = new TaskCompletionSource<SocketReaction>();
+
+
+        Context.Client.ReactionAdded += Handler;
+
+        await message.AddReactionsAsync(emotes);
+
+        var trigger = eventTrigger.Task;
+        var delay = Task.Delay(timeout.Value);
+        var task = await Task.WhenAny(trigger, delay);
+
+        Context.Client.ReactionAdded -= Handler;
+
+
+        await message.DeleteAsync();
+
+        if (task == trigger)
+        {
+            var reaction = await trigger;
+
+            if (reaction.Emote.Name == emotes[0].Name)
+                return true;
+
+            if (reaction.Emote.Name == emotes[1].Name)
+                return false;
+        }
+
+
+        return null;
+
+
+
+        async Task Handler(Cacheable<IUserMessage, ulong> message, ISocketMessageChannel channel, SocketReaction reaction)
+        {
+            if (await criterion.JudgeAsync(Context, reaction))
+                eventTrigger.SetResult(reaction);
+        }
+    }
+
+
+
+    public async Task<bool> ConfirmActionWithHandlingAsync(string title, ulong? logChannelId = null, TimeSpan? timeout = null)
+    {
+        var msg = await ReplyEmbedAsync(EmbedType.Information, "Подтвердите действие", false, title, true);
+
+        return await ConfirmActionWithHandlingAsync(msg, logChannelId, timeout);
+    }
+    public async Task<bool> ConfirmActionWithHandlingAsync(IUserMessage message, ulong? logChannelId = null, TimeSpan? timeout = null)
+    {
+        var confirmed = await ConfirmActionAsync(message, timeout);
+
+        if (confirmed is null)
+        {
+            await ReplyEmbedAndDeleteAsync(EmbedType.Warning, "Вы не подтвердили действие", true, "Сброс рейтинга", true);
+
+            return false;
+        }
+        else if (confirmed is false)
+        {
+            await ReplyEmbedAndDeleteAsync(EmbedType.Error, "Вы отклонили действие", true, "Сброс рейтинга", true);
+
+            return false;
+        }
+
+        var embed = (Embed)message.Embeds.First();
+
+        message = await ReplyEmbedAndDeleteAsync(EmbedType.Successfull, "Вы подтвердили действие", true, embed.Title, true);
+
+        embed = (Embed)message.Embeds.First();
+
+        if (logChannelId is not null)
+        {
+            var logChannel = Context.Guild.GetTextChannel(logChannelId.Value);
+
+            if (logChannel is not null)
+            {
+                await logChannel.SendMessageAsync(
+                        $"{Context.Guild.EveryoneRole.Mention} Пользователь **{Context.User.GetFullName()}** выполнил команду **{embed.Title}**", embed: embed);
+            }
+        }
+
+        return true;
     }
 }

@@ -10,7 +10,7 @@ using Modules.Extensions;
 namespace Modules;
 
 [Name("Фан")]
-public class FunModule : ModuleBase<SocketCommandContext>
+public class FunModule : GuildModuleBase
 {
     private readonly Random _random;
 
@@ -24,16 +24,9 @@ public class FunModule : ModuleBase<SocketCommandContext>
     [Command("Шанс")]
     public async Task CalculateChanceAsync([Remainder] string text)
     {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            await ReplyAsync("Пожалуйста, введите текст.");
-
-            return;
-        }
-
         int num = _random.Next(101);
 
-        await ReplyAsync($"Шанс того, что {text} - {num}%");
+        await ReplyAsync($"Шанс того, что {text} - **{num}%**", messageReference: new(Context.Message.Id));
     }
 
 
@@ -42,7 +35,7 @@ public class FunModule : ModuleBase<SocketCommandContext>
     {
         await Context.Message.DeleteAsync();
 
-        await ReplyAsync(message);
+        await ReplyAsync(message, messageReference: Context.Message.Reference);
     }
 
 
@@ -52,9 +45,9 @@ public class FunModule : ModuleBase<SocketCommandContext>
         bool answer = _random.Next(2) > 0;
 
         if (answer)
-            await ReplyAsync("Да");
+            await ReplyAsync("**Да**");
         else
-            await ReplyAsync("Нет");
+            await ReplyAsync("**Нет**");
     }
 
 
@@ -66,7 +59,7 @@ public class FunModule : ModuleBase<SocketCommandContext>
         var user = Context.Guild.Users.ToList()[num];
         var nickname = user.Nickname ?? user.Username;
 
-        await ReplyAsync($"{nickname} {message}");
+        await ReplyAsync($"**{nickname}** {message}", messageReference: new(Context.Message.Id));
     }
 
     [Command("Голосование")]
@@ -75,7 +68,12 @@ public class FunModule : ModuleBase<SocketCommandContext>
     {
         var content = text.Split("|");
 
-        var votingText = content[0];
+        string? title = null;
+
+        if (!string.IsNullOrEmpty(content[0]))
+            title = content[0];
+
+        var options = "";
 
         var points = new List<string>();
         var emotes = new List<IEmote>();
@@ -91,16 +89,15 @@ public class FunModule : ModuleBase<SocketCommandContext>
 
             points.AddRange(content[1].Split());
 
-            votingText += "\n";
-            for (int i = 0; i < Math.Min(points.Count, 10); i++)
+            for (int i = 0; i < Math.Min(points.Count, 20); i++)
             {
-                votingText += $"{i + 1} - {points[i]}\n";
+                options += $"{(char)(i + 65)} - {points[i]}\n";
 
-                emotes.Add(new Emoji((i + 1).ConvertToSmile()));
+                emotes.Add(new Emoji(((char)(i + 65)).ConvertToSmile()));
             }
         }
 
-        var response = await ReplyAsync(votingText);
+        var response = await ReplyEmbedAsync(EmbedType.Information, options, false, title, withDefaultAuthor: true);
 
         await response.AddReactionsAsync(emotes.ToArray());
     }
@@ -142,8 +139,6 @@ public class FunModule : ModuleBase<SocketCommandContext>
     [Priority(1)]
     public async Task GetAvatarAsync(IUser user)
     {
-        //if (!await HasBotChannelPermAsync(message, ChannelPermission.AttachFiles, "Эта команда требует разрешения <AttachFiles>")) return;
-
         var request = user.GetAvatarUrl(size: 2048);
 
         var resp = await new HttpClient().GetAsync(request);
@@ -151,7 +146,7 @@ public class FunModule : ModuleBase<SocketCommandContext>
 
         if (resp is null)
         {
-            await ReplyAsync("Не удалось загрузить аватар");
+            await ReplyEmbedAsync(EmbedType.Information, "Не удалось загрузить аватар");
 
             return;
         }
@@ -165,32 +160,18 @@ public class FunModule : ModuleBase<SocketCommandContext>
     [Command("Смайл")]
     public async Task GetSmileAsync(string emoteId)
     {
-        //if (!await HasBotChannelPermAsync(message, ChannelPermission.AttachFiles, "Эта команда требует разрешения <AttachFiles>")) return;
-
         if (Emote.TryParse(emoteId, out var emote))
-        {
-            var resp = await new HttpClient().GetAsync($"https://cdn.discordapp.com/emojis/{emote.Id}.png");
-
-            if (resp is not null && resp.IsSuccessStatusCode)
-            {
-                var stream = await resp.Content.ReadAsStreamAsync();
-
-                var smileExtension = resp.Content.Headers.ContentType!.MediaType!.Split('/')[1];
-
-                await Context.Channel.SendFileAsync(stream, $"smile.{smileExtension}");
-
-                return;
-            }
-        }
-
-        await ReplyAsync("Не удалось распознать пользовательский смайлик");
+            await GetSmileByIdAsync(emote.Id);
+        else
+            await ReplyEmbedAsync(EmbedType.Information, "Не удалось распознать пользовательский смайлик");
     }
 
 
     [Command("Смайлайди")]
     public async Task GetSmileByIdAsync(ulong smileId)
     {
-        var resp = await new HttpClient().GetAsync($"https://cdn.discordapp.com/emojis/{smileId}.png");
+        var resp = await new HttpClient().GetAsync($"https://cdn.discordapp.com/emojis/{smileId}.png")
+            ?? await new HttpClient().GetAsync($"https://cdn.discordapp.com/emojis/{smileId}.gif");
 
         if (resp.IsSuccessStatusCode)
         {
@@ -203,7 +184,42 @@ public class FunModule : ModuleBase<SocketCommandContext>
             return;
         }
 
-        await ReplyAsync("Не удалось распознать пользовательский смайлик");
+        await ReplyEmbedAsync(EmbedType.Information, "Не удалось найти пользовательский смайлик");
     }
 
+
+    [Command("Смайлдобавить")]
+    [RequireUserPermission(GuildPermission.KickMembers)]
+    public async Task AddEmoteAsync()
+        => await AddEmoteAsync($"emoji_{Context.Guild.Emotes.Count + 1}");
+
+    [Command("Смайлдобавить")]
+    [RequireUserPermission(GuildPermission.KickMembers)]
+    public async Task AddEmoteAsync(string name)
+    {
+        var attachment = Context.Message.Attachments.FirstOrDefault() ?? Context.Message.ReferencedMessage?.Attachments.FirstOrDefault();
+
+        if (attachment is null)
+        {
+            await ReplyEmbedAsync(EmbedType.Error, "Прикрепите к своему сообщению картинку, или ответьте на сообщение, содержащее картинку");
+
+            return;
+        }
+
+        var stream = await new HttpClient().GetStreamAsync(attachment.Url);
+
+        if (stream is null)
+        {
+            await ReplyEmbedAsync(EmbedType.Error, "Не удалось загрузить картинку");
+
+            return;
+        }
+
+        var emote = await Context.Guild.CreateEmoteAsync(name, new Image(stream));
+
+
+        var msg = await ReplyEmbedAsync(EmbedType.Successfull, "Смайл успешно добавлен");
+
+        await msg.AddReactionAsync(emote);
+    }
 }

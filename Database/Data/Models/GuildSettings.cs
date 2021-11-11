@@ -12,6 +12,7 @@ public class GuildSettings
 
     public ulong? RoleMuteId { get; set; }
 
+    public ulong? LogChannelId { get; set; }
 
     public MafiaSettings MafiaSettings { get; set; } = null!;
 

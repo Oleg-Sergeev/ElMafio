@@ -2,22 +2,21 @@
 
 namespace Infrastructure.Migrations;
 
-public partial class GuildSettingsAddColumnPrefix : Migration
+public partial class TableGuildSettingsAddLogChannelId : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
     {
-        migrationBuilder.AddColumn<string>(
-            name: "Prefix",
+        migrationBuilder.AddColumn<decimal>(
+            name: "LogChannelId",
             table: "GuildSettings",
-            type: "nvarchar(max)",
-            nullable: true,
-            defaultValue: "/");
+            type: "decimal(20,0)",
+            nullable: true);
     }
 
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropColumn(
-            name: "Prefix",
+            name: "LogChannelId",
             table: "GuildSettings");
     }
 }
