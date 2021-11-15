@@ -23,11 +23,12 @@ public class MafiaStats : GameStats
 
 
     public int CommissionerMovesCount { get; set; }
-    public int CommissionerSuccessfullMovesCount { get; set; }
+    public int CommissionerSuccessfullFoundsCount { get; set; }
+    public int CommissionerSuccessfullShotsCount { get; set; }
 
     public float CommissionerEfficiency
     {
-        get => CommissionerMovesCount != 0 ? (float)CommissionerSuccessfullMovesCount / CommissionerMovesCount : 0;
+        get => CommissionerMovesCount != 0 ? (float)(CommissionerSuccessfullFoundsCount + CommissionerSuccessfullShotsCount) / CommissionerMovesCount : 0;
         private set { }
     }
 
@@ -50,7 +51,7 @@ public class MafiaStats : GameStats
 
     public float Scores
     {
-        get => WinsCount + BlacksWinsCount + DoctorSuccessfullMovesCount + CommissionerSuccessfullMovesCount + DonSuccessfullMovesCount;
+        get => WinsCount + BlacksWinsCount + DoctorSuccessfullMovesCount + CommissionerSuccessfullFoundsCount + CommissionerSuccessfullShotsCount + DonSuccessfullMovesCount;
         private set { }
     }
 
@@ -78,7 +79,8 @@ public class MafiaStats : GameStats
         DoctorSuccessfullMovesCount = 0;
 
         CommissionerMovesCount = 0;
-        CommissionerSuccessfullMovesCount = 0;
+        CommissionerSuccessfullFoundsCount = 0;
+        CommissionerSuccessfullShotsCount = 0;
 
         DonMovesCount = 0;
         DonSuccessfullMovesCount = 0;

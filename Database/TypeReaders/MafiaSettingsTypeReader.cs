@@ -27,7 +27,7 @@ public class MafiaSettingsTypeReader : TypeReader
         {
                 nameof(MafiaSettingsViewModel.IsRatingGame),
                 nameof(MafiaSettingsViewModel.RenameUsers),
-                nameof(MafiaSettingsViewModel.ReplyMessagesOnError),
+                nameof(MafiaSettingsViewModel.ReplyMessagesOnSetupError),
                 nameof(MafiaSettingsViewModel.AbortGameWhenError),
                 nameof(MafiaSettingsViewModel.SendWelcomeMessage),
         };
@@ -49,7 +49,7 @@ public class MafiaSettingsTypeReader : TypeReader
             MafiaKoefficient = mafiaKoefficient,
             IsRatingGame = values[0],
             RenameUsers = values[1],
-            ReplyMessagesOnError = values[2],
+            ReplyMessagesOnSetupError = values[2],
             AbortGameWhenError = values[3],
             SendWelcomeMessage = values[4]
         };

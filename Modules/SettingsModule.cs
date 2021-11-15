@@ -1,8 +1,7 @@
-﻿using System;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using Discord;
 using Discord.Commands;
-using Infrastructure.Data;
 
 namespace Modules;
 
@@ -12,33 +11,22 @@ namespace Modules;
 [RequireUserPermission(GuildPermission.Administrator)]
 public class SettingsModule : GuildModuleBase
 {
-    private readonly BotContext _db;
-
-
-    public SettingsModule(BotContext db)
-    {
-        _db = db;
-    }
-
-
     [Command("Префикс")]
     [Alias("преф", "п")]
     [Summary("Изменить префикс бота")]
     public async Task UpdatePrefixAsync([Summary("Новый префикс бота")] string newPrefix)
     {
-        var guildSettings = await _db.GuildSettings.FindAsync(Context.Guild.Id);
-
-        if (guildSettings is null)
-            throw new ArgumentException($"Guild with id [{Context.Guild.Id}] was not found in database.");
+        var guildSettings = await Context.GetGuildSettingsAsync();
 
         var oldPrefix = guildSettings.Prefix;
         guildSettings.Prefix = newPrefix;
 
-        await _db.SaveChangesAsync();
+        await Context.Db.SaveChangesAsync();
 
 
-        await ReplyEmbedAsync(EmbedType.Successfull, $"Префикс успешно изменен с **{oldPrefix}** на **{newPrefix}**");
+        await ReplyEmbedAsync(EmbedStyle.Successfull, $"Префикс успешно изменен с **{oldPrefix}** на **{newPrefix}**");
     }
+
 
     [Command("рольмут")]
     public async Task UpdateMuteRoleAsync([Summary("Роль для мута")] IRole newMuteRole)
@@ -47,26 +35,23 @@ public class SettingsModule : GuildModuleBase
     [Command("рольмут")]
     public async Task UpdateMuteRoleAsync([Summary("ID роли для мута")] ulong newMuteRoleId)
     {
-        var guildSettings = await _db.GuildSettings.FindAsync(Context.Guild.Id);
-
-        if (guildSettings is null)
-            throw new ArgumentException($"Guild with id [{Context.Guild.Id}] was not found in database.");
-
         var muteRole = Context.Guild.GetRole(newMuteRoleId);
 
         if (muteRole is null)
         {
-            await ReplyEmbedAsync(EmbedType.Error, "Указанный ID роли недействителен");
+            await ReplyEmbedAsync(EmbedStyle.Error, "Роль с указанным ID не найдена");
 
             return;
         }
 
+        var guildSettings = await Context.GetGuildSettingsAsync();
+
         guildSettings.RoleMuteId = newMuteRoleId;
 
-        await _db.SaveChangesAsync();
+        await Context.Db.SaveChangesAsync();
 
 
-        await ReplyEmbedAsync(EmbedType.Successfull, $"Роль успешна установлена [{muteRole.Mention}]", withDefaultFooter: true);
+        await ReplyEmbedAsync(EmbedStyle.Successfull, $"Роль [{muteRole.Mention}] успешна установлена", withDefaultFooter: true);
     }
 
 
@@ -77,26 +62,22 @@ public class SettingsModule : GuildModuleBase
     [Command("каналлог")]
     public async Task UpdateLogChannelAsync([Summary("ID канала для логов")] ulong logChannelId)
     {
-        var guildSettings = await _db.GuildSettings.FindAsync(Context.Guild.Id);
-
-        if (guildSettings is null)
-            throw new ArgumentException($"Guild with id [{Context.Guild.Id}] was not found in database.");
-
-
         var logChannel = Context.Guild.GetTextChannel(logChannelId);
 
         if (logChannel is null)
         {
-            await ReplyEmbedAsync(EmbedType.Error, "Указанный ID канала недействителен");
+            await ReplyEmbedAsync(EmbedStyle.Error, "Канал с указанным ID не найден");
 
             return;
         }
 
+        var guildSettings = await Context.GetGuildSettingsAsync();
+
         guildSettings.LogChannelId = logChannelId;
 
-        await _db.SaveChangesAsync();
+        await Context.Db.SaveChangesAsync();
 
 
-        await ReplyEmbedAsync(EmbedType.Successfull, $"Канал для логов успешно установлен [{logChannel.Mention}]", withDefaultFooter: true);
+        await ReplyEmbedAsync(EmbedStyle.Successfull, $"Канал для логов [{logChannel.Mention}] успешно установлен", withDefaultFooter: true);
     }
 }

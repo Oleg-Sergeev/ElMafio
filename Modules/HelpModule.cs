@@ -2,7 +2,6 @@
 using System.Linq;
 using System.Threading.Tasks;
 using Discord;
-using Discord.Addons.Interactive;
 using Discord.Commands;
 using Discord.Net;
 using Microsoft.Extensions.Configuration;
@@ -12,7 +11,7 @@ using Modules.Extensions;
 namespace Modules;
 
 [Name("Помощь")]
-public class HelpModule : InteractiveBase
+public class HelpModule : GuildModuleBase
 {
     private const char EmptySpace = '⠀';
 
@@ -26,37 +25,31 @@ public class HelpModule : InteractiveBase
         _config = config;
     }
 
-
-    [Priority(0)]
     [Command("Помощь")]
-    [Alias("help", "команды")]
+    [Alias("команды")]
     [Summary("Получить список доступных команд")]
     [Remarks("Список содержит только те команды, которые доступны вам")]
-    public async Task HelpDMAsync() => await HelpAsync(await Context.User.GetOrCreateDMChannelAsync());
-
-    [Command("Помощьсервер")]
-    [Alias("help", "команды")]
-    [Summary("Получить список доступных команд")]
-    [Remarks("Список содержит только те команды, которые доступны вам")]
-    public async Task HelpGuildAsync() => await HelpAsync(Context.Channel);
-
-    private async Task HelpAsync(IMessageChannel channel)
+    public async Task HelpAsync(bool sendToServer = false)
     {
+        IMessageChannel channel = !sendToServer ? await Context.User.GetOrCreateDMChannelAsync() : Context.Channel;
+
+        await channel.TriggerTypingAsync();
+
+
         var builder = new EmbedBuilder()
             .WithThumbnailUrl(Context.Guild.CurrentUser.GetAvatarUrl() ?? Context.Guild.CurrentUser.GetDefaultAvatarUrl())
             .WithTitle("Список доступных команд")
-            .WithDescription("Для получения подробностей команды наберите команду **помощь {имя команды}**")
-            .WithColor(Color.DarkGreen)
+            .WithDescription("Для получения подробностей команды наберите команду **помощь [имена блоков].{имя команды}**")
+            .WithInformationMessage()
             .WithCurrentTimestamp()
-            .WithFooter(new EmbedFooterBuilder()
-            {
-                IconUrl = Context.User.GetAvatarUrl() ?? Context.User.GetDefaultAvatarUrl(),
-                Text = Context.User.GetFullName()
-            });
+            .WithUserFooter(Context.User);
 
         foreach (var module in _commandService.Modules)
         {
             var commands = module.Commands.Distinct(new CommandInfoComparer());
+
+            if (module.IsSubmodule)
+                commands = commands.Except(module.Parent.Commands, new CommandInfoComparer(false));
 
             var tab = new string(EmptySpace, 4 * GetParentsCount(module));
             var commandList = "";
@@ -65,75 +58,28 @@ public class HelpModule : InteractiveBase
             {
                 var result = await cmd.CheckPreconditionsAsync(Context);
                 if (result.IsSuccess)
-                    commandList += $"{EmptySpace}{tab}{GetParentModulesGroupsPath(module.Group, module)}{cmd.Name}\n";
+                    commandList += $"{EmptySpace}{tab}{cmd.Name}\n";
             }
             if (!string.IsNullOrWhiteSpace(commandList))
             {
                 if (!string.IsNullOrEmpty(tab))
                     tab += '➥';
-                builder.AddField(tab + module.Name, commandList, false);
+                builder.AddField(tab + (GetParentModulesGroupsPath(module.Group, module) ?? module.Name), commandList, false);
             }
         }
-
         try
         {
-            await channel.TriggerTypingAsync();
-
             await channel.SendMessageAsync(embed: builder.Build());
         }
         catch (HttpException)
         {
-            await ReplyAsync($"Не удалось отправить сообщение пользователю {Context.User.GetFullMention()}");
-        }
-
-
-
-
-
-
-        static int GetParentsCount(ModuleInfo module)
-        {
-            if (!module.IsSubmodule)
-                return 0;
-
-            return 1 + GetParentsCount(module.Parent);
-        }
-
-        static string? GetParentModulesGroupsPath(string? subModuleGroup, ModuleInfo module)
-        {
-            if (string.IsNullOrEmpty(subModuleGroup))
-                return null;
-
-            if (!module.IsSubmodule)
-                return subModuleGroup + '.';
-
-
-            subModuleGroup = $"{module.Parent.Group}.{subModuleGroup}";
-
-            var t = GetParentModulesGroupsPath(subModuleGroup, module.Parent);
-
-            if (string.IsNullOrEmpty(module.Group) && t is not null)
-                return t.TrimEnd('.');
-
-            return t;
-        }
-
-        static string GetParentModulesNames(string subModuleName, ModuleInfo module)
-        {
-            if (!module.IsSubmodule)
-                return subModuleName;
-
-            subModuleName = $"{module.Parent.Name}.{subModuleName}";
-
-            return GetParentModulesNames(subModuleName, module.Parent);
+            await ReplyEmbedAsync(EmbedStyle.Error, $"Не удалось отправить сообщение от пользователя {Context.User.GetFullMention()}");
         }
     }
 
-
-
-    [Priority(1)]
+    [Priority(-1)]
     [Command("Помощь")]
-    [Alias("help", "команда")]
+    [Alias("команда")]
     [Summary("Получить подробности указанной команды")]
     [Remarks("Необходимую команду необходимо указывать вместе со всеми блоками. Например: **помощь Мафия.Настройки.Параметры**" +
         "\n Если команда имеет несколько вариаций, каждая вариация будет показана отдельным сообщением")]
@@ -143,7 +89,7 @@ public class HelpModule : InteractiveBase
 
         if (!result.IsSuccess)
         {
-            await ReplyAsync($"Команда **{command}** не найдена");
+            await ReplyEmbedAsync(EmbedStyle.Error, $"Команда **{command}** не найдена");
             return;
         }
 
@@ -161,10 +107,8 @@ public class HelpModule : InteractiveBase
             hasAnyAvailableCommand = true;
 
             var builder = new EmbedBuilder()
-            {
-                Color = new Color(114, 137, 218),
-                Title = $"Команда {command}"
-            };
+                .WithInformationMessage(false)
+                .WithTitle($"Команда {command}");
 
             builder.AddField("Псевдонимы", GetAllAliases(cmd));
 
@@ -182,9 +126,69 @@ public class HelpModule : InteractiveBase
         }
 
         if (!hasAnyAvailableCommand)
-            await ReplyAsync($"У вас нет прав на использование команды {command}");
+            await ReplyEmbedAsync(EmbedStyle.Error, $"У вас нет прав на использование команды {command}");
     }
 
+
+    [Command("Помощьблок")]
+    [Summary("Получить подробности указанного модуля")]
+    [Remarks("Необходимый модуль необходимо указывать вместе со всеми родительскими блоками. Например: **помощьблок Мафия.Настройки**")]
+    public async Task HelpModuleAsync(string moduleName)
+    {
+        moduleName = moduleName.ToLower();
+
+        var module = _commandService.Modules
+            .FirstOrDefault(m => m.Aliases.Select(a => a.ToLower()).Contains(moduleName))
+            ?? _commandService.Modules
+            .FirstOrDefault(m => m.Name.ToLower() == moduleName);
+
+        if (module is null)
+        {
+            await ReplyEmbedAsync(EmbedStyle.Error, $"Блок **{moduleName}** не найден");
+
+            return;
+        }
+
+
+        var builder = new EmbedBuilder()
+            .WithThumbnailUrl(Context.Guild.CurrentUser.GetAvatarUrl() ?? Context.Guild.CurrentUser.GetDefaultAvatarUrl())
+            .WithTitle($"Блок {moduleName}")
+            .WithDescription("Для получения подробностей команды наберите команду **помощь [имена блоков].{имя команды}**")
+            .WithInformationMessage()
+            .WithCurrentTimestamp()
+            .WithUserFooter(Context.User);
+
+        if (!string.IsNullOrEmpty(module.Summary))
+        {
+            builder.AddField("О блоке", module.Summary);
+
+            if (!string.IsNullOrEmpty(module.Remarks))
+                builder.AddField("Примечание", module.Remarks);
+        }
+
+
+        var commands = module.Commands.Distinct(new CommandInfoComparer());
+
+        if (module.IsSubmodule)
+            commands = commands.Except(module.Parent.Commands, new CommandInfoComparer(false));
+
+        var commandList = "";
+
+        foreach (var cmd in commands)
+        {
+            var result = await cmd.CheckPreconditionsAsync(Context);
+            if (result.IsSuccess)
+            {
+                var parentModulesPath = GetParentModulesGroupsPath(module.Group, module) + ".";
+                commandList += $"{parentModulesPath.TrimStart('.')}{cmd.Name}\n";
+            }
+        }
+        if (!string.IsNullOrWhiteSpace(commandList))
+            builder.AddField("Список команд", commandList, false);
+
+
+        await ReplyAsync(embed: builder.Build());
+    }
 
 
 
@@ -197,11 +201,9 @@ public class HelpModule : InteractiveBase
         var msg = "Если у вас есть вопросы, или другие пожелания, то данный список для вас:\n";
 
         foreach (var contact in contactsSection.GetChildren())
-        {
             msg += $"**{contact.Key}**: {contact.Value}\n";
-        }
 
-        await ReplyAsync(msg);
+        await ReplyEmbedAsync(EmbedStyle.Information, msg);
     }
 
 
@@ -262,4 +264,42 @@ public class HelpModule : InteractiveBase
     }
     private static IEnumerable<string> GetOwnAliases(ModuleInfo module) => GetOwnAliases(module.Aliases);
     private static IEnumerable<string> GetOwnAliases(CommandInfo command) => GetOwnAliases(command.Aliases);
+
+
+    private static int GetParentsCount(ModuleInfo module)
+    {
+        if (!module.IsSubmodule)
+            return 0;
+
+        return 1 + GetParentsCount(module.Parent);
+    }
+
+    private static string? GetParentModulesGroupsPath(string? subModuleGroup, ModuleInfo module)
+    {
+        if (string.IsNullOrEmpty(subModuleGroup))
+            return null;
+
+        if (!module.IsSubmodule || string.IsNullOrEmpty(module.Parent.Group))
+            return subModuleGroup;
+
+
+        subModuleGroup = $"{module.Parent.Group}.{subModuleGroup}";
+
+        var t = GetParentModulesGroupsPath(subModuleGroup, module.Parent);
+
+        if (string.IsNullOrEmpty(module.Group) && t is not null)
+            return t.TrimEnd('.');
+
+        return t;
+    }
+
+    private static string GetParentModulesNames(string subModuleName, ModuleInfo module)
+    {
+        if (!module.IsSubmodule)
+            return subModuleName;
+
+        subModuleName = $"{module.Parent.Name}.{subModuleName}";
+
+        return GetParentModulesNames(subModuleName, module.Parent);
+    }
 }

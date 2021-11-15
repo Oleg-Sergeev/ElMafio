@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using Discord;
@@ -11,12 +12,14 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Modules;
 using Serilog;
 using Serilog.Events;
 using Serilog.Filters;
 using Services;
 
 namespace Core;
+
 
 public class Program
 {
@@ -109,11 +112,14 @@ public class Program
         .ConfigureServices((context, services) =>
         {
             services.AddDbContext<BotContext>(options =>
-                options.UseSqlServer(context.Configuration.GetConnectionString("DefaultSQLServer")))
-            .AddHostedService<CommandHandler>()
+            {
+                options.UseSqlServer(context.Configuration.GetConnectionString("DefaultSQLServer"));
+                options.EnableSensitiveDataLogging();
+            })
+            .AddHostedService<CommandHandlerService>()
             .AddSingleton<InteractiveService>()
             .AddSingleton<LoggingService>()
-            .AddSingleton<Random>();
+            .AddSingleton<IRandom, BotRandom>();
         });
 
 }

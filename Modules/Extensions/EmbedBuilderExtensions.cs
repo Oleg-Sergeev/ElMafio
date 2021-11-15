@@ -9,6 +9,9 @@ public static class EmbedBuilderExtensions
     public static EmbedBuilder AddEmptyField(this EmbedBuilder builder, bool inline = false)
         => builder.AddField(EmptySpace.ToString(), EmptySpace, inline);
 
+    public static EmbedBuilder AddFieldWithEmptyName(this EmbedBuilder builder, string description, bool inline = false)
+        => builder.AddField(EmptySpace.ToString(), description, inline);
+
 
     public static EmbedBuilder WithErrorMessage(this EmbedBuilder builder, bool addSmiles = true)
         => builder
@@ -27,10 +30,10 @@ public static class EmbedBuilderExtensions
 
     public static EmbedBuilder WithInformationMessage(this EmbedBuilder builder, bool addSmiles = true)
         => builder
-        .WithDescription(addSmiles ? $"{builder.Description} ℹ️" : builder.Description)
+        .WithDescription(addSmiles ? $"ℹ️{EmptySpace}{builder.Description}" : builder.Description)
         .WithColor(52, 104, 194);
 
 
-    public static EmbedBuilder WithUserInfoFooter(this EmbedBuilder builder, IUser user)
+    public static EmbedBuilder WithUserFooter(this EmbedBuilder builder, IUser user)
         => builder.WithFooter(user.GetFullName(), user.GetAvatarUrlOrDefaultAvatarUrl());
 }

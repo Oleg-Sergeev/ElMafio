@@ -8,7 +8,7 @@ public class MafiaSettings : GameSettings
 
     public bool RenameUsers { get; set; }
 
-    public bool ReplyMessagesOnError { get; set; }
+    public bool ReplyMessagesOnSetupError { get; set; }
 
     public bool AbortGameWhenError { get; set; }
 

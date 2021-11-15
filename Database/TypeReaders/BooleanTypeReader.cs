@@ -6,7 +6,7 @@ namespace Infrastructure.TypeReaders;
 
 public class BooleanTypeReader : TypeReader
 {
-    public override Task<TypeReaderResult> ReadAsync(ICommandContext context, string? input, IServiceProvider services)
+    public override Task<TypeReaderResult> ReadAsync(ICommandContext context, string? input, IServiceProvider? services = null)
     {
         if (string.IsNullOrWhiteSpace(input))
             return Task.FromResult(TypeReaderResult.FromError(CommandError.ParseFailed, "The input is empty"));

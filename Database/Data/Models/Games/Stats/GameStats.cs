@@ -14,8 +14,8 @@ public abstract class GameStats : IResetableStat
     public ulong UserId { get; set; }
     public User User { get; set; } = null!;
 
-    public ulong GuildId { get; set; }
-    public GuildSettings Guild { get; set; } = null!;
+    public ulong GuildSettingsId { get; set; }
+    public GuildSettings GuildSettings { get; set; } = null!;
 
 
     public virtual void Reset()

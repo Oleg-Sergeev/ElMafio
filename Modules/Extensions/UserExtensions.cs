@@ -12,4 +12,11 @@ public static class UserExtensions
 
     public static string GetAvatarUrlOrDefaultAvatarUrl(this IUser user, ImageFormat format = ImageFormat.Auto, ushort size = 128)
         => user.GetAvatarUrl(format, size) ?? user.GetDefaultAvatarUrl();
+
+
+    public static bool HasGuildPermission(this IUser user, GuildPermission guildPermission)
+        => user is IGuildUser guildUser && guildUser.HasGuildPermission(guildPermission);
+
+    public static bool HasGuildPermission(this IGuildUser guildUser, GuildPermission guildPermission)
+        => guildUser.GuildPermissions.Has(guildPermission);
 }

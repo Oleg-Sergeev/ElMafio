@@ -9,17 +9,25 @@ using Discord.Net;
 using Discord.WebSocket;
 using Modules.EnsureCriterias;
 using Modules.Extensions;
+using Serilog;
+using Services;
 
 namespace Modules;
 
-public abstract class GuildModuleBase : InteractiveBase
+public abstract class GuildModuleBase : InteractiveBase<DbSocketCommandContext>
 {
-    protected const int VotingOptionsMaxCount = 35;
+    protected const int VotingOptionsMaxCount = 19;
+
+    protected static readonly IEmote ConfirmEmote = new Emoji("✅");
+    protected static readonly IEmote DenyEmote = new Emoji("❌");
+
+
+    protected static ILogger GetGuildLogger(ulong guildId)
+        => Log.ForContext("GuildName", guildId);
 
 
     public async Task WaitTimerAsync(int seconds, params IMessageChannel[] channels)
         => await WaitTimerAsync(seconds, null, channels);
-
     public async Task WaitTimerAsync(int seconds, CancellationToken? cancellationToken, params IMessageChannel[] channels)
     {
         if (seconds >= 20)
@@ -57,6 +65,37 @@ public abstract class GuildModuleBase : InteractiveBase
     }
 
 
+    protected static IList<IEmote> GetEmotesList(int count)
+        => GetEmotesList(count, null, out _);
+    protected static IList<IEmote> GetEmotesList(int count, IList<string>? emoteAssociations, out string emoteAssociationsText)
+        => GetEmotesList(count, 0, emoteAssociations, out emoteAssociationsText);
+    protected static IList<IEmote> GetEmotesList(int count, int offset)
+        => GetEmotesList(count, offset, null, out _);
+    protected static IList<IEmote> GetEmotesList(int count, int offset, IList<string>? emoteAssociations, out string emoteAssociationsText)
+    {
+        emoteAssociationsText = "";
+
+        var emotes = new List<IEmote>();
+
+        if (offset < 0)
+            throw new ArgumentException("Offset cannot be below zero", nameof(offset));
+
+        const int ASymbolASCII = 65;
+
+        for (int i = 0; i < count; i++)
+        {
+            var symbol = (char)(ASymbolASCII + i + offset);
+
+            emotes.Add(new Emoji(symbol.ConvertToSmile()));
+
+            if (emoteAssociations is not null && emoteAssociations.Count > i)
+                emoteAssociationsText += $"{symbol} - {emoteAssociations[i]}\n";
+        }
+
+        return emotes;
+    }
+
+
     public async Task<(T?, bool)> WaitForVotingAsync<T>(IMessageChannel channel, int voteTime, IList<T> options, IList<string>? displayOptions = null, CancellationToken? token = null) where T : notnull
     {
         if (options.Count == 0)
@@ -74,42 +113,17 @@ public abstract class GuildModuleBase : InteractiveBase
         }
 
 
-        const int ZeroASCII = 48;
-        const int ASymbolASCII = 65;
-
-        var text = "";
-        var emojis = new Emoji[options.Count + 1];
-
         var listToDisplay = displayOptions is null ? options.Select(o => o.ToString()).ToList()! : displayOptions;
 
-        var digitVotesCount = Math.Min(options.Count, 9);
-
-        for (int i = 0; i < digitVotesCount; i++)
-        {
-            var symbol = (char)(1 + i + ZeroASCII);
-
-            text += $"{symbol} - {listToDisplay[i]}\n";
-
-            var emoji = new Emoji(symbol.ConvertToSmile());
-            emojis[i] = emoji;
-        }
-
-        for (int i = digitVotesCount; i < Math.Min(options.Count, VotingOptionsMaxCount); i++)
-        {
-            var symbol = (char)(i + ASymbolASCII - digitVotesCount);
-
-            text += $"{symbol} - {listToDisplay[i]}\n";
-
-            var emoji = new Emoji(symbol.ConvertToSmile());
-            emojis[i] = emoji;
-        }
+        var emojis = GetEmotesList(Math.Min(options.Count, VotingOptionsMaxCount), listToDisplay, out var text);
 
         text += $"0 - Пропустить голосование\n";
-        emojis[options.Count] = new Emoji(0.ConvertToSmile());
+        emojis.Add(new Emoji(0.ConvertToSmile()));
+
 
         var votingMessage = await channel.SendMessageAsync(text);
 
-        await votingMessage.AddReactionsAsync(emojis);
+        await votingMessage.AddReactionsAsync(emojis.ToArray());
 
 
         await WaitTimerAsync(voteTime, token, channel);
@@ -168,7 +182,7 @@ public abstract class GuildModuleBase : InteractiveBase
             }
             catch (HttpException e)
             {
-                await ReplyAsync($"Не удалось отправить сообщение в канал {channel.Name}. Причина: {e.Reason}");
+                await ReplyEmbedAsync(EmbedStyle.Error, $"Не удалось отправить сообщение в канал {channel.Name}. Причина: {e.Reason}");
             }
         }
 
@@ -177,43 +191,21 @@ public abstract class GuildModuleBase : InteractiveBase
 
 
     public async Task<IUserMessage> ReplyEmbedAsync(
-        EmbedType embedType,
+        EmbedStyle embedStyle,
         string description,
-        bool addSmilesToDescription = true,
         string? title = null,
         bool withDefaultFooter = false,
         bool withDefaultAuthor = false,
+        bool addSmilesToDescription = true,
         EmbedBuilder? embedBuilder = null)
     {
-        embedBuilder ??= new EmbedBuilder();
+        var builder = CreateEmbedBuilder(embedStyle, description, title, withDefaultFooter, withDefaultAuthor, addSmilesToDescription, embedBuilder);
 
-        embedBuilder.WithDescription(description);
-
-        embedBuilder = embedType switch
-        {
-            EmbedType.Error => embedBuilder.WithErrorMessage(addSmilesToDescription),
-            EmbedType.Warning => embedBuilder.WithWarningMessage(addSmilesToDescription),
-            EmbedType.Successfull => embedBuilder.WithSuccessfullyMessage(addSmilesToDescription),
-            _ => embedBuilder.WithInformationMessage(addSmilesToDescription)
-        };
-
-        if (title is not null)
-            embedBuilder.WithTitle(title);
-
-        if (withDefaultFooter)
-            embedBuilder
-                .WithCurrentTimestamp()
-                .WithUserInfoFooter(Context.User);
-
-        if (withDefaultAuthor)
-            embedBuilder.WithAuthor(Context.User);
-
-
-        return await ReplyAsync(embed: embedBuilder.Build());
+        return await ReplyAsync(embed: builder.Build());
     }
 
     public async Task<IUserMessage> ReplyEmbedAndDeleteAsync(
-        EmbedType embedType,
+        EmbedStyle embedType,
         string description,
         bool addSmilesToDescription = true,
         string? title = null,
@@ -222,7 +214,7 @@ public abstract class GuildModuleBase : InteractiveBase
         EmbedBuilder? embedBuilder = null,
         TimeSpan? timeout = null)
     {
-        var msg = await ReplyEmbedAsync(embedType, description, addSmilesToDescription, title, withDefaultFooter, withDefaultAuthor, embedBuilder);
+        var msg = await ReplyEmbedAsync(embedType, description, title, withDefaultFooter, withDefaultAuthor, addSmilesToDescription, embedBuilder);
 
         _ = Task.Run(async () =>
         {
@@ -235,9 +227,83 @@ public abstract class GuildModuleBase : InteractiveBase
     }
 
 
+    public async Task<IEmote?> NextReactionAsync(IUserMessage message, TimeSpan? timeout = null, IList<IEmote>? emotes = null)
+    {
+        emotes ??= message.Reactions.Keys.ToList();
+        if (emotes.Count == 0)
+        {
+            emotes.Add(ConfirmEmote);
+            emotes.Add(DenyEmote);
+        }
+
+        timeout ??= TimeSpan.FromSeconds(15);
+
+        var criterion = new Criteria<SocketReaction>()
+              .AddCriterion(new EnsureReactionFromSourceUserCriterion())
+              .AddCriterion(new EnsureReactionFromMessageCriterion(message));
+
+        var eventTrigger = new TaskCompletionSource<SocketReaction>();
+
+        var cts = new CancellationTokenSource();
+
+
+        Context.Client.ReactionAdded += HandlerAsync;
+
+        var addReactionsTask = message.AddReactionsAsync(emotes.ToArray(), new() { CancelToken = cts.Token });
+
+        var trigger = eventTrigger.Task;
+        var delay = Task.Delay(timeout.Value);
+        var task = await Task.WhenAny(trigger, delay);
+
+        Context.Client.ReactionAdded -= HandlerAsync;
+
+        cts.Cancel();
+        try
+        {
+            await addReactionsTask;
+        }
+        catch (OperationCanceledException) { Console.WriteLine("*****************CANCEL*****************"); }
+
+        await message.DeleteAsync();
+
+        if (task == trigger)
+        {
+            var reaction = await trigger;
+
+            return reaction.Emote;
+        }
+
+
+        return null;
+
+
+
+        async Task HandlerAsync(Cacheable<IUserMessage, ulong> message, ISocketMessageChannel channel, SocketReaction reaction)
+        {
+            if (await criterion.JudgeAsync(Context, reaction))
+                eventTrigger.SetResult(reaction);
+        }
+    }
+
+    public async Task<SocketMessage> NextMessageAsync(
+        string? message = null,
+        bool isTTS = false,
+        Embed? embed = null,
+        bool fromSourceUser = true,
+        bool inSourceChannel = true,
+        TimeSpan? timeout = null,
+        CancellationToken token = default)
+    {
+        await ReplyAsync(message, isTTS, embed);
+
+        var msg = await NextMessageAsync(fromSourceUser, inSourceChannel, timeout, token);
+
+        return msg;
+    }
+
     public async Task<bool?> ConfirmActionAsync(string title, TimeSpan? timeout = null)
     {
-        var msg = await ReplyEmbedAsync(EmbedType.Information, "Подтвердите действие", false, title, true);
+        var msg = await ReplyEmbedAsync(EmbedStyle.Information, "Подтвердите действие", title, true);
 
         var res = await ConfirmActionAsync(msg, timeout);
 
@@ -246,58 +312,26 @@ public abstract class GuildModuleBase : InteractiveBase
 
     public async Task<bool?> ConfirmActionAsync(IUserMessage message, TimeSpan? timeout = null)
     {
-        timeout ??= TimeSpan.FromSeconds(15);
+        var selectedEmote = await NextReactionAsync(message, timeout);
 
-        var emotes = new IEmote[] { new Emoji("✅"), new Emoji("❌") };
+        if (selectedEmote is null)
+            return null;
 
-        var criterion = new Criteria<SocketReaction>()
-            .AddCriterion(new EnsureReactionFromSourceUserCriterion())
-            .AddCriterion(new EnsureReactionFromMessageCriterion(message));
+        if (selectedEmote.Name == ConfirmEmote.Name)
+            return true;
 
-        var eventTrigger = new TaskCompletionSource<SocketReaction>();
-
-
-        Context.Client.ReactionAdded += Handler;
-
-        await message.AddReactionsAsync(emotes);
-
-        var trigger = eventTrigger.Task;
-        var delay = Task.Delay(timeout.Value);
-        var task = await Task.WhenAny(trigger, delay);
-
-        Context.Client.ReactionAdded -= Handler;
-
-
-        await message.DeleteAsync();
-
-        if (task == trigger)
-        {
-            var reaction = await trigger;
-
-            if (reaction.Emote.Name == emotes[0].Name)
-                return true;
-
-            if (reaction.Emote.Name == emotes[1].Name)
-                return false;
-        }
+        if (selectedEmote.Name == DenyEmote.Name)
+            return false;
 
 
         return null;
-
-
-
-        async Task Handler(Cacheable<IUserMessage, ulong> message, ISocketMessageChannel channel, SocketReaction reaction)
-        {
-            if (await criterion.JudgeAsync(Context, reaction))
-                eventTrigger.SetResult(reaction);
-        }
     }
 
 
 
     public async Task<bool> ConfirmActionWithHandlingAsync(string title, ulong? logChannelId = null, TimeSpan? timeout = null)
     {
-        var msg = await ReplyEmbedAsync(EmbedType.Information, "Подтвердите действие", false, title, true);
+        var msg = await ReplyEmbedAsync(EmbedStyle.Information, "Подтвердите действие", title, true);
 
         return await ConfirmActionWithHandlingAsync(msg, logChannelId, timeout);
     }
@@ -307,20 +341,20 @@ public abstract class GuildModuleBase : InteractiveBase
 
         if (confirmed is null)
         {
-            await ReplyEmbedAndDeleteAsync(EmbedType.Warning, "Вы не подтвердили действие", true, "Сброс рейтинга", true);
+            await ReplyEmbedAndDeleteAsync(EmbedStyle.Warning, "Вы не подтвердили действие", true, "Сброс рейтинга", true);
 
             return false;
         }
         else if (confirmed is false)
         {
-            await ReplyEmbedAndDeleteAsync(EmbedType.Error, "Вы отклонили действие", true, "Сброс рейтинга", true);
+            await ReplyEmbedAndDeleteAsync(EmbedStyle.Error, "Вы отклонили действие", true, "Сброс рейтинга", true);
 
             return false;
         }
 
         var embed = (Embed)message.Embeds.First();
 
-        message = await ReplyEmbedAndDeleteAsync(EmbedType.Successfull, "Вы подтвердили действие", true, embed.Title, true);
+        message = await ReplyEmbedAndDeleteAsync(EmbedStyle.Successfull, "Вы подтвердили действие", true, embed.Title, true);
 
         embed = (Embed)message.Embeds.First();
 
@@ -336,5 +370,41 @@ public abstract class GuildModuleBase : InteractiveBase
         }
 
         return true;
+    }
+
+
+    protected EmbedBuilder CreateEmbedBuilder(
+         EmbedStyle embedStyle,
+        string description,
+        string? title = null,
+        bool withDefaultFooter = false,
+        bool withDefaultAuthor = false,
+        bool addSmilesToDescription = true,
+        EmbedBuilder? innerEmbedBuilder = null)
+    {
+        innerEmbedBuilder ??= new EmbedBuilder();
+
+        innerEmbedBuilder.WithDescription(description);
+
+        innerEmbedBuilder = embedStyle switch
+        {
+            EmbedStyle.Error => innerEmbedBuilder.WithErrorMessage(addSmilesToDescription),
+            EmbedStyle.Warning => innerEmbedBuilder.WithWarningMessage(addSmilesToDescription),
+            EmbedStyle.Successfull => innerEmbedBuilder.WithSuccessfullyMessage(addSmilesToDescription),
+            _ => innerEmbedBuilder.WithInformationMessage(addSmilesToDescription)
+        };
+
+        if (title is not null)
+            innerEmbedBuilder.WithTitle(title);
+
+        if (withDefaultFooter)
+            innerEmbedBuilder
+                .WithCurrentTimestamp()
+                .WithUserFooter(Context.User);
+
+        if (withDefaultAuthor)
+            innerEmbedBuilder.WithAuthor(Context.User);
+
+        return innerEmbedBuilder;
     }
 }

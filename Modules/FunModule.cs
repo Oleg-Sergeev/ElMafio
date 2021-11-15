@@ -12,10 +12,10 @@ namespace Modules;
 [Name("Фан")]
 public class FunModule : GuildModuleBase
 {
-    private readonly Random _random;
+    private readonly IRandom _random;
 
 
-    public FunModule(Random random)
+    public FunModule(IRandom random)
     {
         _random = random;
     }
@@ -26,7 +26,8 @@ public class FunModule : GuildModuleBase
     {
         int num = _random.Next(101);
 
-        await ReplyAsync($"Шанс того, что {text} - **{num}%**", messageReference: new(Context.Message.Id));
+        await ReplyAsync(embed: CreateEmbedBuilder(EmbedStyle.Information, $"Шанс того, что {text} - **{num}%**", addSmilesToDescription: false).Build(),
+            messageReference: new(Context.Message.Id));
     }
 
 
@@ -59,7 +60,8 @@ public class FunModule : GuildModuleBase
         var user = Context.Guild.Users.ToList()[num];
         var nickname = user.Nickname ?? user.Username;
 
-        await ReplyAsync($"**{nickname}** {message}", messageReference: new(Context.Message.Id));
+        await ReplyAsync(embed: CreateEmbedBuilder(EmbedStyle.Information, $"**{nickname}** {message}", addSmilesToDescription: false).Build(),
+            messageReference: new(Context.Message.Id));
     }
 
     [Command("Голосование")]
@@ -97,7 +99,7 @@ public class FunModule : GuildModuleBase
             }
         }
 
-        var response = await ReplyEmbedAsync(EmbedType.Information, options, false, title, withDefaultAuthor: true);
+        var response = await ReplyEmbedAsync(EmbedStyle.Information, options, title, withDefaultAuthor: true, addSmilesToDescription: false);
 
         await response.AddReactionsAsync(emotes.ToArray());
     }
@@ -131,12 +133,11 @@ public class FunModule : GuildModuleBase
 
 
     [Command("Аватар")]
-    [Priority(0)]
+    [Priority(-1)]
     public async Task GetAvatarAsync()
         => await GetAvatarAsync(Context.User);
 
     [Command("Аватар")]
-    [Priority(1)]
     public async Task GetAvatarAsync(IUser user)
     {
         var request = user.GetAvatarUrl(size: 2048);
@@ -146,7 +147,7 @@ public class FunModule : GuildModuleBase
 
         if (resp is null)
         {
-            await ReplyEmbedAsync(EmbedType.Information, "Не удалось загрузить аватар");
+            await ReplyEmbedAsync(EmbedStyle.Error, "Не удалось загрузить аватар");
 
             return;
         }
@@ -157,21 +158,27 @@ public class FunModule : GuildModuleBase
     }
 
 
+
     [Command("Смайл")]
     public async Task GetSmileAsync(string emoteId)
     {
         if (Emote.TryParse(emoteId, out var emote))
             await GetSmileByIdAsync(emote.Id);
         else
-            await ReplyEmbedAsync(EmbedType.Information, "Не удалось распознать пользовательский смайлик");
+            await ReplyEmbedAsync(EmbedStyle.Error, "Не удалось распознать пользовательский смайлик");
     }
 
 
-    [Command("Смайлайди")]
+    [Command("СмайлАйди")]
     public async Task GetSmileByIdAsync(ulong smileId)
     {
-        var resp = await new HttpClient().GetAsync($"https://cdn.discordapp.com/emojis/{smileId}.png")
-            ?? await new HttpClient().GetAsync($"https://cdn.discordapp.com/emojis/{smileId}.gif");
+        var hhtpClient = new HttpClient();
+
+        var resp = await hhtpClient.GetAsync($"https://cdn.discordapp.com/emojis/{smileId}.gif");
+
+        if (!resp.IsSuccessStatusCode)
+            resp = await hhtpClient.GetAsync($"https://cdn.discordapp.com/emojis/{smileId}.png");
+
 
         if (resp.IsSuccessStatusCode)
         {
@@ -179,47 +186,12 @@ public class FunModule : GuildModuleBase
 
             var smileExtension = resp.Content.Headers.ContentType!.MediaType!.Split('/')[1];
 
-            await Context.Channel.SendFileAsync(stream, $"smile.{smileExtension}");
+            await Context.Channel.SendFileAsync(stream, $"smile.{smileExtension}", messageReference: new(Context.Message.Id));
 
             return;
         }
 
-        await ReplyEmbedAsync(EmbedType.Information, "Не удалось найти пользовательский смайлик");
+        await ReplyEmbedAsync(EmbedStyle.Error, "Не удалось найти пользовательский смайлик");
     }
 
-
-    [Command("Смайлдобавить")]
-    [RequireUserPermission(GuildPermission.KickMembers)]
-    public async Task AddEmoteAsync()
-        => await AddEmoteAsync($"emoji_{Context.Guild.Emotes.Count + 1}");
-
-    [Command("Смайлдобавить")]
-    [RequireUserPermission(GuildPermission.KickMembers)]
-    public async Task AddEmoteAsync(string name)
-    {
-        var attachment = Context.Message.Attachments.FirstOrDefault() ?? Context.Message.ReferencedMessage?.Attachments.FirstOrDefault();
-
-        if (attachment is null)
-        {
-            await ReplyEmbedAsync(EmbedType.Error, "Прикрепите к своему сообщению картинку, или ответьте на сообщение, содержащее картинку");
-
-            return;
-        }
-
-        var stream = await new HttpClient().GetStreamAsync(attachment.Url);
-
-        if (stream is null)
-        {
-            await ReplyEmbedAsync(EmbedType.Error, "Не удалось загрузить картинку");
-
-            return;
-        }
-
-        var emote = await Context.Guild.CreateEmoteAsync(name, new Image(stream));
-
-
-        var msg = await ReplyEmbedAsync(EmbedType.Successfull, "Смайл успешно добавлен");
-
-        await msg.AddReactionAsync(emote);
-    }
 }

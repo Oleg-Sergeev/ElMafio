@@ -4,14 +4,16 @@ using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Infrastructure.Migrations
 {
     [DbContext(typeof(BotContext))]
-    partial class GuildContextModelSnapshot : ModelSnapshot
+    [Migration("20211114175203_MinorChanges")]
+    partial class MinorChanges
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -139,10 +141,7 @@ namespace Infrastructure.Migrations
                     b.Property<int>("CommissionerMovesCount")
                         .HasColumnType("int");
 
-                    b.Property<int>("CommissionerSuccessfullFoundsCount")
-                        .HasColumnType("int");
-
-                    b.Property<int>("CommissionerSuccessfullShotsCount")
+                    b.Property<int>("CommissionerSuccessfullMovesCount")
                         .HasColumnType("int");
 
                     b.Property<float>("DoctorEfficiency")

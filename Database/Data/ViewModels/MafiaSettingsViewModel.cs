@@ -8,7 +8,7 @@ public class MafiaSettingsViewModel
 
     public bool? RenameUsers { get; init; }
 
-    public bool? ReplyMessagesOnError { get; init; }
+    public bool? ReplyMessagesOnSetupError { get; init; }
 
     public bool? AbortGameWhenError { get; init; }
 

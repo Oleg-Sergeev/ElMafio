@@ -18,7 +18,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Services;
 
-public class CommandHandler : DiscordClientService
+public class CommandHandlerService : DiscordClientService
 {
     private const string PrefixSectionPath = "DefaultSettings:Guild:Prefix";
 
@@ -30,7 +30,7 @@ public class CommandHandler : DiscordClientService
     private readonly IConfiguration _config;
 
 
-    public CommandHandler(DiscordSocketClient client, CommandService commandService, BotContext db, IServiceProvider provider, IConfiguration config, ILogger<DiscordClientService> logger) : base(client, logger)
+    public CommandHandlerService(DiscordSocketClient client, CommandService commandService, BotContext db, IServiceProvider provider, IConfiguration config, ILogger<DiscordClientService> logger) : base(client, logger)
     {
         _db = db;
         _config = config;
@@ -58,13 +58,13 @@ public class CommandHandler : DiscordClientService
 
     private async Task OnMessageReceivedAsync(SocketMessage socketMessage)
     {
+        if (socketMessage.Author.IsBot)
+            return;
+
         if (socketMessage is not SocketUserMessage userMessage)
             return;
 
-        if (userMessage.Author.IsBot)
-            return;
-
-        var context = new SocketCommandContext(Client, userMessage);
+        var context = new DbSocketCommandContext(Client, userMessage, _db);
 
         int argPos = 0;
         if (userMessage.HasStringPrefix(_prefixes[context.Guild.Id], ref argPos) || userMessage.HasMentionPrefix(Client.CurrentUser, ref argPos))
@@ -80,8 +80,29 @@ public class CommandHandler : DiscordClientService
 
         Client.MessageReceived += OnMessageReceivedAsync;
         Client.JoinedGuild += OnJoinedGuildAsync;
+        Client.UserLeft += OnUserLeft;
 
         _db.SavedChanges += OnDbUpdated;
+    }
+
+    private async Task OnUserLeft(SocketGuildUser user)
+    {
+        var guildSettings = await _db.GuildSettings.FindAsync(user.Guild.Id);
+
+        var logChannelId = guildSettings.LogChannelId;
+
+        if (logChannelId is not null)
+        {
+            var guild = user.Guild;
+
+            var logChannel = guild.GetTextChannel(logChannelId.Value);
+
+            if (logChannel is not null)
+            {
+                await logChannel.SendMessageAsync(
+                        $"{guild.EveryoneRole.Mention} Пользователь **{user.Nickname ?? user.Username}** покинул сервер");
+            }
+        }
     }
 
     private async Task OnJoinedGuildAsync(SocketGuild guild)
@@ -90,11 +111,24 @@ public class CommandHandler : DiscordClientService
             return;
 
 
-        await _db.GuildSettings.AddAsync(new GuildSettings
+        var guildSettings = new GuildSettings()
         {
             Id = guild.Id,
             Prefix = _config[PrefixSectionPath]
+        };
+
+        await _db.GuildSettings.AddAsync(guildSettings);
+
+        await _db.MafiaSettings.AddAsync(new()
+        {
+            GuildSettingsId = guildSettings.Id
         });
+
+        await _db.RussianRouletteSettings.AddAsync(new()
+        {
+            GuildSettingsId = guildSettings.Id
+        });
+
 
 
         await _db.SaveChangesAsync();

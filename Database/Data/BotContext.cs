@@ -34,7 +34,7 @@ public class BotContext : DbContext
                 .HasDefaultValue(true);
 
         modelBuilder.Entity<MafiaSettings>()
-            .Property(s => s.ReplyMessagesOnError)
+            .Property(s => s.ReplyMessagesOnSetupError)
                 .HasDefaultValue(true);
 
         modelBuilder.Entity<RussianRouletteSettings>()
@@ -51,9 +51,9 @@ public class BotContext : DbContext
             .HasDefaultValue("/");
 
         modelBuilder.Entity<RussianRouletteStats>()
-            .HasKey(nameof(GameStats.UserId), nameof(GameStats.GuildId));
+            .HasKey(nameof(GameStats.UserId), nameof(GameStats.GuildSettingsId));
 
         modelBuilder.Entity<MafiaStats>()
-            .HasKey(nameof(GameStats.UserId), nameof(GameStats.GuildId));
+            .HasKey(nameof(GameStats.UserId), nameof(GameStats.GuildSettingsId));
     }
 }

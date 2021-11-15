@@ -78,7 +78,9 @@ public class LoggingService
                     parseResult.ArgValues,
                     parseResult.ParamValues);
 
-                await context.Channel.SendMessageAsync($"Неверные параметры команды. Введите команду **помощь {commandInfo.Value.Name}** для информации по данной команде");
+                var cmd = context.Message.Content.Split(' ')[0].Remove(0, 1);
+
+                await context.Channel.SendMessageAsync($"Неверные параметры команды. Введите команду **помощь {cmd}** для информации по данной команде");
 
                 break;
 
@@ -114,7 +116,7 @@ public class LoggingService
                                      result.ToString());
 
 
-                await context.Channel.SendMessageAsync("Произошла непредвиденная ошибка");
+                await context.Channel.SendMessageAsync($"Произошла непредвиденная ошибка: {result.ErrorReason}");
 
                 break;
         }

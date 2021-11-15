@@ -1,6 +1,6 @@
 ﻿namespace Modules;
 
-public enum EmbedType
+public enum EmbedStyle
 {
     Information = 0,
     Successfull,
