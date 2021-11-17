@@ -1,6 +1,8 @@
-﻿namespace Infrastructure.Data.Models.Games.Stats;
+﻿using Core.Interfaces;
 
-public abstract class GameStats : IResetableStat
+namespace Infrastructure.Data.Models.Games.Stats;
+
+public abstract class GameStats : IResetable
 {
     public int GamesCount { get; set; }
     public int WinsCount { get; set; }

@@ -7,19 +7,19 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Discord.Addons.Interactive" Version="2.0.0" />
     <PackageReference Include="Discord.Net" Version="2.4.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="5.0.0" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Core\Core.csproj" />
     <ProjectReference Include="..\Database\Infrastructure.csproj" />
     <ProjectReference Include="..\Services\Services.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="Discord.Addons.Interactive">
-      <HintPath>..\..\Discord.Addons.Interactive-8eccd40d05c054b2304d9e5ef6e2fe340df528be\Discord.Addons.Interactive\bin\Debug\netstandard2.0\Discord.Addons.Interactive.dll</HintPath>
-    </Reference>
+    <Folder Include="Games\Mafia\Common\" />
   </ItemGroup>
 
 </Project>

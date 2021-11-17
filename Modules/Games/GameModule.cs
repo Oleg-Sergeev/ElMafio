@@ -3,13 +3,15 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Core.Common;
+using Core.Extensions;
+using Core.Interfaces;
 using Discord;
 using Discord.Commands;
 using Infrastructure.Data.Models;
 using Infrastructure.Data.Models.Games.Stats;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using Modules.Extensions;
 
 namespace Modules.Games;
 
@@ -19,13 +21,13 @@ public abstract class GameModule : GuildModuleBase
     protected static Dictionary<ulong, Dictionary<Type, GameModuleData>> GamesData { get; } = new();
 
 
-    protected IRandom Random { get; }
+    protected IRandomService Random { get; }
     protected IConfiguration Config { get; }
 
 
     protected GameModuleData? GameData { get; set; }
 
-    public GameModule(IConfiguration config, IRandom random)
+    public GameModule(IConfiguration config, IRandomService random)
     {
         Config = config;
         Random = random;
@@ -501,7 +503,7 @@ public abstract class GameModule : GuildModuleBase
         {
             var secs = (int)timeout.Value.TotalSeconds;
 
-            while(secs-- > 0)
+            while (secs-- > 0)
             {
                 await Task.Delay(1000);
 

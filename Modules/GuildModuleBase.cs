@@ -3,12 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Core.Common;
+using Core.EnsureCriterias;
+using Core.Extensions;
 using Discord;
 using Discord.Addons.Interactive;
 using Discord.Net;
 using Discord.WebSocket;
-using Modules.EnsureCriterias;
-using Modules.Extensions;
 using Serilog;
 using Services;
 

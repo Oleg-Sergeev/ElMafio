@@ -3,19 +3,21 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
+using Core.Common;
+using Core.Extensions;
+using Core.Interfaces;
 using Discord;
 using Discord.Commands;
-using Modules.Extensions;
 
 namespace Modules;
 
 [Name("Фан")]
 public class FunModule : GuildModuleBase
 {
-    private readonly IRandom _random;
+    private readonly IRandomService _random;
 
 
-    public FunModule(IRandom random)
+    public FunModule(IRandomService random)
     {
         _random = random;
     }

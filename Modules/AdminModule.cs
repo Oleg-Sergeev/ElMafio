@@ -3,10 +3,11 @@ using System.Linq;
 using System.Net.Http;
 using System.Reflection;
 using System.Threading.Tasks;
+using Core.Common;
+using Core.Extensions;
 using Discord;
 using Discord.Commands;
 using Microsoft.EntityFrameworkCore;
-using Modules.Extensions;
 using Serilog;
 using Services;
 

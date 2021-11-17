@@ -3,13 +3,15 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Core.Common;
+using Core.Extensions;
+using Core.Interfaces;
 using Discord;
 using Discord.Commands;
 using Infrastructure.Data.Models.Games.Settings;
 using Infrastructure.Data.Models.Games.Stats;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using Modules.Extensions;
 
 namespace Modules.Games;
 
@@ -18,7 +20,7 @@ namespace Modules.Games;
 [Alias("р")]
 public class RussianRouletteModule : GameModule
 {
-    public RussianRouletteModule(IConfiguration config, IRandom random) : base(config, random)
+    public RussianRouletteModule(IConfiguration config, IRandomService random) : base(config, random)
     {
     }
 

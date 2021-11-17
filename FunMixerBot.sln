@@ -1,15 +1,17 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.31727.386
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Core", "Core\Core.csproj", "{69F34B39-05F9-499A-B835-DAC1999C4D4C}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ConsoleUI", "ConsoleUI\ConsoleUI.csproj", "{69F34B39-05F9-499A-B835-DAC1999C4D4C}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Services", "Services\Services.csproj", "{693DA301-031C-4397-8773-C43D82A2C234}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Modules", "Modules\Modules.csproj", "{427DEAB3-83C1-4027-A7D0-FF5B044D798B}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Infrastructure", "Database\Infrastructure.csproj", "{E72B9C99-D1C4-498E-890C-88E0CE857CFF}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Core", "Core\Core.csproj", "{1999162C-22E8-44B9-9232-F081A047B85A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -33,6 +35,10 @@ Global
 		{E72B9C99-D1C4-498E-890C-88E0CE857CFF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E72B9C99-D1C4-498E-890C-88E0CE857CFF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E72B9C99-D1C4-498E-890C-88E0CE857CFF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1999162C-22E8-44B9-9232-F081A047B85A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1999162C-22E8-44B9-9232-F081A047B85A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1999162C-22E8-44B9-9232-F081A047B85A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1999162C-22E8-44B9-9232-F081A047B85A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

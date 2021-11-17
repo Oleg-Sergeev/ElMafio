@@ -1,12 +1,13 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Core.Common;
+using Core.Comparers;
+using Core.Extensions;
 using Discord;
 using Discord.Commands;
 using Discord.Net;
 using Microsoft.Extensions.Configuration;
-using Modules.Comparers;
-using Modules.Extensions;
 
 namespace Modules;
 

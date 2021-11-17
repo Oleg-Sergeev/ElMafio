@@ -17,7 +17,6 @@ public class BotContext : DbContext
     public DbSet<RussianRouletteSettings> RussianRouletteSettings => Set<RussianRouletteSettings>();
 
 
-
     public BotContext(DbContextOptions<BotContext> options) : base(options)
     {
         Database.EnsureCreated();
