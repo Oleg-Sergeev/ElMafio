@@ -4,9 +4,9 @@ namespace Core.Extensions;
 
 public static class IConfigurationExtensions
 {
-    public static string? GetConnectionStringProductionDb(this IConfiguration config)
+    public static string GetConnectionStringProductionDb(this IConfiguration config)
         => config.GetConnectionString("SQLServer_Production");
-    public static string? GetConnectionStringDebugDb(this IConfiguration config)
+    public static string GetConnectionStringDebugDb(this IConfiguration config)
         => config.GetConnectionString("SQLServer_Debug");
 
 

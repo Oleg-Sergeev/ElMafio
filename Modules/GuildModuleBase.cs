@@ -165,14 +165,8 @@ public abstract class GuildModuleBase : InteractiveBase<DbSocketCommandContext>
     }
 
 
-    public async Task<IEnumerable<IUserMessage>> BroadcastMessagesAsync(
-        IEnumerable<IMessageChannel> channels,
-        string? text = null,
-        bool isTTS = false,
-        Embed? embed = null,
-        RequestOptions? options = null,
-        AllowedMentions? mentions = null,
-        MessageReference? reference = null)
+    public async Task<IEnumerable<IUserMessage>> BroadcastMessagesAsync(IEnumerable<IMessageChannel> channels, string? text = null, bool isTTS = false, 
+        Embed? embed = null, RequestOptions? options = null, AllowedMentions? mentions = null, MessageReference? reference = null)
     {
         var messages = new List<IUserMessage>();
         foreach (var channel in channels)
@@ -191,29 +185,16 @@ public abstract class GuildModuleBase : InteractiveBase<DbSocketCommandContext>
     }
 
 
-    public async Task<IUserMessage> ReplyEmbedAsync(
-        EmbedStyle embedStyle,
-        string description,
-        string? title = null,
-        bool withDefaultFooter = false,
-        bool withDefaultAuthor = false,
-        bool addSmilesToDescription = true,
-        EmbedBuilder? embedBuilder = null)
+    public async Task<IUserMessage> ReplyEmbedAsync(EmbedStyle embedStyle, string description, string? title = null,
+        bool withDefaultFooter = false, bool withDefaultAuthor = false, bool addSmilesToDescription = true, EmbedBuilder? embedBuilder = null)
     {
         var builder = CreateEmbedBuilder(embedStyle, description, title, withDefaultFooter, withDefaultAuthor, addSmilesToDescription, embedBuilder);
 
         return await ReplyAsync(embed: builder.Build());
     }
 
-    public async Task<IUserMessage> ReplyEmbedAndDeleteAsync(
-        EmbedStyle embedType,
-        string description,
-        bool addSmilesToDescription = true,
-        string? title = null,
-        bool withDefaultFooter = false,
-        bool withDefaultAuthor = false,
-        EmbedBuilder? embedBuilder = null,
-        TimeSpan? timeout = null)
+    public async Task<IUserMessage> ReplyEmbedAndDeleteAsync(EmbedStyle embedType, string description, bool addSmilesToDescription = true, string? title = null,
+        bool withDefaultFooter = false, bool withDefaultAuthor = false, EmbedBuilder? embedBuilder = null, TimeSpan? timeout = null)
     {
         var msg = await ReplyEmbedAsync(embedType, description, title, withDefaultFooter, withDefaultAuthor, addSmilesToDescription, embedBuilder);
 
@@ -286,21 +267,31 @@ public abstract class GuildModuleBase : InteractiveBase<DbSocketCommandContext>
         }
     }
 
-    public async Task<SocketMessage> NextMessageAsync(
-        string? message = null,
-        bool isTTS = false,
-        Embed? embed = null,
-        bool fromSourceUser = true,
-        bool inSourceChannel = true,
-        TimeSpan? timeout = null,
-        CancellationToken token = default)
+    public async Task<SocketMessage> NextMessageAsync(string? message = null, bool isTTS = false, Embed? embed = null,
+        bool fromSourceUser = true, bool inSourceChannel = true, TimeSpan? timeout = null, IMessageChannel? messageChannel = null, CancellationToken token = default)
     {
-        await ReplyAsync(message, isTTS, embed);
+        messageChannel ??= Context.Channel;
+
+        await messageChannel.SendMessageAsync(message, isTTS, embed);
 
         var msg = await NextMessageAsync(fromSourceUser, inSourceChannel, timeout, token);
 
         return msg;
     }
+
+    public async Task<SocketMessage> NextMessageAsync(ICriterion<SocketMessage> criterion, string? message = null, bool isTTS = false, 
+        Embed? embed = null, TimeSpan? timeout = null, IMessageChannel? messageChannel = null, CancellationToken token = default)
+    {
+        messageChannel ??= Context.Channel;
+
+        await messageChannel.SendMessageAsync(message, isTTS, embed);
+
+        var msg = await NextMessageAsync(criterion, timeout, token);
+
+        return msg;
+    }
+
+
 
     public async Task<bool?> ConfirmActionAsync(string title, TimeSpan? timeout = null)
     {
@@ -374,14 +365,8 @@ public abstract class GuildModuleBase : InteractiveBase<DbSocketCommandContext>
     }
 
 
-    protected EmbedBuilder CreateEmbedBuilder(
-         EmbedStyle embedStyle,
-        string description,
-        string? title = null,
-        bool withDefaultFooter = false,
-        bool withDefaultAuthor = false,
-        bool addSmilesToDescription = true,
-        EmbedBuilder? innerEmbedBuilder = null)
+    protected EmbedBuilder CreateEmbedBuilder(EmbedStyle embedStyle, string description, string? title = null, bool withDefaultFooter = false,
+        bool withDefaultAuthor = false, bool addSmilesToDescription = true, EmbedBuilder? innerEmbedBuilder = null)
     {
         innerEmbedBuilder ??= new EmbedBuilder();
 

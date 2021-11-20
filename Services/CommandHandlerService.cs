@@ -5,7 +5,6 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Core.TypeReaders;
-using Core.ViewModels;
 using Discord;
 using Discord.Addons.Hosting;
 using Discord.Commands;
@@ -48,7 +47,6 @@ public class CommandHandlerService : DiscordClientService
         _commandService.AddTypeReader<bool>(new BooleanTypeReader(), true);
         _commandService.AddTypeReader<Emoji>(new EmojiTypeReader());
         _commandService.AddTypeReader<Emote>(new EmoteTypeReader());
-        _commandService.AddTypeReader<MafiaSettingsViewModel>(new MafiaSettingsTypeReader());
 
         await _commandService.AddModulesAsync(Assembly.LoadFrom("Modules"), _provider);
 
@@ -64,6 +62,9 @@ public class CommandHandlerService : DiscordClientService
         if (socketMessage is not SocketUserMessage userMessage)
             return;
 
+        if (userMessage.Channel is not IGuildChannel)
+            return;
+
         var context = new DbSocketCommandContext(Client, userMessage, _db);
 
         int argPos = 0;
@@ -77,7 +78,7 @@ public class CommandHandlerService : DiscordClientService
         var loadGuildSettingsTask = LoadGuildSettingsAsync();
 
         await loadGuildSettingsTask;
-
+        
         Client.MessageReceived += OnMessageReceivedAsync;
         Client.JoinedGuild += OnJoinedGuildAsync;
         Client.UserLeft += OnUserLeft;
@@ -88,6 +89,9 @@ public class CommandHandlerService : DiscordClientService
     private async Task OnUserLeft(SocketGuildUser user)
     {
         var guildSettings = await _db.GuildSettings.FindAsync(user.Guild.Id);
+
+        if (guildSettings is null)
+            throw new InvalidOperationException();
 
         var logChannelId = guildSettings.LogChannelId;
 

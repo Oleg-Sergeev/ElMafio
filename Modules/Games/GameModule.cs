@@ -565,7 +565,7 @@ public abstract class GameModule : GuildModuleBase
         return games.GetValueOrDefault(type);
     }
 
-    protected bool CanStart(out string? failMessage)
+    protected virtual bool CanStart(out string? failMessage)
     {
         failMessage = null;
 
@@ -579,21 +579,21 @@ public abstract class GameModule : GuildModuleBase
 
         if (GameData.Players.Count < GameData.MinPlayersCount)
         {
-            failMessage = "Недостаточно игроков";
+            failMessage = $"Недостаточно игроков. Минимальное количество игроков для игры: {GameData.MinPlayersCount}";
 
             return false;
         }
 
         if (GameData.IsPlaying)
         {
-            failMessage = $"{GameData.Name} уже запущена";
+            failMessage = $"{GameData.Name} уже запущена, дождитесь завершения игры";
 
             return false;
         }
 
         if (GameData.Creator.Id != Context.User.Id && Context.User.Id != Context.Guild.OwnerId)
         {
-            failMessage = "Вы не являетесь создателем";
+            failMessage = "Вы не являетесь инициатором игры. Запустить игру может только ее инициатор";
 
             return false;
         }

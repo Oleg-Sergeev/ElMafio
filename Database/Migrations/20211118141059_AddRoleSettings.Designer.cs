@@ -4,6 +4,7 @@ using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,10 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations
 {
     [DbContext(typeof(BotContext))]
-    partial class GuildContextModelSnapshot : ModelSnapshot
+    [Migration("20211118141059_AddRoleSettings")]
+    partial class AddRoleSettings
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -22,7 +24,7 @@ namespace Infrastructure.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder, 1L, 1);
 
-            modelBuilder.Entity("Infrastructure.Data.Models.Games.Settings.Mafia.MafiaSettings", b =>
+            modelBuilder.Entity("Infrastructure.Data.Models.Games.Settings.MafiaSettings", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -30,20 +32,54 @@ namespace Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
 
-                    b.Property<string>("GameSubSettingsJsonData")
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<bool>("AbortGameWhenError")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal?>("CategoryChannelId")
+                        .HasColumnType("decimal(20,0)");
+
+                    b.Property<decimal?>("GeneralTextChannelId")
+                        .HasColumnType("decimal(20,0)");
+
+                    b.Property<decimal?>("GeneralVoiceChannelId")
+                        .HasColumnType("decimal(20,0)");
 
                     b.Property<decimal>("GuildSettingsId")
                         .HasColumnType("decimal(20,0)");
 
-                    b.Property<string>("GuildSubSettingsJsonData")
+                    b.Property<bool>("IsRatingGame")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("MafiaKoefficient")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("MafiaRoleId")
+                        .HasColumnType("decimal(20,0)");
+
+                    b.Property<decimal?>("MurdersTextChannelId")
+                        .HasColumnType("decimal(20,0)");
+
+                    b.Property<decimal?>("MurdersVoiceChannelId")
+                        .HasColumnType("decimal(20,0)");
+
+                    b.Property<bool>("RenameUsers")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("ReplyMessagesOnSetupError")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("RoleSettingsJsonData")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("RoleAmountSubSettingsJsonData")
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<bool>("SendWelcomeMessage")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
 
-                    b.Property<string>("RolesInfoSubSettingsJsonData")
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<decimal?>("WatcherRoleId")
+                        .HasColumnType("decimal(20,0)");
 
                     b.HasKey("Id");
 
@@ -224,11 +260,11 @@ namespace Infrastructure.Migrations
                     b.ToTable("Users");
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.Games.Settings.Mafia.MafiaSettings", b =>
+            modelBuilder.Entity("Infrastructure.Data.Models.Games.Settings.MafiaSettings", b =>
                 {
                     b.HasOne("Infrastructure.Data.Models.GuildSettings", "GuildSettings")
                         .WithOne("MafiaSettings")
-                        .HasForeignKey("Infrastructure.Data.Models.Games.Settings.Mafia.MafiaSettings", "GuildSettingsId")
+                        .HasForeignKey("Infrastructure.Data.Models.Games.Settings.MafiaSettings", "GuildSettingsId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 

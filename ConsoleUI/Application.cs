@@ -17,6 +17,7 @@ using Serilog.Events;
 using Serilog.Filters;
 using Services;
 using Core.Extensions;
+using Modules.Games.Mafia.Common.GameRoles.Data;
 
 namespace ConsoleUI;
 
@@ -85,6 +86,7 @@ public static class Application
             | GatewayIntents.GuildVoiceStates
             | GatewayIntents.GuildMessageReactions
             | GatewayIntents.DirectMessageReactions
+            | GatewayIntents.DirectMessages
             };
 
             discrodConfig.Token = context.Configuration["Tokens:DiscordBot"];
@@ -108,6 +110,8 @@ public static class Application
             .AddHostedService<CommandHandlerService>()
             .AddSingleton<InteractiveService>()
             .AddSingleton<LoggingService>()
-            .AddSingleton<IRandomService, BotRandomService>();
+            .AddSingleton<IRandomService, BotRandomService>()
+            .Configure<GameRoleData>(GameRoleData.InnocentSection, context.Configuration.GetSection($"{GameRoleData.RootSection}:{GameRoleData.InnocentSection}"))
+            .Configure<GameRoleData>(GameRoleData.MurderSection, context.Configuration.GetSection($"{GameRoleData.RootSection}:{GameRoleData.MurderSection}"));
         });
 }

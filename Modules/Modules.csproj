@@ -9,17 +9,13 @@
   <ItemGroup>
     <PackageReference Include="Discord.Addons.Interactive" Version="2.0.0" />
     <PackageReference Include="Discord.Net" Version="2.4.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration" Version="5.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="6.0.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Core\Core.csproj" />
     <ProjectReference Include="..\Database\Infrastructure.csproj" />
     <ProjectReference Include="..\Services\Services.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Games\Mafia\Common\" />
   </ItemGroup>
 
 </Project>

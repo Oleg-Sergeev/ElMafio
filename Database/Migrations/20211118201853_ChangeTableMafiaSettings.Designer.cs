@@ -4,6 +4,7 @@ using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,10 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations
 {
     [DbContext(typeof(BotContext))]
-    partial class GuildContextModelSnapshot : ModelSnapshot
+    [Migration("20211118201853_ChangeTableMafiaSettings")]
+    partial class ChangeTableMafiaSettings
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -30,19 +32,13 @@ namespace Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
 
-                    b.Property<string>("GameSubSettingsJsonData")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<decimal>("GuildSettingsId")
                         .HasColumnType("decimal(20,0)");
 
                     b.Property<string>("GuildSubSettingsJsonData")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("RoleAmountSubSettingsJsonData")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("RolesInfoSubSettingsJsonData")
+                    b.Property<string>("RoleSubSettingsJsonData")
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");

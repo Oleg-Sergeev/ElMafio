@@ -15,10 +15,10 @@ public static class BotContextExtensions
             return;
 
 
-        await SeedUsersAsync(context);
+        await context.SeedUsersAsync();
     }
 
-    private static async Task SeedUsersAsync(BotContext context)
+    private static async Task SeedUsersAsync(this BotContext context)
     {
         var users = GetUsers();
 

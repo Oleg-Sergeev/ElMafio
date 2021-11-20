@@ -1,10 +1,8 @@
 ﻿namespace Core.ViewModels;
 
-public class MafiaSettingsViewModel
+public class ServerSubSettingsViewModel
 {
-    public int? MafiaKoefficient { get; init; }
-
-    public bool? IsRatingGame { get; init; }
+    public bool? RemoveRolesFromUsers { get; init; }
 
     public bool? RenameUsers { get; init; }
 
