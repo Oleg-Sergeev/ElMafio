@@ -112,6 +112,11 @@ public static class Application
             .AddSingleton<LoggingService>()
             .AddSingleton<IRandomService, BotRandomService>()
             .Configure<GameRoleData>(GameRoleData.InnocentSection, context.Configuration.GetSection($"{GameRoleData.RootSection}:{GameRoleData.InnocentSection}"))
-            .Configure<GameRoleData>(GameRoleData.MurderSection, context.Configuration.GetSection($"{GameRoleData.RootSection}:{GameRoleData.MurderSection}"));
+            .Configure<GameRoleData>(GameRoleData.MurderSection, context.Configuration.GetSection($"{GameRoleData.RootSection}:{GameRoleData.MurderSection}"))
+            .Configure<GameRoleData>(GameRoleData.DoctorSection, context.Configuration.GetSection($"{GameRoleData.RootSection}:{GameRoleData.DoctorSection}"))
+            .Configure<GameRoleData>(GameRoleData.MurderGroupSection, context.Configuration.GetSection($"{GameRoleData.RootSection}:{GameRoleData.MurderGroupSection}"))
+            .Configure<GameRoleData>(GameRoleData.AliveGroupSection, context.Configuration.GetSection($"{GameRoleData.RootSection}:{GameRoleData.AliveGroupSection}"))
+            .Configure<CheckerData>(GameRoleData.DonSection, context.Configuration.GetSection($"{GameRoleData.RootSection}:{GameRoleData.DonSection}"))
+            .Configure<SheriffData>(GameRoleData.SheriffSection, context.Configuration.GetSection($"{GameRoleData.RootSection}:{GameRoleData.SheriffSection}"));
         });
 }

@@ -115,29 +115,8 @@ public class CommandHandlerService : DiscordClientService
             return;
 
 
-        var guildSettings = new GuildSettings()
-        {
-            Id = guild.Id,
-            Prefix = _config[PrefixSectionPath]
-        };
-
-        await _db.GuildSettings.AddAsync(guildSettings);
-
-        await _db.MafiaSettings.AddAsync(new()
-        {
-            GuildSettingsId = guildSettings.Id
-        });
-
-        await _db.RussianRouletteSettings.AddAsync(new()
-        {
-            GuildSettingsId = guildSettings.Id
-        });
-
-
-
-        await _db.SaveChangesAsync();
+        await AddNewGuildAsync(guild.Id);
     }
-
 
 
     private void OnDbUpdated(object? sender, SavedChangesEventArgs args)
@@ -190,23 +169,47 @@ public class CommandHandlerService : DiscordClientService
         }
     }
 
-    private async Task AddNewGuildsAsync(IEnumerable<ulong> newGuildsId)
-    {
-        var newGuildsSettings = newGuildsId
-            .Select(id => new GuildSettings
-            {
-                Id = id,
-                Prefix = _config[PrefixSectionPath]
-            })
-            .ToList();
 
-        await _db.GuildSettings.AddRangeAsync(newGuildsSettings);
+    private async Task AddNewGuildAsync(ulong guildId)
+    {
+        var guildSettings = new GuildSettings()
+        {
+            Id = guildId,
+            Prefix = _config[PrefixSectionPath]
+        };
+
+        await _db.GuildSettings.AddAsync(guildSettings);
 
         await _db.SaveChangesAsync();
 
 
-        foreach (var guildSettings in newGuildsSettings)
-            _prefixes.Add(guildSettings.Id, guildSettings.Prefix);
-    }
+        await _db.RussianRouletteSettings.AddAsync(new()
+        {
+            GuildSettingsId = guildSettings.Id
+        });
 
+
+        var mafiaSettings = await _db.MafiaSettings.AddAsync(new()
+        {
+            GuildSettingsId = guildSettings.Id
+        });
+
+        await _db.SaveChangesAsync();
+
+        await _db.MafiaSettingsTemplates.AddAsync(new("_Default")
+        {
+            MafiaSettingsId = mafiaSettings.Entity.Id,
+        });
+
+
+        await _db.SaveChangesAsync();
+
+
+        _prefixes.Add(guildSettings.Id, guildSettings.Prefix);
+    }
+    private async Task AddNewGuildsAsync(IEnumerable<ulong> newGuildsId)
+    {
+        foreach (var guildId in newGuildsId)
+            await AddNewGuildAsync(guildId);
+    }
 }

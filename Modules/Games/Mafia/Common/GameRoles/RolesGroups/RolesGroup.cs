@@ -13,7 +13,7 @@ public abstract class RolesGroup<T> : GameRole where T : GameRole
     public override bool IsAlive => Roles.Any(r => r.IsAlive);
 
 
-    public RolesGroup(IList<T> roles, IOptionsMonitor<GameRoleData> options, int voteTime) : base(roles[0].Player, options, voteTime)
+    public RolesGroup(IList<T> roles, IOptionsSnapshot<GameRoleData> options, int voteTime) : base(roles[0].Player, options, voteTime)
     {
         Roles = roles;
     }

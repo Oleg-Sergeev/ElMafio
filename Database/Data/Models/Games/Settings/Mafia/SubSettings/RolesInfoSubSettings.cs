@@ -1,4 +1,4 @@
-﻿namespace Infrastructure.Data.Models.Games.Settings.Mafia;
+﻿namespace Infrastructure.Data.Models.Games.Settings.Mafia.SubSettings;
 
 public record RolesInfoSubSettings
 {

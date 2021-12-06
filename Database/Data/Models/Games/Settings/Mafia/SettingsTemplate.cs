@@ -1,20 +1,16 @@
-﻿using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations.Schema;
+﻿using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json;
 using Infrastructure.Data.Models.Games.Settings.Mafia.SubSettings;
 
 namespace Infrastructure.Data.Models.Games.Settings.Mafia;
 
-public class MafiaSettings : GameSettings
+public class SettingsTemplate
 {
-    public string CurrentTemplateName { get; set; }
+    public int Id { get; set; }
 
-    [NotMapped]
-    public SettingsTemplate? Current { get; set; }
+    public int MafiaSettingsId { get; set; }
 
-    public List<SettingsTemplate> SettingsTemplates { get; private set; } = null!;
-
-
+    public string Name { get; set; }
 
     public string? RoleAmountSubSettingsJsonData { get; private set; }
 
@@ -89,9 +85,8 @@ public class MafiaSettings : GameSettings
     }
 
 
-
-    public MafiaSettings()
+    public SettingsTemplate(string name)
     {
-        CurrentTemplateName = "_Default";
+        Name = name;
     }
 }

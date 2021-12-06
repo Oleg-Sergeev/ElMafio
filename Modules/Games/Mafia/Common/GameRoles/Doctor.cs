@@ -14,7 +14,7 @@ public class Doctor : Innocent, IHealer
 
     protected int SelfHealsCount { get; set; }
 
-    public Doctor(IGuildUser player, IOptionsMonitor<GameRoleData> options, int voteTime, int selfHealsCount) : base(player, options, voteTime, true)
+    public Doctor(IGuildUser player, IOptionsSnapshot<GameRoleData> options, int voteTime, int selfHealsCount) : base(player, options, voteTime, true)
     {
         SelfHealsCount = selfHealsCount;
     }
@@ -37,9 +37,15 @@ public class Doctor : Innocent, IHealer
     {
         base.ProcessMove(selectedPlayer, isSkip);
 
-        HealedPlayer = !isSkip ? selectedPlayer : null;
 
-        if (HealedPlayer == Player)
-            SelfHealsCount--;
+        if (IsNight)
+        {
+            HealedPlayer = !isSkip ? selectedPlayer : null;
+
+            if (HealedPlayer == Player)
+                SelfHealsCount--;
+
+            IsNight = false;
+        }
     }
 }

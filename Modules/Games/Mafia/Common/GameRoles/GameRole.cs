@@ -1,11 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using Core.Common;
+using Core.Extensions;
 using Discord;
 using Microsoft.Extensions.Options;
 using Modules.Games.Mafia.Common.GameRoles.Data;
 
 namespace Modules.Games.Mafia.Common.GameRoles;
+
+
 
 public abstract class GameRole
 {
@@ -23,11 +27,16 @@ public abstract class GameRole
 
     public virtual bool CanDoMove { get; protected set; }
 
+    public virtual bool IsNight { get; protected set; }
+
+
+
+    protected bool IsSkip { get; set; }
 
     protected GameRoleData Data { get; }
 
 
-    public GameRole(IGuildUser player, IOptionsMonitor<GameRoleData> options, int voteTime)
+    public GameRole(IGuildUser player, IOptionsSnapshot<GameRoleData> options, int voteTime)
     {
         Data = options.Get(GetType().Name);
 
@@ -49,21 +58,56 @@ public abstract class GameRole
     public virtual void ProcessMove(IGuildUser? selectedPlayer, bool isSkip)
     {
         LastMove = !isSkip ? selectedPlayer : null;
+
+        IsSkip = isSkip;
     }
 
 
-    public string GetRandomPhrase(bool isSuccess) => isSuccess
-        ? Data.SuccessPhrases[_random.Next(Data.SuccessPhrases.Length)]
-        : Data.FailurePhrases[_random.Next(Data.FailurePhrases.Length)];
 
+    public virtual ICollection<(EmbedStyle, string)> GetMoveResultPhasesSequence()
+    {
+        var sequence = new List<(EmbedStyle, string)>();
 
-    public void BlockMove() => CanDoMove = false;
+        if (LastMove is not null)
+        {
+            sequence.Add((EmbedStyle.Successfull, "Выбор сделан"));
+            sequence.Add((EmbedStyle.Successfull, ParsePattern(GetRandomPhrase(Data.SuccessPhrases), $"**{LastMove?.GetFullName()}**")));
+        }
+        else
+        {
+            if (IsSkip)
+                sequence.Add((EmbedStyle.Error, "Вы пропустили голосование"));
+            else
+            {
+                sequence.Add((EmbedStyle.Error, "Вы не смогли сделать выбор"));
+                sequence.Add((EmbedStyle.Error, ParsePattern(GetRandomPhrase(Data.FailurePhrases))));
+            }
+        }
 
-    public void UnblockMove() => CanDoMove = true;
+        return sequence;
+    }
+
+    public string GetRandomYourMovePhrase() => Data.YourMovePhrases[_random.Next(Data.YourMovePhrases.Length)];
+
+    protected static string GetRandomPhrase(string[] phrases) => phrases[_random.Next(phrases.Length)];
 
     public void GameOver()
     {
+        CanDoMove = false;
         IsAlive = false;
         LastMove = null;
+    }
+
+
+
+    public void SetNightMove() => IsNight = true;
+
+
+    protected static string ParsePattern(string str, params string[] values)
+    {
+        for (int i = 0; i < values.Length; i++)
+            str = str.Replace($"{{{i}}}", $"**{values[i]}**");
+
+        return str;
     }
 }
