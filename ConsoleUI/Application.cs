@@ -116,6 +116,8 @@ public static class Application
             .Configure<GameRoleData>(GameRoleData.DoctorSection, context.Configuration.GetSection($"{GameRoleData.RootSection}:{GameRoleData.DoctorSection}"))
             .Configure<GameRoleData>(GameRoleData.MurderGroupSection, context.Configuration.GetSection($"{GameRoleData.RootSection}:{GameRoleData.MurderGroupSection}"))
             .Configure<GameRoleData>(GameRoleData.AliveGroupSection, context.Configuration.GetSection($"{GameRoleData.RootSection}:{GameRoleData.AliveGroupSection}"))
+            .Configure<GameRoleData>(GameRoleData.ManiacSection, context.Configuration.GetSection($"{GameRoleData.RootSection}:{GameRoleData.ManiacSection}"))
+            .Configure<GameRoleData>(GameRoleData.HookerSection, context.Configuration.GetSection($"{GameRoleData.RootSection}:{GameRoleData.HookerSection}"))
             .Configure<CheckerData>(GameRoleData.DonSection, context.Configuration.GetSection($"{GameRoleData.RootSection}:{GameRoleData.DonSection}"))
             .Configure<SheriffData>(GameRoleData.SheriffSection, context.Configuration.GetSection($"{GameRoleData.RootSection}:{GameRoleData.SheriffSection}"));
         });

@@ -55,12 +55,13 @@ public abstract class GameModule : GuildModuleBase
             return;
         }
 
-        var mentions = "";
+        var mentions = "Упоминание всех игроков:\n";
 
         foreach (var player in GameData.Players)
             mentions += $"{player.Mention}\n";
 
-        await ReplyEmbedAsync(EmbedStyle.Information, mentions, "Упоминание всех игроков", addSmilesToDescription: false);
+
+        await ReplyAsync(mentions);
     }
 
     [Command("Создатель")]

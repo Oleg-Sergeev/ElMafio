@@ -7,9 +7,9 @@ namespace Modules.Games.Mafia.Common.GameRoles;
 
 public class Innocent : GameRole
 {
-    public Innocent(IGuildUser player, IOptionsSnapshot<GameRoleData> options, int voteTime, bool canDoMove) : base(player, options, voteTime)
+    public Innocent(IGuildUser player, IOptionsSnapshot<GameRoleData> options, int voteTime) : base(player, options, voteTime)
     {
-        CanDoMove = canDoMove;
+
     }
 
 

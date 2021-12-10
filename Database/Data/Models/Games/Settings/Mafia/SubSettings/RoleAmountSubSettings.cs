@@ -13,6 +13,10 @@ public record class RoleAmountSubSettings
 
     public int? InnocentCount { get; init; }
 
+    public int? ManiacsCount { get; init; }
+
+    public int? HookersCount { get; init; }
+
 
     public int? RedRolesCount => InnocentCount is null && DoctorsCount is null && SheriffsCount is null ? null : (InnocentCount ?? 0) + (DoctorsCount ?? 0) + (SheriffsCount ?? 0);
 

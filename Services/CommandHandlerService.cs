@@ -82,7 +82,6 @@ public class CommandHandlerService : DiscordClientService
         Client.MessageReceived += OnMessageReceivedAsync;
         Client.JoinedGuild += OnJoinedGuildAsync;
         Client.UserLeft += OnUserLeft;
-
         _db.SavedChanges += OnDbUpdated;
     }
 

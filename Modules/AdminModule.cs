@@ -386,23 +386,63 @@ public class AdminModule : GuildModuleBase
         {
             var attachment = Context.Message.Attachments.FirstOrDefault() ?? Context.Message.ReferencedMessage?.Attachments.FirstOrDefault();
 
+            var httpClient = new HttpClient();
 
             if (attachment is null)
             {
-                await ReplyEmbedAsync(EmbedStyle.Error, "Прикрепите к своему сообщению картинку, или ответьте на сообщение, содержащее картинку");
+                HttpResponseMessage? resp = null;
 
-                return;
+                var arr = Context.Message.Content.Split();
+                var uri = arr.Length > 1 ? arr[1] : string.Empty;
+
+                if (uri.StartsWith("http"))
+                {
+                    name = $"emoji_{Context.Guild.Emotes.Count + 1}";
+                    resp = await httpClient.GetAsync(uri);
+                }
+
+                if ((resp is null || !resp.IsSuccessStatusCode) && (Context.Message.ReferencedMessage?.Content.StartsWith("http") ?? false))
+                    resp = await httpClient.GetAsync(Context.Message.ReferencedMessage.Content);
+
+                if (resp is null || !resp.IsSuccessStatusCode)
+                {
+                    await ReplyEmbedAsync(EmbedStyle.Error, "Прикрепите к своему сообщению картинку, или ответьте на сообщение, содержащее картинку");
+                    
+                    return;
+                }
+
+                var resptream = await resp.Content.ReadAsStreamAsync();
+
+                string? smileExtension = null;
+                var smileExtensions = resp.Content.Headers.ContentType?.MediaType?.Split('/');
+
+                if (smileExtensions?.Length > 1)
+                    smileExtension = smileExtensions[1];
+
+                if (smileExtension is null)
+                {
+                    await ReplyEmbedAsync(EmbedStyle.Error, "Прикрепите к своему сообщению картинку, или ответьте на сообщение, содержащее картинку");
+
+                    return;
+                }
+
+                var embed = CreateEmbedBuilder(EmbedStyle.Information, "Ваша картинка", addSmilesToDescription: false).Build();
+
+                var file = await Context.Channel.SendFileAsync(resptream, $"smile.{smileExtension}", embed: embed, messageReference: new(Context.Message.Id));
+
+                attachment = file.Attachments.First();
             }
 
-            if (attachment.Height > 256 || attachment.Width > 256)
+            if (attachment.Size > 256 * 1024)
             {
                 await ReplyEmbedAsync(EmbedStyle.Error,
-                    $"Изображение имеет слишком большие размеры. Допустимый размер: 256х256; Размер изображения: {attachment.Width}x{attachment.Height}");
+                    $"Изображение имеет слишком большой размер. Допустимый размер: 256Кб; Размер изображения: {attachment.Size / 1024}Кб");
 
                 return;
             }
 
-            var stream = await new HttpClient().GetStreamAsync(attachment.Url);
+
+            var stream = await httpClient.GetStreamAsync(attachment.Url);
 
             if (stream is null)
             {
@@ -411,7 +451,9 @@ public class AdminModule : GuildModuleBase
                 return;
             }
 
-            var emote = await Context.Guild.CreateEmoteAsync(name, new Image(stream));
+            var image = new Image(stream);
+
+            var emote = await Context.Guild.CreateEmoteAsync(name, image);
 
 
             var msg = await ReplyEmbedAsync(EmbedStyle.Successfull, "Смайл успешно добавлен");

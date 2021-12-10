@@ -11,6 +11,8 @@ public class GameRoleData
     public const string DonSection = nameof(Don);
     public const string DoctorSection = nameof(Doctor);
     public const string SheriffSection = nameof(Sheriff);
+    public const string ManiacSection = nameof(Maniac);
+    public const string HookerSection = nameof(Hooker);
     public const string MurderGroupSection = nameof(MurdersGroup);
     public const string AliveGroupSection = nameof(AliveGroup);
 

@@ -4,6 +4,7 @@ using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,10 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations
 {
     [DbContext(typeof(BotContext))]
-    partial class GuildContextModelSnapshot : ModelSnapshot
+    [Migration("20211209142708_AddColumn")]
+    partial class AddColumn
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -42,7 +44,7 @@ namespace Infrastructure.Migrations
                     b.HasIndex("GuildSettingsId")
                         .IsUnique();
 
-                    b.ToTable("MafiaSettings", (string)null);
+                    b.ToTable("MafiaSettings");
                 });
 
             modelBuilder.Entity("Infrastructure.Data.Models.Games.Settings.Mafia.SettingsTemplate", b =>
@@ -79,7 +81,7 @@ namespace Infrastructure.Migrations
 
                     b.HasIndex("MafiaSettingsId");
 
-                    b.ToTable("MafiaSettingsTemplates", (string)null);
+                    b.ToTable("MafiaSettingsTemplates");
                 });
 
             modelBuilder.Entity("Infrastructure.Data.Models.Games.Settings.RussianRouletteSettings", b =>
@@ -116,7 +118,7 @@ namespace Infrastructure.Migrations
                     b.HasIndex("GuildSettingsId")
                         .IsUnique();
 
-                    b.ToTable("RussianRouletteSettings", (string)null);
+                    b.ToTable("RussianRouletteSettings");
                 });
 
             modelBuilder.Entity("Infrastructure.Data.Models.Games.Stats.MafiaStats", b =>
@@ -191,7 +193,7 @@ namespace Infrastructure.Migrations
 
                     b.HasIndex("GuildSettingsId");
 
-                    b.ToTable("MafiaStats", (string)null);
+                    b.ToTable("MafiaStats");
                 });
 
             modelBuilder.Entity("Infrastructure.Data.Models.Games.Stats.RussianRouletteStats", b =>
@@ -215,7 +217,7 @@ namespace Infrastructure.Migrations
 
                     b.HasIndex("GuildSettingsId");
 
-                    b.ToTable("RussianRouletteStats", (string)null);
+                    b.ToTable("RussianRouletteStats");
                 });
 
             modelBuilder.Entity("Infrastructure.Data.Models.GuildSettings", b =>
@@ -237,7 +239,7 @@ namespace Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("GuildSettings", (string)null);
+                    b.ToTable("GuildSettings");
                 });
 
             modelBuilder.Entity("Infrastructure.Data.Models.User", b =>
@@ -250,7 +252,7 @@ namespace Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Users", (string)null);
+                    b.ToTable("Users");
                 });
 
             modelBuilder.Entity("Infrastructure.Data.Models.Games.Settings.Mafia.MafiaSettings", b =>

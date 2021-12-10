@@ -25,7 +25,7 @@ public abstract class GameRole
 
     public virtual bool IsAlive { get; protected set; }
 
-    public virtual bool CanDoMove { get; protected set; }
+    public virtual bool BlockedByHooker { get; set; }
 
     public virtual bool IsNight { get; protected set; }
 
@@ -48,7 +48,7 @@ public abstract class GameRole
 
         IsAlive = true;
 
-        CanDoMove = true;
+        BlockedByHooker = false;
     }
 
 
@@ -93,7 +93,7 @@ public abstract class GameRole
 
     public void GameOver()
     {
-        CanDoMove = false;
+        BlockedByHooker = false;
         IsAlive = false;
         LastMove = null;
     }

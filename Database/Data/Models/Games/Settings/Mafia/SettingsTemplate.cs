@@ -10,7 +10,11 @@ public class SettingsTemplate
 
     public int MafiaSettingsId { get; set; }
 
+
     public string Name { get; set; }
+
+    public string? PreGameMessage { get; set; }
+
 
     public string? RoleAmountSubSettingsJsonData { get; private set; }
 

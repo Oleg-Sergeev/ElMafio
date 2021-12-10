@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using Core.Common;
 using Microsoft.Extensions.Options;
 using Modules.Games.Mafia.Common.GameRoles.Data;
 

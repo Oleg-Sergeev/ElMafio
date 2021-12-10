@@ -12,8 +12,6 @@ namespace Modules.Games.Mafia.Common.GameRoles;
 
 public class Sheriff : Innocent, IKiller, IChecker
 {
-    public override bool CanDoMove => true;
-
     public bool IsAvailableToShot => ShotsCount > 0;
 
 
@@ -33,7 +31,7 @@ public class Sheriff : Innocent, IKiller, IChecker
     public IEnumerable<GameRole> CheckableRoles => _murders.Where(m => m.IsAlive);
 
 
-    public Sheriff(IGuildUser player, IOptionsSnapshot<CheckerData> options, int voteTime, int maxShotsCount, IEnumerable<Murder> murders) : base(player, options, voteTime, true)
+    public Sheriff(IGuildUser player, IOptionsSnapshot<CheckerData> options, int voteTime, int maxShotsCount, IEnumerable<Murder> murders) : base(player, options, voteTime)
     {
         ShotsCount = maxShotsCount;
 
