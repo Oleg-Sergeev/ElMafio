@@ -5,5 +5,5 @@ namespace Modules.Games.Mafia.Common.Interfaces;
 
 public interface IHealer
 {
-    IGuildUser? HealedPlayer { get; set; }
+    IGuildUser? HealedPlayer { get; }
 }

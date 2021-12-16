@@ -2,7 +2,7 @@
 
 namespace Modules.Games.Mafia.Common.Interfaces;
 
-public interface IKiller
+public interface IBlocker
 {
-    IGuildUser? KilledPlayer { get; }
+    IGuildUser? BlockedPlayer { get; }
 }

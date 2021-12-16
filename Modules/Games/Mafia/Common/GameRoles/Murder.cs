@@ -8,7 +8,7 @@ namespace Modules.Games.Mafia.Common.GameRoles;
 
 public class Murder : GameRole, IKiller
 {
-    public IGuildUser? KilledPlayer { get; set; }
+    public IGuildUser? KilledPlayer { get; protected set; }
 
 
     public Murder(IGuildUser player, IOptionsSnapshot<GameRoleData> options, int voteTime) : base(player, options, voteTime)
@@ -20,10 +20,6 @@ public class Murder : GameRole, IKiller
         base.ProcessMove(selectedPlayer, isSkip);
 
         if (IsNight)
-        {
             KilledPlayer = !isSkip ? selectedPlayer : null;
-
-            IsNight = false;
-        }
     }
 }

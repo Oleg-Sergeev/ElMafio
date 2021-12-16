@@ -28,7 +28,7 @@ public class FunModule : GuildModuleBase
     {
         int num = _random.Next(101);
 
-        await ReplyAsync(embed: CreateEmbedBuilder(EmbedStyle.Information, $"Шанс того, что {text} - **{num}%**", addSmilesToDescription: false).Build(),
+        await ReplyAsync(embed: CreateEmbed(EmbedStyle.Information, $"Шанс того, что {text} - **{num}%**"),
             messageReference: new(Context.Message.Id));
     }
 
@@ -62,7 +62,7 @@ public class FunModule : GuildModuleBase
         var user = Context.Guild.Users.ToList()[num];
         var nickname = user.Nickname ?? user.Username;
 
-        await ReplyAsync(embed: CreateEmbedBuilder(EmbedStyle.Information, $"**{nickname}** {message}", addSmilesToDescription: false).Build(),
+        await ReplyAsync(embed: CreateEmbed(EmbedStyle.Information, $"**{nickname}** {message}"),
             messageReference: new(Context.Message.Id));
     }
 
@@ -101,7 +101,7 @@ public class FunModule : GuildModuleBase
             }
         }
 
-        var response = await ReplyEmbedAsync(EmbedStyle.Information, options, title, withDefaultAuthor: true, addSmilesToDescription: false);
+        var response = await ReplyEmbedStampAsync(EmbedStyle.Information, options, title);
 
         await response.AddReactionsAsync(emotes.ToArray());
     }

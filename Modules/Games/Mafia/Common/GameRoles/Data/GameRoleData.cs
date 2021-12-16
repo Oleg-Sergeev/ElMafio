@@ -1,4 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using Core.Extensions;
 using Modules.Games.Mafia.Common.GameRoles.RolesGroups;
 
 namespace Modules.Games.Mafia.Common.GameRoles.Data;
@@ -6,15 +9,18 @@ namespace Modules.Games.Mafia.Common.GameRoles.Data;
 public class GameRoleData
 {
     public const string RootSection = "Games:Mafia:GameRoles";
-    public const string InnocentSection = nameof(Innocent);
-    public const string MurderSection = nameof(Murder);
-    public const string DonSection = nameof(Don);
-    public const string DoctorSection = nameof(Doctor);
-    public const string SheriffSection = nameof(Sheriff);
-    public const string ManiacSection = nameof(Maniac);
-    public const string HookerSection = nameof(Hooker);
-    public const string MurderGroupSection = nameof(MurdersGroup);
-    public const string AliveGroupSection = nameof(AliveGroup);
+
+
+    public static readonly IEnumerable<string> Sections;
+
+
+
+    static GameRoleData()
+    {
+        Sections = typeof(GameRole).GetAllDerivedTypes()
+            .Select(t => t.Name);
+    }
+
 
     public string Name { get; set; } = string.Empty;
 

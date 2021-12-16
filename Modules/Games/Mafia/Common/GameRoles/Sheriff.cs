@@ -15,7 +15,7 @@ public class Sheriff : Innocent, IKiller, IChecker
     public bool IsAvailableToShot => ShotsCount > 0;
 
 
-    public IGuildUser? KilledPlayer { get; set; }
+    public IGuildUser? KilledPlayer { get; protected set; }
 
     public GameRole? CheckedRole { get; protected set; }
 
@@ -27,15 +27,14 @@ public class Sheriff : Innocent, IKiller, IChecker
     protected bool ShotSelected { get; set; }
 
 
-    private readonly IEnumerable<Murder> _murders;
-    public IEnumerable<GameRole> CheckableRoles => _murders.Where(m => m.IsAlive);
+    public IEnumerable<GameRole> CheckableRoles { get; }
 
 
-    public Sheriff(IGuildUser player, IOptionsSnapshot<CheckerData> options, int voteTime, int maxShotsCount, IEnumerable<Murder> murders) : base(player, options, voteTime)
+    public Sheriff(IGuildUser player, IOptionsSnapshot<GameRoleData> options, int voteTime, int maxShotsCount, IEnumerable<Murder> murders) : base(player, options, voteTime)
     {
         ShotsCount = maxShotsCount;
 
-        _murders = murders;
+        CheckableRoles = murders;
     }
 
 
@@ -49,7 +48,6 @@ public class Sheriff : Innocent, IKiller, IChecker
     public override ICollection<(EmbedStyle, string)> GetMoveResultPhasesSequence()
     {
         var sequence = base.GetMoveResultPhasesSequence();
-
 
         if (LastMove is not null)
         {
@@ -71,8 +69,6 @@ public class Sheriff : Innocent, IKiller, IChecker
             }
         }
 
-
-
         return sequence;
     }
 
@@ -86,24 +82,19 @@ public class Sheriff : Innocent, IKiller, IChecker
         if (!IsNight)
             return;
 
-        if (isSkip)
-        {
-            KilledPlayer = null;
-
-            return;
-        }
-
         if (ShotSelected && ShotsCount > 0)
         {
+            CheckedRole = null;
+
             KilledPlayer = selectedPlayer;
 
             ShotsCount--;
         }
         else
         {
+            KilledPlayer = null;
+
             CheckedRole = CheckableRoles.FirstOrDefault(r => r.Player == selectedPlayer);
         }
-
-        IsNight = false;
     }
 }

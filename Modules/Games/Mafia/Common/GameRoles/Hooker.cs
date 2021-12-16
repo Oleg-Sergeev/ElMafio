@@ -6,9 +6,12 @@ using Modules.Games.Mafia.Common.Interfaces;
 
 namespace Modules.Games.Mafia.Common.GameRoles;
 
-public class Hooker : Neutral, IHealer
+public class Hooker : Neutral, IHooker
 {
-    public IGuildUser? HealedPlayer { get; set; }
+    public IGuildUser? HealedPlayer { get; protected set; }
+
+    public IGuildUser? BlockedPlayer { get; protected set; }
+
 
     public Hooker(IGuildUser player, IOptionsSnapshot<GameRoleData> options, int voteTime) : base(player, options, voteTime)
     {
@@ -35,7 +38,20 @@ public class Hooker : Neutral, IHealer
         {
             HealedPlayer = !isSkip ? selectedPlayer : null;
 
-            IsNight = false;
+            BlockedPlayer = HealedPlayer;
+        }
+    }
+
+
+    public override void Block(IBlocker byRole)
+    {
+        if (byRole is Hooker hooker)
+        {
+            hooker.ProcessMove(null, false);
+        }
+        else
+        {
+            base.Block(byRole);
         }
     }
 }

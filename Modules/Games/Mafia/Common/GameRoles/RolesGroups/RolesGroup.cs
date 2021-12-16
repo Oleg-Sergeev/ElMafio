@@ -7,24 +7,16 @@ using Modules.Games.Mafia.Common.GameRoles.Data;
 namespace Modules.Games.Mafia.Common.GameRoles.RolesGroups;
 
 
-
 public abstract class RolesGroup : GameRole
 {
-    protected RolesGroup(IGuildUser player, IOptionsSnapshot<GameRoleData> options, int voteTime) : base(player, options, voteTime)
-    {
-    }
-}
-
-public abstract class RolesGroup<T> : RolesGroup where T : GameRole
-{
-    public IList<T> Roles { get; }
+    public IReadOnlyList<GameRole> Roles { get; }
 
     public override bool IsAlive => Roles.Any(r => r.IsAlive);
 
     public override bool BlockedByHooker => Roles.All(r => r.BlockedByHooker);
 
 
-    public RolesGroup(IList<T> roles, IOptionsSnapshot<GameRoleData> options, int voteTime) : base(roles[0].Player, options, voteTime)
+    public RolesGroup(IReadOnlyList<GameRole> roles, IOptionsSnapshot<GameRoleData> options, int voteTime) : base(roles[0].Player, options, voteTime)
     {
         Roles = roles;
     }

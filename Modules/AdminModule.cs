@@ -93,7 +93,7 @@ public class AdminModule : GuildModuleBase
         await textChannel.DeleteMessagesAsync(messagesToDelete);
 
 
-        await ReplyEmbedAndDeleteAsync(EmbedStyle.Successfull, $"Сообщения успешно удалены ({count} шт)", withDefaultFooter: true);
+        await ReplyEmbedAndDeleteAsync(EmbedStyle.Successfull, $"Сообщения успешно удалены ({count} шт)");
     }
 
 
@@ -114,10 +114,10 @@ public class AdminModule : GuildModuleBase
             {
                 await Context.Guild.AddBanAsync(guildUser, pruneDays, reason);
 
-                await ReplyEmbedAsync(EmbedStyle.Successfull, $"Пользователь {guildUser.GetFullName()} успешно забанен", withDefaultFooter: true);
+                await ReplyEmbedAsync(EmbedStyle.Successfull, $"Пользователь {guildUser.GetFullName()} успешно забанен");
             }
             else
-                await ReplyEmbedAsync(EmbedStyle.Error, $"Пользователь {guildUser.GetFullName()} не найден", withDefaultFooter: true);
+                await ReplyEmbedAsync(EmbedStyle.Error, $"Пользователь {guildUser.GetFullName()} не найден");
         }
     }
 
@@ -178,7 +178,7 @@ public class AdminModule : GuildModuleBase
         {
             await Context.Guild.RemoveBanAsync(user);
 
-            await ReplyEmbedAsync(EmbedStyle.Successfull, $"Пользователь {user.GetFullName()} успешно разбанен", withDefaultFooter: true);
+            await ReplyEmbedAsync(EmbedStyle.Successfull, $"Пользователь {user.GetFullName()} успешно разбанен");
         }
     }
 
@@ -246,7 +246,7 @@ public class AdminModule : GuildModuleBase
         await guildUser.AddRoleAsync(roleMute);
 
 
-        await ReplyEmbedAsync(EmbedStyle.Successfull, $"Пользователь {guildUser.GetFullMention()} успешно замьючен", withDefaultFooter: true);
+        await ReplyEmbedAsync(EmbedStyle.Successfull, $"Пользователь {guildUser.GetFullMention()} успешно замьючен");
     }
 
 
@@ -281,7 +281,7 @@ public class AdminModule : GuildModuleBase
         {
             await guildUser.RemoveRoleAsync(guildSettings.RoleMuteId.Value);
 
-            await ReplyEmbedAsync(EmbedStyle.Successfull, $"Пользователь {guildUser.GetFullMention()} успешно размьючен", withDefaultFooter: true);
+            await ReplyEmbedAsync(EmbedStyle.Successfull, $"Пользователь {guildUser.GetFullMention()} успешно размьючен");
         }
     }
 
@@ -426,7 +426,7 @@ public class AdminModule : GuildModuleBase
                     return;
                 }
 
-                var embed = CreateEmbedBuilder(EmbedStyle.Information, "Ваша картинка", addSmilesToDescription: false).Build();
+                var embed = CreateEmbed(EmbedStyle.Information, "Ваша картинка");
 
                 var file = await Context.Channel.SendFileAsync(resptream, $"smile.{smileExtension}", embed: embed, messageReference: new(Context.Message.Id));
 

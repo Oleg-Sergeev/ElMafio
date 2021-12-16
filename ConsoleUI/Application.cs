@@ -1,7 +1,8 @@
 ﻿using System;
 using System.IO;
-using Core.Interfaces;
 using Core.Common;
+using Core.Extensions;
+using Core.Interfaces;
 using Discord;
 using Discord.Addons.Hosting;
 using Discord.Addons.Interactive;
@@ -12,12 +13,13 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
+using Modules.Games.Mafia.Common.GameRoles;
+using Modules.Games.Mafia.Common.GameRoles.Data;
 using Serilog;
 using Serilog.Events;
 using Serilog.Filters;
 using Services;
-using Core.Extensions;
-using Modules.Games.Mafia.Common.GameRoles.Data;
 
 namespace ConsoleUI;
 
@@ -76,6 +78,7 @@ public static class Application
                 LogLevel = LogSeverity.Verbose,
                 MessageCacheSize = 1000,
                 ExclusiveBulkDelete = true,
+                UseSystemClock = true,
                 GatewayIntents =
               GatewayIntents.Guilds
             | GatewayIntents.GuildBans
@@ -110,15 +113,12 @@ public static class Application
             .AddHostedService<CommandHandlerService>()
             .AddSingleton<InteractiveService>()
             .AddSingleton<LoggingService>()
-            .AddSingleton<IRandomService, BotRandomService>()
-            .Configure<GameRoleData>(GameRoleData.InnocentSection, context.Configuration.GetSection($"{GameRoleData.RootSection}:{GameRoleData.InnocentSection}"))
-            .Configure<GameRoleData>(GameRoleData.MurderSection, context.Configuration.GetSection($"{GameRoleData.RootSection}:{GameRoleData.MurderSection}"))
-            .Configure<GameRoleData>(GameRoleData.DoctorSection, context.Configuration.GetSection($"{GameRoleData.RootSection}:{GameRoleData.DoctorSection}"))
-            .Configure<GameRoleData>(GameRoleData.MurderGroupSection, context.Configuration.GetSection($"{GameRoleData.RootSection}:{GameRoleData.MurderGroupSection}"))
-            .Configure<GameRoleData>(GameRoleData.AliveGroupSection, context.Configuration.GetSection($"{GameRoleData.RootSection}:{GameRoleData.AliveGroupSection}"))
-            .Configure<GameRoleData>(GameRoleData.ManiacSection, context.Configuration.GetSection($"{GameRoleData.RootSection}:{GameRoleData.ManiacSection}"))
-            .Configure<GameRoleData>(GameRoleData.HookerSection, context.Configuration.GetSection($"{GameRoleData.RootSection}:{GameRoleData.HookerSection}"))
-            .Configure<CheckerData>(GameRoleData.DonSection, context.Configuration.GetSection($"{GameRoleData.RootSection}:{GameRoleData.DonSection}"))
-            .Configure<SheriffData>(GameRoleData.SheriffSection, context.Configuration.GetSection($"{GameRoleData.RootSection}:{GameRoleData.SheriffSection}"));
+            .AddSingleton<IRandomService, BotRandomService>();
+
+            foreach (var section in GameRoleData.Sections)
+                services.Configure<GameRoleData>(section, context.Configuration.GetSection($"{GameRoleData.RootSection}:{section}"));
+
+            services.Configure<CheckerData>(nameof(Don), context.Configuration.GetSection($"{GameRoleData.RootSection}:{nameof(Don)}"));
+            services.Configure<SheriffData>(nameof(Sheriff), context.Configuration.GetSection($"{GameRoleData.RootSection}:{nameof(Sheriff)}"));
         });
 }

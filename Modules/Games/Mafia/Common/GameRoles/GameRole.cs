@@ -6,6 +6,7 @@ using Core.Extensions;
 using Discord;
 using Microsoft.Extensions.Options;
 using Modules.Games.Mafia.Common.GameRoles.Data;
+using Modules.Games.Mafia.Common.Interfaces;
 
 namespace Modules.Games.Mafia.Common.GameRoles;
 
@@ -15,20 +16,22 @@ public abstract class GameRole
 {
     protected static readonly Random _random = new();
 
-    public virtual IGuildUser Player { get; init; }
+
+    public virtual IGuildUser Player { get; }
 
     public virtual IGuildUser? LastMove { get; protected set; }
 
-    public virtual string Name { get; init; }
 
-    public virtual int VoteTime { get; init; }
+    public virtual string Name { get; }
+
+    public virtual int VoteTime { get; }
+
 
     public virtual bool IsAlive { get; protected set; }
 
-    public virtual bool BlockedByHooker { get; set; }
+    public virtual bool BlockedByHooker { get; protected set; }
 
     public virtual bool IsNight { get; protected set; }
-
 
 
     protected bool IsSkip { get; set; }
@@ -36,9 +39,11 @@ public abstract class GameRole
     protected GameRoleData Data { get; }
 
 
+
     public GameRole(IGuildUser player, IOptionsSnapshot<GameRoleData> options, int voteTime)
     {
-        Data = options.Get(GetType().Name);
+        var name = GetType().Name;
+        Data = options.Get(name);
 
         Name = Data.Name;
 
@@ -47,9 +52,8 @@ public abstract class GameRole
         Player = player;
 
         IsAlive = true;
-
-        BlockedByHooker = false;
     }
+
 
 
     public virtual IEnumerable<IGuildUser> GetExceptList()
@@ -91,16 +95,34 @@ public abstract class GameRole
 
     protected static string GetRandomPhrase(string[] phrases) => phrases[_random.Next(phrases.Length)];
 
-    public void GameOver()
+    public virtual void GameOver()
     {
-        BlockedByHooker = false;
         IsAlive = false;
-        LastMove = null;
     }
 
 
+    public virtual void Block(IBlocker byRole)
+    {
+        switch (byRole)
+        {
+            case Hooker:
+                BlockedByHooker = true;
+                break;
+        }
+    }
 
-    public void SetNightMove() => IsNight = true;
+    public virtual void Unblock()
+    {
+        BlockedByHooker = false;
+    }
+
+    public virtual void SetPhase(bool isNight)
+    {
+        IsNight = isNight;
+
+        if (isNight)
+            BlockedByHooker = false;
+    }
 
 
     protected static string ParsePattern(string str, params string[] values)

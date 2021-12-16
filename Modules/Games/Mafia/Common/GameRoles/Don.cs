@@ -16,13 +16,12 @@ public class Don : Murder, IChecker
     public bool IsChecking { get; protected set; }
 
 
-    private readonly IEnumerable<Sheriff> _sheriffs;
-    public IEnumerable<GameRole> CheckableRoles => _sheriffs.Where(r => r.IsAlive);
+    public IEnumerable<GameRole> CheckableRoles { get; }
 
 
     public Don(IGuildUser player, IOptionsSnapshot<GameRoleData> options, int voteTime, IEnumerable<Sheriff> sheriffs) : base(player, options, voteTime)
     {
-        _sheriffs = sheriffs;
+        CheckableRoles = sheriffs;
     }
 
 
@@ -33,7 +32,6 @@ public class Don : Murder, IChecker
         {
             Player
         };
-
 
     public override ICollection<(EmbedStyle, string)> GetMoveResultPhasesSequence()
     {
@@ -65,13 +63,17 @@ public class Don : Murder, IChecker
 
 
             CheckedRole = CheckableRoles.FirstOrDefault(r => r.Player == selectedPlayer);
-
-            IsChecking = false;
-
-            IsNight = false;
         }
     }
 
+    public override void SetPhase(bool isNight)
+    {
+        base.SetPhase(isNight);
 
-    public void SetDonChecking() => IsChecking = true;
+        if (!isNight)
+            SetChecking(false);
+    }
+
+
+    public void SetChecking(bool cheking) => IsChecking = cheking;
 }

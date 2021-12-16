@@ -51,7 +51,7 @@ public class SettingsModule : GuildModuleBase
         await Context.Db.SaveChangesAsync();
 
 
-        await ReplyEmbedAsync(EmbedStyle.Successfull, $"Роль [{muteRole.Mention}] успешна установлена", withDefaultFooter: true);
+        await ReplyEmbedStampAsync(EmbedStyle.Successfull, $"Роль [{muteRole.Mention}] успешна установлена");
     }
 
 
@@ -78,6 +78,6 @@ public class SettingsModule : GuildModuleBase
         await Context.Db.SaveChangesAsync();
 
 
-        await ReplyEmbedAsync(EmbedStyle.Successfull, $"Канал для логов [{logChannel.Mention}] успешно установлен", withDefaultFooter: true);
+        await ReplyEmbedStampAsync(EmbedStyle.Successfull, $"Канал для логов [{logChannel.Mention}] успешно установлен");
     }
 }

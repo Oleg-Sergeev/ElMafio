@@ -11,4 +11,6 @@ public class ServerSubSettingsViewModel
     public bool? AbortGameWhenError { get; init; }
 
     public bool? SendWelcomeMessage { get; init; }
+
+    public bool? MentionPlayersOnGameStart { get; init; }
 }

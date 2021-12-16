@@ -47,13 +47,13 @@ public abstract class GameModule : GuildModuleBase
             return;
         }
 
-
         if (GameData.Creator.Id != Context.User.Id && !Context.User.HasGuildPermission(GuildPermission.Administrator))
         {
             await ReplyEmbedAsync(EmbedStyle.Error, "Упомянуть всех участников может только создатель или администратор");
 
             return;
         }
+
 
         var mentions = "Упоминание всех игроков:\n";
 
@@ -63,6 +63,7 @@ public abstract class GameModule : GuildModuleBase
 
         await ReplyAsync(mentions);
     }
+
 
     [Command("Создатель")]
     [Summary("Показать создателя игры")]
@@ -91,12 +92,17 @@ public abstract class GameModule : GuildModuleBase
             return;
         }
 
-        var text = $"Кол-во игроков: {GameData.Players.Count}. Список:\n";
 
-        foreach (var player in GameData.Players)
-            text += $"**{player.GetFullName()}** - {(GameData.Creator.Id == player.Id ? "создатель" : "участник")}\n";
+        var text = "";
 
-        await ReplyEmbedAsync(EmbedStyle.Information, text);
+        for (int i = 0; i < GameData.Players.Count; i++)
+        {
+            var player = GameData.Players[i];
+
+            text += $"[{i + 1}] {player.Mention} - {(GameData.Creator.Id == player.Id ? "**создатель**" : "участник")}\n";
+        }
+
+        await ReplyEmbedAsync(EmbedStyle.Information, text, "Список игроков");
     }
 
 
@@ -124,8 +130,14 @@ public abstract class GameModule : GuildModuleBase
             AddGameDataToGamesList(Context.Guild.Id, GameData);
 
             AutoStop();
-        }
 
+
+            GameData.Players.Add(guildUser);
+
+            await ReplyEmbedStampAsync(EmbedStyle.Successfull, $"{GameData.Name} создана! Хост игры - {guildUser.Mention}");
+
+            return;
+        }
 
         if (GameData!.IsPlaying)
         {
@@ -134,15 +146,17 @@ public abstract class GameModule : GuildModuleBase
             return;
         }
 
-
-        if (!GameData.Players.Contains(guildUser))
+        if (GameData.Players.Contains(guildUser))
         {
-            GameData.Players.Add(guildUser);
-
-            await ReplyEmbedAsync(EmbedStyle.Information, $"{guildUser.GetFullMention()} присоединился к игре! Количество участников: {GameData.Players.Count}", addSmilesToDescription: false);
-        }
-        else
             await ReplyEmbedAsync(EmbedStyle.Warning, "Вы уже участвуете!");
+
+            return;
+        }
+
+
+        GameData.Players.Add(guildUser);
+
+        await ReplyEmbedAsync(EmbedStyle.Information, $"{guildUser.GetFullMention()} присоединился к игре! Количество участников: {GameData.Players.Count}");
     }
 
 
@@ -199,7 +213,7 @@ public abstract class GameModule : GuildModuleBase
         else
             DeleteGameData();
 
-        await ReplyEmbedAsync(EmbedStyle.Successfull, $"{GameData.Name} остановлена");
+        await ReplyEmbedStampAsync(EmbedStyle.Successfull, $"{GameData.Name} остановлена");
     }
 
 
@@ -251,10 +265,11 @@ public abstract class GameModule : GuildModuleBase
             return;
         }
 
+
         if (GameData.Players.Remove(guildUser))
-            await ReplyEmbedAsync(EmbedStyle.Successfull, $"{guildUser.GetFullMention()} выгнан из игры. Количество участников: {GameData.Players.Count}");
+            await ReplyEmbedStampAsync(EmbedStyle.Successfull, $"{guildUser.GetFullMention()} выгнан из игры. Количество участников: {GameData.Players.Count}");
         else
-            await ReplyEmbedAsync(EmbedStyle.Error, $"Не удалось выгнать {guildUser.GetFullName()}");
+            await ReplyEmbedStampAsync(EmbedStyle.Error, $"Не удалось выгнать {guildUser.GetFullName()}");
     }
 
 
@@ -264,118 +279,8 @@ public abstract class GameModule : GuildModuleBase
     public abstract Task StartAsync();
 
 
-
-    [Group("Помощь")]
-    public abstract class HelpModule : GuildModuleBase
-    {
-        protected IConfiguration Config { get; }
-
-
-        protected HelpModule(IConfiguration config)
-        {
-            Config = config;
-        }
-
-
-        protected IConfigurationSection? GetGameSection(string sectionName)
-        {
-            var gameName = GetType().Name.Replace("HelpModule", null);
-            var gameSection = Config.GetSection($"Games:{gameName}:{sectionName}");
-
-            return gameSection;
-        }
-
-
-        [Command("ОбИгре")]
-        public virtual async Task ShowAboutGameAsync(bool sendToServer = false)
-        {
-            var gameAboutSection = GetGameSection("About");
-
-            if (gameAboutSection is null)
-            {
-                await ReplyEmbedAsync(EmbedStyle.Error, "Текст об игре не найден");
-
-                return;
-            }
-
-
-            var title = gameAboutSection.GetTitle() ?? "Об игре";
-
-            var description = gameAboutSection.GetDescription() ?? "Нет описания";
-
-            var builder = new EmbedBuilder()
-                .WithTitle(title)
-                .WithDescription(description)
-                .WithInformationMessage(false);
-
-            var imageUrl = gameAboutSection.GetImageUrl();
-
-            if (imageUrl is not null)
-                builder.WithImageUrl(imageUrl);
-
-            if (!sendToServer)
-                await Context.User.SendMessageAsync(embed: builder.Build());
-            else
-                await ReplyAsync(embed: builder.Build());
-        }
-
-
-        [Command("Подробности")]
-        public virtual async Task ShowGameDetails(bool sendToServer = false)
-        {
-            var gameDetailsSection = GetGameSection("Details");
-
-            if (gameDetailsSection is null)
-            {
-                await ReplyEmbedAsync(EmbedStyle.Error, "Подробности не найдены");
-
-                return;
-            }
-
-            for (int i = 1; ; i++)
-            {
-                var part = gameDetailsSection.GetSection($"Part{i}");
-
-                var title = part.GetTitle() ?? gameDetailsSection.GetTitle() ?? "Подробности";
-
-                var builder = new EmbedBuilder()
-                    .WithTitle(title)
-                    .WithInformationMessage(false);
-
-                foreach (var paragraph in part.GetChildren())
-                {
-                    var paragraphField = paragraph.GetEmbedFieldInfo();
-
-                    if (paragraphField is null)
-                    {
-                        if (paragraph.Key == "Description")
-                            builder.WithDescription(paragraph.Value);
-
-                        continue;
-                    }
-
-                    builder.AddField(paragraphField?.Item1, paragraphField?.Item2);
-                }
-
-                if (builder.Description is null && builder.Fields.Count == 0)
-                    break;
-
-                var postParagraph = part["PostParagraph"];
-
-                if (postParagraph is not null)
-                    builder.AddFieldWithEmptyName(postParagraph);
-
-                if (!sendToServer)
-                    await Context.User.SendMessageAsync(embed: builder.Build());
-                else
-                    await ReplyAsync(embed: builder.Build());
-            }
-        }
-
-    }
-
-
-
+    // ??????????????????????????
+    #region Rating
 
     [Command("Рейтинг")]
     [Alias("топ", "рейт")]
@@ -392,18 +297,18 @@ public abstract class GameModule : GuildModuleBase
 
         if (confirmed is null)
         {
-            await ReplyEmbedAndDeleteAsync(EmbedStyle.Warning, "Вы не подтвердили действие", true, "Сброс рейтинга", true);
+            await ReplyEmbedAndDeleteAsync(EmbedStyle.Warning, "Вы не подтвердили действие", "Сброс рейтинга");
 
             return;
         }
         else if (confirmed is false)
         {
-            await ReplyEmbedAndDeleteAsync(EmbedStyle.Error, "Вы отклонили действие", true, "Сброс рейтинга", true);
+            await ReplyEmbedAndDeleteAsync(EmbedStyle.Error, "Вы отклонили действие", "Сброс рейтинга");
 
             return;
         }
 
-        var msg = await ReplyEmbedAndDeleteAsync(EmbedStyle.Successfull, "Вы подтвердили действие", true, "Сброс рейтинга", true);
+        var msg = await ReplyEmbedAndDeleteAsync(EmbedStyle.Successfull, "Вы подтвердили действие", "Сброс рейтинга");
 
         var guildSettings = await Context.GetGuildSettingsAsync();
 
@@ -437,7 +342,7 @@ public abstract class GameModule : GuildModuleBase
 
         await Context.Db.SaveChangesAsync();
 
-        await ReplyEmbedAsync(EmbedStyle.Successfull, "Рейтинг успешно сброшен", withDefaultFooter: true);
+        await ReplyEmbedAsync(EmbedStyle.Successfull, "Рейтинг успешно сброшен");
     }
 
 
@@ -478,25 +383,23 @@ public abstract class GameModule : GuildModuleBase
         await ReplyEmbedAsync(EmbedStyle.Successfull, $"Статистика игрока {guildUser.GetFullName()} успешно сброшена");
     }
 
+    #endregion
 
-
-    protected virtual async void AutoStop(TimeSpan? timeout = null, CancellationToken? token = null)
+    protected virtual async void AutoStop(TimeSpan? timeout = null, CancellationToken token = default)
     {
         if (GameData is null || GameData.IsPlaying)
             return;
 
         timeout ??= TimeSpan.FromMinutes(30);
 
-        if (token is not null)
+        if (token != default)
         {
             try
             {
-                await Task.Delay(timeout.Value, token.Value);
+                await Task.Delay(timeout.Value, token);
             }
             catch (OperationCanceledException)
             {
-                await ReplyAsync("Autostop cancelled");
-
                 return;
             }
         }
@@ -506,7 +409,7 @@ public abstract class GameModule : GuildModuleBase
 
             while (secs-- > 0)
             {
-                await Task.Delay(1000);
+                await Task.Delay(1000, CancellationToken.None);
 
                 if (GameData is null || GameData.IsPlaying)
                     return;
@@ -516,15 +419,16 @@ public abstract class GameModule : GuildModuleBase
         if (GameData is null || GameData.IsPlaying)
             return;
 
-        if (!GameData.IsPlaying)
-        {
-            await ReplyEmbedAsync(EmbedStyle.Warning, "Остановка игры из-за низкой активности...");
 
-            await StopAsync();
-        }
+        await ReplyEmbedAsync(EmbedStyle.Warning, "Остановка игры из-за низкой активности...");
+
+        await StopAsync();
     }
 
 
+
+
+    // ????
 
     protected abstract GameModuleData CreateGameData(IGuildUser creator);
 
@@ -648,6 +552,119 @@ public abstract class GameModule : GuildModuleBase
             MinPlayersCount = minPlayersCount;
 
             Creator = creator;
+        }
+    }
+
+
+
+
+
+
+    [Group("Помощь")]
+    public abstract class HelpModule : GuildModuleBase
+    {
+        protected IConfiguration Config { get; }
+
+
+        protected HelpModule(IConfiguration config)
+        {
+            Config = config;
+        }
+
+
+        protected IConfigurationSection? GetGameSection(string sectionName)
+        {
+            var gameName = GetType().Name.Replace("HelpModule", null);
+            var gameSection = Config.GetSection($"Games:{gameName}:{sectionName}");
+
+            return gameSection;
+        }
+
+
+        [Command("ОбИгре")]
+        public virtual async Task ShowAboutGameAsync(bool sendToServer = false)
+        {
+            var gameAboutSection = GetGameSection("About");
+
+            if (gameAboutSection is null)
+            {
+                await ReplyEmbedAsync(EmbedStyle.Error, "Описание игры не найдено");
+
+                return;
+            }
+
+
+            var title = gameAboutSection.GetTitle() ?? "Об игре";
+
+            var description = gameAboutSection.GetDescription() ?? "Нет описания";
+
+            var builder = new EmbedBuilder()
+                .WithTitle(title)
+                .WithDescription(description)
+                .WithInformationMessage();
+
+            var imageUrl = gameAboutSection.GetImageUrl();
+
+            if (imageUrl is not null)
+                builder.WithImageUrl(imageUrl);
+
+            if (!sendToServer)
+                await Context.User.SendMessageAsync(embed: builder.Build());
+            else
+                await ReplyAsync(embed: builder.Build());
+        }
+
+
+        [Command("Подробности")]
+        public virtual async Task ShowGameDetails(bool sendToServer = false)
+        {
+            var gameDetailsSection = GetGameSection("Details");
+
+            if (gameDetailsSection is null)
+            {
+                await ReplyEmbedAsync(EmbedStyle.Error, "Подробности не найдены");
+
+                return;
+            }
+
+            for (int i = 1; ; i++)
+            {
+                var part = gameDetailsSection.GetSection($"Part{i}");
+
+                var title = part.GetTitle() ?? gameDetailsSection.GetTitle() ?? "Подробности";
+
+                var builder = new EmbedBuilder()
+                    .WithTitle(title)
+                    .WithInformationMessage();
+
+                foreach (var paragraph in part.GetChildren())
+                {
+                    var paragraphField = paragraph.GetEmbedFieldInfo();
+
+                    if (paragraphField is null)
+                    {
+                        if (paragraph.Key == "Description")
+                            builder.WithDescription(paragraph.Value);
+
+                        continue;
+                    }
+
+                    builder.AddField(paragraphField?.Item1, paragraphField?.Item2);
+                }
+
+                if (builder.Description is null && builder.Fields.Count == 0)
+                    break;
+
+                var postParagraph = part["PostParagraph"];
+
+                if (postParagraph is not null)
+                    builder.AddFieldWithEmptyName(postParagraph);
+
+                if (!sendToServer)
+                    await Context.User.SendMessageAsync(embed: builder.Build());
+                else
+                    await ReplyAsync(embed: builder.Build());
+            }
         }
     }
 }

@@ -4,18 +4,22 @@ public record GameSubSettings
 {
     public int MafiaCoefficient { get; init; }
 
+    public int LastWordNightCount { get; init; }
+
     public bool IsRatingGame { get; init; }
 
     public bool IsCustomGame { get; init; }
 
     public bool ConditionAliveAtLeast1Innocent { get; init; }
 
-    public int LastWordNightCount { get; init; }
+    public bool IsTurnByTurnVote { get; init; }
 
 
     public GameSubSettings()
     {
         MafiaCoefficient = 3;
+
+        LastWordNightCount = 0;
 
         IsRatingGame = false;
 
@@ -23,6 +27,6 @@ public record GameSubSettings
 
         ConditionAliveAtLeast1Innocent = false;
 
-        LastWordNightCount = 0;
+        IsTurnByTurnVote = false;
     }
 }

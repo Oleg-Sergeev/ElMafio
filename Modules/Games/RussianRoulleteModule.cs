@@ -160,7 +160,7 @@ public class RussianRouletteModule : GameModule
         }
 
 
-        await ReplyEmbedAsync(EmbedStyle.Information, $"Процент побед: {userStat.WinRate.ToPercent()}", addSmilesToDescription: false);
+        await ReplyEmbedAsync(EmbedStyle.Information, $"Процент побед: {userStat.WinRate.ToPercent()}");
     }
 
 
@@ -188,7 +188,7 @@ public class RussianRouletteModule : GameModule
         }
 
 
-        await ReplyEmbedAsync(EmbedStyle.Information, message, "Рейтинг русской рулетки", addSmilesToDescription: false);
+        await ReplyEmbedAsync(EmbedStyle.Information, message, "Рейтинг русской рулетки");
     }
 
     public override Task ResetRatingAsync()

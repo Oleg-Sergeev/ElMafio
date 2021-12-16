@@ -12,6 +12,7 @@ public record class ServerSubSettings
 
     public bool SendWelcomeMessage { get; init; }
 
+    public bool MentionPlayersOnGameStart { get; init; }
 
     public ulong? CategoryChannelId { get; init; }
 
@@ -47,5 +48,7 @@ public record class ServerSubSettings
         ReplyMessagesOnSetupError = true;
 
         AbortGameWhenError = true;
+
+        MentionPlayersOnGameStart = true;
     }
 }

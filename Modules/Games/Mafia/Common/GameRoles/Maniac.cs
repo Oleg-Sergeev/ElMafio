@@ -7,7 +7,8 @@ namespace Modules.Games.Mafia.Common.GameRoles;
 
 public class Maniac : Neutral, IKiller
 {
-    public IGuildUser? KilledPlayer { get; set; }
+    public IGuildUser? KilledPlayer { get; protected set; }
+
 
     public Maniac(IGuildUser player, IOptionsSnapshot<GameRoleData> options, int voteTime) : base(player, options, voteTime)
     {

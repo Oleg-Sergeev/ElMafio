@@ -17,75 +17,40 @@ namespace Modules;
 
 public abstract class GuildModuleBase : InteractiveBase<DbSocketCommandContext>
 {
+    protected const string LogTemplate = "({Context:l}): {Message}";
+
     protected const int VotingOptionsMaxCount = 19;
 
     protected static readonly IEmote ConfirmEmote = new Emoji("✅");
     protected static readonly IEmote DenyEmote = new Emoji("❌");
 
+    protected ILogger GuildLogger { get; }
+
+
+
+    protected GuildModuleBase()
+    {
+        GuildLogger = GetGuildLogger(Context?.Guild.Id ?? 0);
+    }
+
+
 
     protected static ILogger GetGuildLogger(ulong guildId)
         => Log.ForContext("GuildName", guildId);
 
-
-    public async Task WaitTimerAsync(int seconds, params IMessageChannel[] channels)
-        => await WaitTimerAsync(seconds, null, channels);
-    public async Task WaitTimerAsync(int seconds, CancellationToken? cancellationToken, params IMessageChannel[] channels)
-    {
-        if (seconds >= 20)
-        {
-            if (seconds >= 40)
-            {
-                seconds /= 2;
-
-                if (cancellationToken is not null)
-                    await Task.Delay(seconds * 1000, cancellationToken.Value);
-                else
-                    await Task.Delay(seconds * 1000);
-
-                await BroadcastMessagesAsync(channels, $"Осталось {seconds}с!");
-
-                if (cancellationToken is not null)
-                    await Task.Delay((seconds - 10) * 1000, cancellationToken.Value);
-                else
-                    await Task.Delay((seconds - 10) * 1000);
-            }
-            else
-            {
-                if (cancellationToken is not null)
-                    await Task.Delay((seconds - 10) * 1000, cancellationToken.Value);
-                else
-                    await Task.Delay((seconds - 10) * 1000);
-            }
-
-            seconds -= seconds - 10;
-
-            await BroadcastMessagesAsync(channels, $"Осталось {seconds}с!");
-        }
-
-        await Task.Delay(seconds * 1000);
-    }
-
-
     protected static IList<IEmote> GetEmotesList(int count)
         => GetEmotesList(count, null, out _);
     protected static IList<IEmote> GetEmotesList(int count, IList<string>? emoteAssociations, out string emoteAssociationsText)
-        => GetEmotesList(count, 0, emoteAssociations, out emoteAssociationsText);
-    protected static IList<IEmote> GetEmotesList(int count, int offset)
-        => GetEmotesList(count, offset, null, out _);
-    protected static IList<IEmote> GetEmotesList(int count, int offset, IList<string>? emoteAssociations, out string emoteAssociationsText)
     {
         emoteAssociationsText = "";
 
         var emotes = new List<IEmote>();
 
-        if (offset < 0)
-            throw new ArgumentException("Offset cannot be below zero", nameof(offset));
-
         const int ASymbolASCII = 65;
 
         for (int i = 0; i < count; i++)
         {
-            var symbol = (char)(ASymbolASCII + i + offset);
+            var symbol = (char)(ASymbolASCII + i);
 
             emotes.Add(new Emoji(symbol.ConvertToSmile()));
 
@@ -97,20 +62,53 @@ public abstract class GuildModuleBase : InteractiveBase<DbSocketCommandContext>
     }
 
 
-    public async Task<(T?, bool)> WaitForVotingAsync<T>(IMessageChannel channel, int voteTime, IList<T> options, IList<string>? displayOptions = null, CancellationToken? token = null) where T : notnull
+    public async Task WaitForTimerAsync(int seconds, params IMessageChannel[] channels)
+        => await WaitForTimerAsync(seconds, default, channels);
+    public async Task WaitForTimerAsync(int seconds, CancellationToken cancellationToken, params IMessageChannel[] channels)
+    {
+        if (seconds >= 20)
+        {
+            if (seconds >= 40)
+            {
+                seconds /= 2;
+
+                await Task.Delay(seconds * 1000, cancellationToken);
+
+                await BroadcastMessagesAsync(channels, $"Осталось {seconds}с!");
+
+                await Task.Delay((seconds - 10) * 1000, cancellationToken);
+            }
+            else
+            {
+                await Task.Delay((seconds - 10) * 1000, cancellationToken);
+            }
+
+            seconds -= seconds - 10;
+
+            await BroadcastMessagesAsync(channels, $"Осталось {seconds}с!");
+        }
+
+        await Task.Delay(seconds * 1000, cancellationToken);
+    }
+
+
+
+    public async Task<(T?, bool)> WaitForVotingAsync<T>(IMessageChannel channel, int voteTime, IList<T> options, IList<string>? displayOptions = null, CancellationToken token = default) where T : notnull
     {
         if (options.Count == 0)
         {
-            await channel.SendMessageAsync("Получен пустой список вариантов");
+            await channel.SendMessageAsync(embed: CreateEmbed(EmbedStyle.Error, "Получен пустой список вариантов"));
 
             return default;
         }
 
         if (options.Count > VotingOptionsMaxCount)
         {
-            await channel.SendMessageAsync($"Превышен лимит вариантов голосования" +
+            var msg = $"Превышен лимит вариантов голосования" +
                 $"\nПолучено – **{options.Count}** вариантов; лимит – **{VotingOptionsMaxCount}** вариантов" +
-                $"\nНа голосовании будут показаны только первые {VotingOptionsMaxCount} вариантов");
+                $"\nНа голосовании будут показаны только первые {VotingOptionsMaxCount} вариантов";
+
+            await channel.SendMessageAsync(embed: CreateEmbed(EmbedStyle.Warning, msg));
         }
 
 
@@ -127,7 +125,7 @@ public abstract class GuildModuleBase : InteractiveBase<DbSocketCommandContext>
         await votingMessage.AddReactionsAsync(emojis.ToArray());
 
 
-        await WaitTimerAsync(voteTime, token, channel);
+        await WaitForTimerAsync(voteTime, token, channel);
 
 
         votingMessage = (IUserMessage)await channel.GetMessageAsync(votingMessage.Id);
@@ -165,38 +163,57 @@ public abstract class GuildModuleBase : InteractiveBase<DbSocketCommandContext>
     }
 
 
-    public async Task<IEnumerable<IUserMessage>> BroadcastMessagesAsync(IEnumerable<IMessageChannel> channels, string? text = null, bool isTTS = false, 
+    public async Task<IEnumerable<IUserMessage>> BroadcastMessagesAsync(IEnumerable<IMessageChannel> channels, string? text = null, bool isTTS = false,
         Embed? embed = null, RequestOptions? options = null, AllowedMentions? mentions = null, MessageReference? reference = null)
     {
-        var messages = new List<IUserMessage>();
+        var tasks = new List<Task<IUserMessage>>();
+
         foreach (var channel in channels)
+            tasks.Add(channel.SendMessageAsync(text, isTTS, embed, options, mentions, reference));
+
+        var messages = new List<IUserMessage>();
+
+        while (tasks.Count > 0)
         {
+            var messageTask = await Task.WhenAny(tasks);
+
+            tasks.Remove(messageTask);
+
             try
             {
-                messages.Add(await channel.SendMessageAsync(text, isTTS, embed, options, mentions, reference));
+                var message = await messageTask;
+
+                messages.Add(message);
             }
             catch (HttpException e)
             {
-                await ReplyEmbedAsync(EmbedStyle.Error, $"Не удалось отправить сообщение в канал {channel.Name}. Причина: {e.Reason}");
+                await ReplyEmbedAsync(EmbedStyle.Error, $"Не удалось отправить сообщение в канал. Причина: {e.Reason}");
             }
         }
+
 
         return messages;
     }
 
 
-    public async Task<IUserMessage> ReplyEmbedAsync(EmbedStyle embedStyle, string description, string? title = null,
-        bool withDefaultFooter = false, bool withDefaultAuthor = false, bool addSmilesToDescription = true, EmbedBuilder? embedBuilder = null)
+    public async Task<IUserMessage> ReplyEmbedAsync(EmbedStyle embedStyle, string description, string? title = null, EmbedBuilder? embedBuilder = null)
     {
-        var builder = CreateEmbedBuilder(embedStyle, description, title, withDefaultFooter, withDefaultAuthor, addSmilesToDescription, embedBuilder);
+        var embed = CreateEmbed(embedStyle, description, title, embedBuilder);
 
-        return await ReplyAsync(embed: builder.Build());
+        return await ReplyAsync(embed: embed);
     }
 
-    public async Task<IUserMessage> ReplyEmbedAndDeleteAsync(EmbedStyle embedType, string description, bool addSmilesToDescription = true, string? title = null,
-        bool withDefaultFooter = false, bool withDefaultAuthor = false, EmbedBuilder? embedBuilder = null, TimeSpan? timeout = null)
+    public async Task<IUserMessage> ReplyEmbedStampAsync(EmbedStyle embedStyle, string description, string? title = null, EmbedBuilder? embedBuilder = null)
     {
-        var msg = await ReplyEmbedAsync(embedType, description, title, withDefaultFooter, withDefaultAuthor, addSmilesToDescription, embedBuilder);
+        var embed = CreateEmbedStamp(embedStyle, description, title, embedBuilder);
+
+        return await ReplyAsync(embed: embed);
+    }
+
+    public async Task<IUserMessage> ReplyEmbedAndDeleteAsync(EmbedStyle embedType, string description, string? title = null,
+        EmbedBuilder? embedBuilder = null, TimeSpan? timeout = null)
+    {
+        var msg = await ReplyEmbedAsync(embedType, description, title, embedBuilder);
 
         _ = Task.Run(async () =>
         {
@@ -208,10 +225,10 @@ public abstract class GuildModuleBase : InteractiveBase<DbSocketCommandContext>
         return msg;
     }
 
-
     public async Task<IEmote?> NextReactionAsync(IUserMessage message, TimeSpan? timeout = null, IList<IEmote>? emotes = null)
     {
         emotes ??= message.Reactions.Keys.ToList();
+
         if (emotes.Count == 0)
         {
             emotes.Add(ConfirmEmote);
@@ -235,18 +252,23 @@ public abstract class GuildModuleBase : InteractiveBase<DbSocketCommandContext>
 
         var trigger = eventTrigger.Task;
         var delay = Task.Delay(timeout.Value);
+
         var task = await Task.WhenAny(trigger, delay);
 
         Context.Client.ReactionAdded -= HandlerAsync;
 
+
         cts.Cancel();
+
         try
         {
             await addReactionsTask;
         }
-        catch (OperationCanceledException) { Console.WriteLine("*****************CANCEL*****************"); }
+        catch (OperationCanceledException) {}
+
 
         await message.DeleteAsync();
+
 
         if (task == trigger)
         {
@@ -254,9 +276,8 @@ public abstract class GuildModuleBase : InteractiveBase<DbSocketCommandContext>
 
             return reaction.Emote;
         }
-
-
-        return null;
+        else
+            return null;
 
 
 
@@ -279,7 +300,7 @@ public abstract class GuildModuleBase : InteractiveBase<DbSocketCommandContext>
         return msg;
     }
 
-    public async Task<SocketMessage> NextMessageAsync(ICriterion<SocketMessage> criterion, string? message = null, bool isTTS = false, 
+    public async Task<SocketMessage> NextMessageAsync(ICriterion<SocketMessage> criterion, string? message = null, bool isTTS = false,
         Embed? embed = null, TimeSpan? timeout = null, IMessageChannel? messageChannel = null, CancellationToken token = default)
     {
         messageChannel ??= Context.Channel;
@@ -295,7 +316,7 @@ public abstract class GuildModuleBase : InteractiveBase<DbSocketCommandContext>
 
     public async Task<bool?> ConfirmActionAsync(string title, TimeSpan? timeout = null)
     {
-        var msg = await ReplyEmbedAsync(EmbedStyle.Information, "Подтвердите действие", title, true);
+        var msg = await ReplyEmbedAsync(EmbedStyle.Information, "Подтвердите действие", title);
 
         var res = await ConfirmActionAsync(msg, timeout);
 
@@ -321,9 +342,52 @@ public abstract class GuildModuleBase : InteractiveBase<DbSocketCommandContext>
 
 
 
+    protected static Embed CreateEmbed(EmbedStyle embedStyle, string description, string? title = null, EmbedBuilder? innerEmbedBuilder = null)
+    {
+        innerEmbedBuilder ??= new EmbedBuilder();
+
+        innerEmbedBuilder.WithDescription(description);
+
+        innerEmbedBuilder = embedStyle switch
+        {
+            EmbedStyle.Error => innerEmbedBuilder.WithErrorMessage(),
+            EmbedStyle.Warning => innerEmbedBuilder.WithWarningMessage(),
+            EmbedStyle.Successfull => innerEmbedBuilder.WithSuccessfullyMessage(),
+            _ => innerEmbedBuilder.WithInformationMessage()
+        };
+
+        if (title is not null)
+            innerEmbedBuilder.WithTitle(title);
+
+        return innerEmbedBuilder.Build();
+    }
+
+    protected Embed CreateEmbedStamp(EmbedStyle embedStyle, string description, string? title = null, EmbedBuilder? innerEmbedBuilder = null)
+    {
+        innerEmbedBuilder ??= new EmbedBuilder()
+            .WithUserAuthor(Context.User)
+            .WithUserFooter(Context.Client.CurrentUser)
+            .WithCurrentTimestamp();
+
+        var embed = CreateEmbed(embedStyle, description, title, innerEmbedBuilder);
+
+        return embed;
+    }
+
+
+
+
+
+
+
+
+
+
+
+
     public async Task<bool> ConfirmActionWithHandlingAsync(string title, ulong? logChannelId = null, TimeSpan? timeout = null)
     {
-        var msg = await ReplyEmbedAsync(EmbedStyle.Information, "Подтвердите действие", title, true);
+        var msg = await ReplyEmbedAsync(EmbedStyle.Information, "Подтвердите действие", title);
 
         return await ConfirmActionWithHandlingAsync(msg, logChannelId, timeout);
     }
@@ -333,20 +397,20 @@ public abstract class GuildModuleBase : InteractiveBase<DbSocketCommandContext>
 
         if (confirmed is null)
         {
-            await ReplyEmbedAndDeleteAsync(EmbedStyle.Warning, "Вы не подтвердили действие", true, "Сброс рейтинга", true);
+            await ReplyEmbedAndDeleteAsync(EmbedStyle.Warning, "Вы не подтвердили действие", "Сброс рейтинга");
 
             return false;
         }
         else if (confirmed is false)
         {
-            await ReplyEmbedAndDeleteAsync(EmbedStyle.Error, "Вы отклонили действие", true, "Сброс рейтинга", true);
+            await ReplyEmbedAndDeleteAsync(EmbedStyle.Error, "Вы отклонили действие", "Сброс рейтинга");
 
             return false;
         }
 
         var embed = (Embed)message.Embeds.First();
 
-        message = await ReplyEmbedAndDeleteAsync(EmbedStyle.Successfull, "Вы подтвердили действие", true, embed.Title, true);
+        message = await ReplyEmbedAndDeleteAsync(EmbedStyle.Successfull, "Вы подтвердили действие", embed.Title);
 
         embed = (Embed)message.Embeds.First();
 
@@ -362,35 +426,5 @@ public abstract class GuildModuleBase : InteractiveBase<DbSocketCommandContext>
         }
 
         return true;
-    }
-
-
-    protected EmbedBuilder CreateEmbedBuilder(EmbedStyle embedStyle, string description, string? title = null, bool withDefaultFooter = false,
-        bool withDefaultAuthor = false, bool addSmilesToDescription = true, EmbedBuilder? innerEmbedBuilder = null)
-    {
-        innerEmbedBuilder ??= new EmbedBuilder();
-
-        innerEmbedBuilder.WithDescription(description);
-
-        innerEmbedBuilder = embedStyle switch
-        {
-            EmbedStyle.Error => innerEmbedBuilder.WithErrorMessage(addSmilesToDescription),
-            EmbedStyle.Warning => innerEmbedBuilder.WithWarningMessage(addSmilesToDescription),
-            EmbedStyle.Successfull => innerEmbedBuilder.WithSuccessfullyMessage(addSmilesToDescription),
-            _ => innerEmbedBuilder.WithInformationMessage(addSmilesToDescription)
-        };
-
-        if (title is not null)
-            innerEmbedBuilder.WithTitle(title);
-
-        if (withDefaultFooter)
-            innerEmbedBuilder
-                .WithCurrentTimestamp()
-                .WithUserFooter(Context.User);
-
-        if (withDefaultAuthor)
-            innerEmbedBuilder.WithAuthor(Context.User);
-
-        return innerEmbedBuilder;
     }
 }

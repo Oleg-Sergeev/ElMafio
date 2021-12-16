@@ -8,9 +8,10 @@ namespace Modules.Games.Mafia.Common.GameRoles;
 
 public class Doctor : Innocent, IHealer
 {
-    public IGuildUser? HealedPlayer { get; set; }
+    public IGuildUser? HealedPlayer { get; protected set; }
 
     protected int SelfHealsCount { get; set; }
+
 
     public Doctor(IGuildUser player, IOptionsSnapshot<GameRoleData> options, int voteTime, int selfHealsCount) : base(player, options, voteTime)
     {
@@ -42,8 +43,6 @@ public class Doctor : Innocent, IHealer
 
             if (HealedPlayer == Player)
                 SelfHealsCount--;
-
-            IsNight = false;
         }
     }
 }

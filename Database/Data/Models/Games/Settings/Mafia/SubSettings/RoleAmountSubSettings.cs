@@ -22,5 +22,5 @@ public record class RoleAmountSubSettings
 
     public int? BlackRolesCount => MurdersCount is null && DonsCount is null ? null : (MurdersCount ?? 0) + (DonsCount ?? 0);
 
-    public int MinimumPlayersCount => (RedRolesCount ?? 0) + (BlackRolesCount ?? 0);
+    public int MinimumPlayersCount => (RedRolesCount ?? 0) + (BlackRolesCount ?? 0) + (ManiacsCount ?? 0) + (HookersCount ?? 0);
 }
