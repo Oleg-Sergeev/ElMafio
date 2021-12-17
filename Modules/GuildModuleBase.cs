@@ -24,14 +24,9 @@ public abstract class GuildModuleBase : InteractiveBase<DbSocketCommandContext>
     protected static readonly IEmote ConfirmEmote = new Emoji("✅");
     protected static readonly IEmote DenyEmote = new Emoji("❌");
 
-    protected ILogger GuildLogger { get; }
+    private ILogger? _guildLogger;
+    protected ILogger GuildLogger => _guildLogger ??= GetGuildLogger(Context.Guild.Id);
 
-
-
-    protected GuildModuleBase()
-    {
-        GuildLogger = GetGuildLogger(Context?.Guild.Id ?? 0);
-    }
 
 
 

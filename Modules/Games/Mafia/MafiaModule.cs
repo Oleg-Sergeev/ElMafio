@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
-using System.Diagnostics.Contracts;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -111,12 +110,12 @@ public class MafiaModule : GameModule
 
             var newTemplate = new SettingsTemplate(newTemplateName)
             {
-                MafiaSettingsId = settings.Id
+                MafiaSettingsId = settings.Id,
+                ServerSubSettings = template.ServerSubSettings,
+                GameSubSettings = template.GameSubSettings,
+                RoleAmountSubSettings = template.RoleAmountSubSettings,
+                RolesInfoSubSettings = template.RolesInfoSubSettings
             };
-            newTemplate.ServerSubSettings = template.ServerSubSettings;
-            newTemplate.GameSubSettings = template.GameSubSettings;
-            newTemplate.RoleAmountSubSettings = template.RoleAmountSubSettings;
-            newTemplate.RolesInfoSubSettings = template.RolesInfoSubSettings;
 
 
             await Context.Db.MafiaSettingsTemplates.AddAsync(newTemplate);
@@ -336,6 +335,33 @@ public class MafiaModule : GameModule
     public class SettingsModule : GuildModuleBase
     {
         [Priority(-1)]
+        [Command]
+        [Alias("Общие", "о")]
+        [Summary("Настроить используемые каналы для игры")]
+        public async Task SetSettingsAsync()
+        {
+            var settingsVM = new MafiaSettingsViewModel();
+
+            var success = await TrySetParameters(settingsVM);
+
+
+            if (!success)
+            {
+                await ReplyEmbedAsync(EmbedStyle.Warning, "Общие настройки мафии не были сохранены");
+
+                return;
+            }
+
+            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
+
+            SetParameters(settings, settingsVM);
+
+            await Context.Db.SaveChangesAsync();
+
+            await ReplyEmbedAsync(EmbedStyle.Successfull, "Общие настройки мафии успешно сохранены");
+        }
+
+
         [Command("Роли")]
         [Alias("р")]
         public async Task SetRoleAmountSettingsAsync()
@@ -355,16 +381,8 @@ public class MafiaModule : GameModule
             settings.Current = Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
 
             var roleAmountSettings = settings.Current.RoleAmountSubSettings;
-            settings.Current.RoleAmountSubSettings = roleAmountSettings with
-            {
-                DoctorsCount = (settingsVM?.DoctorsCount <= -1) ? null : (settingsVM?.DoctorsCount ?? roleAmountSettings.DoctorsCount),
-                SheriffsCount = (settingsVM?.SheriffsCount <= -1) ? null : (settingsVM?.SheriffsCount ?? roleAmountSettings.SheriffsCount),
-                MurdersCount = (settingsVM?.MurdersCount <= -1) ? null : (settingsVM?.MurdersCount ?? roleAmountSettings.MurdersCount),
-                DonsCount = (settingsVM?.DonsCount <= -1) ? null : (settingsVM?.DonsCount ?? roleAmountSettings.DonsCount),
-                InnocentCount = (settingsVM?.InnocentCount <= -1) ? null : (settingsVM?.InnocentCount ?? roleAmountSettings.InnocentCount),
-                ManiacsCount = (settingsVM?.ManiacsCount <= -1) ? null : (settingsVM?.ManiacsCount ?? roleAmountSettings.ManiacsCount),
-                HookersCount = (settingsVM?.HookersCount <= -1) ? null : (settingsVM?.HookersCount ?? roleAmountSettings.HookersCount)
-            };
+            SetParameters(roleAmountSettings, settingsVM);
+            settings.Current.RoleAmountSubSettings = roleAmountSettings;
 
 
             if (settings.Current.RoleAmountSubSettings.MurdersCount == 0 && settings.Current.RoleAmountSubSettings.DonsCount == 0)
@@ -400,17 +418,10 @@ public class MafiaModule : GameModule
 
             settings.Current ??= Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
 
+
             var rolesSettings = settings.Current.RolesInfoSubSettings;
-            settings.Current.RolesInfoSubSettings = rolesSettings with
-            {
-                DoctorSelfHealsCount = (settingsVM?.DoctorSelfHealsCount <= -1) ? null : (settingsVM?.DoctorSelfHealsCount ?? rolesSettings.DoctorSelfHealsCount),
-                SheriffShotsCount = (settingsVM?.SheriffShotsCount <= -1) ? null : (settingsVM?.SheriffShotsCount ?? rolesSettings.SheriffShotsCount),
-                MurdersVoteTogether = settingsVM?.MurdersVoteTogether ?? rolesSettings.MurdersVoteTogether,
-                MurdersMustVoteForOnePlayer = settingsVM?.MurdersMustVoteForOnePlayer ?? rolesSettings.MurdersMustVoteForOnePlayer,
-                MurdersKnowEachOther = settingsVM?.MurdersKnowEachOther ?? rolesSettings.MurdersKnowEachOther,
-                CanInnocentsKillAtNight = settingsVM?.CanInnocentsKillAtNight ?? rolesSettings.CanInnocentsKillAtNight,
-                InnocentsMustVoteForOnePlayer = settingsVM?.InnocentsMustVoteForOnePlayer ?? rolesSettings.InnocentsMustVoteForOnePlayer
-            };
+            SetParameters(rolesSettings, settingsVM);
+            settings.Current.RolesInfoSubSettings = rolesSettings;
 
 
             var MurdersKnowEachOther = settings.Current.RolesInfoSubSettings.MurdersKnowEachOther;
@@ -453,23 +464,15 @@ public class MafiaModule : GameModule
             settings.Current ??= Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
 
 
-
             var serverSettings = settings.Current.ServerSubSettings;
-            settings.Current.ServerSubSettings = serverSettings with
-            {
-                AbortGameWhenError = serverSettingsVM?.AbortGameWhenError ?? serverSettings.AbortGameWhenError,
-                SendWelcomeMessage = serverSettingsVM?.SendWelcomeMessage ?? serverSettings.SendWelcomeMessage,
-                RenameUsers = serverSettingsVM?.RenameUsers ?? serverSettings.RenameUsers,
-                RemoveRolesFromUsers = serverSettingsVM?.RemoveRolesFromUsers ?? serverSettings.RemoveRolesFromUsers,
-                ReplyMessagesOnSetupError = serverSettingsVM?.ReplyMessagesOnSetupError ?? serverSettings.ReplyMessagesOnSetupError
-            };
+            SetParameters(serverSettings, serverSettingsVM);
+            settings.Current.ServerSubSettings = serverSettings;
+
 
             await Context.Db.SaveChangesAsync();
 
             await ReplyEmbedAsync(EmbedStyle.Successfull, "Настройки сервера успешно сохранены");
         }
-
-
 
         [Command("Игра")]
         [Alias("и")]
@@ -493,15 +496,9 @@ public class MafiaModule : GameModule
 
 
             var gameSettings = settings.Current.GameSubSettings;
-            settings.Current.GameSubSettings = gameSettings with
-            {
-                IsRatingGame = settingsVM?.IsRatingGame ?? gameSettings.IsRatingGame,
-                MafiaCoefficient = (settingsVM?.MafiaCoefficient <= -1) ? 3 : (settingsVM?.MafiaCoefficient ?? gameSettings.MafiaCoefficient),
-                LastWordNightCount = (settingsVM?.LastWordNightCount <= -1) ? 0 : (settingsVM?.LastWordNightCount ?? gameSettings.LastWordNightCount),
-                IsCustomGame = settingsVM?.IsCustomGame ?? gameSettings.IsCustomGame,
-                ConditionAliveAtLeast1Innocent = settingsVM?.ConditionAliveAtLeast1Innocent ?? gameSettings.ConditionAliveAtLeast1Innocent,
-                IsTurnByTurnVote = settingsVM?.IsTurnByTurnVote ?? gameSettings.IsTurnByTurnVote
-            };
+            SetParameters(gameSettings, settingsVM);
+            settings.Current.GameSubSettings = gameSettings;
+
 
             if (settings.Current.GameSubSettings.MafiaCoefficient <= 1)
             {
@@ -519,87 +516,6 @@ public class MafiaModule : GameModule
         }
 
 
-        [Priority(-1)]
-        [Command("Каналы")]
-        [Summary("Настроить используемые каналы для игры")]
-        [Remarks("Для указания ссылки на голосовой канал, используйте следующий шаблон: <#VoiceChannelId>")]
-        public async Task SetSettingsAsync(
-            [Summary("Главный канал игры, в котором происходит дневное голосование и объявление результатов прошедшей ночи")] ITextChannel generalTextChannel,
-            [Summary("Канал для убийц, в котором обсуждаются планы на следующую жертву и непосредственно само голосование")] ITextChannel murderTextChannel,
-            [Summary("Текстовый канал для наблюдателей")] ITextChannel? watcherTextChannel = null,
-            [Summary("Голосовой канал для всех игроков, доступен только днем во время обсуждения")] IVoiceChannel? generalVoiceChannel = null,
-            [Summary("Голосовой канал для убийц, доступен только ночью")] IVoiceChannel? murderVoiceChannel = null,
-            [Summary("Голосовой канал для наблюдателей")] IVoiceChannel? watcherVoiceChannel = null)
-        {
-            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
-
-            settings.Current ??= Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
-
-
-            settings.Current.ServerSubSettings = settings.Current.ServerSubSettings with
-            {
-                GeneralTextChannelId = generalTextChannel.Id,
-                MurdersTextChannelId = murderTextChannel.Id,
-                WatchersTextChannelId = watcherTextChannel?.Id,
-                GeneralVoiceChannelId = generalVoiceChannel?.Id,
-                MurdersVoiceChannelId = murderVoiceChannel?.Id,
-                WatchersVoiceChannelId = watcherVoiceChannel?.Id
-            };
-
-
-            await Context.Db.SaveChangesAsync();
-
-            await ReplyEmbedAsync(EmbedStyle.Successfull, "Каналы успешно сохранены");
-        }
-
-
-        [Command("Роли")]
-        [Summary("Настроить параметры игры")]
-        [Remarks("Чтобы указать нужную роль, введите **@** и выберите необходимую роль")]
-        public async Task SetSettingsAsync(
-            [Summary("Роль, выдываваемая каждому игроку мафии")] IRole mafiaRole,
-            [Summary("Роль, выдываваемая игроку, убитому во время игры, чтобы он мог продолжать наблюдать за игрой")] IRole watcherRole)
-        {
-            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
-            settings.Current = Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
-
-            settings.Current.ServerSubSettings = settings.Current.ServerSubSettings with
-            {
-                MafiaRoleId = mafiaRole.Id,
-                WatcherRoleId = watcherRole.Id
-            };
-
-            await Context.Db.SaveChangesAsync();
-
-            await ReplyEmbedAsync(EmbedStyle.Successfull, "Роли успешно сохранены");
-        }
-
-
-
-        [Command("Категория")]
-        [Summary("Настроить параметры игры")]
-        [Remarks("Чтобы ввести ID категории канала, нажмите по нужной категории правой кнопкой мыши (ПК), или зажмите пальцем канал (Моб.), " +
-                 "а затем нажмите кнопку **Скопировать ID**")]
-        public async Task SetSettingsAsync([Summary("Категория каналов, в которой будут находиться игровые каналы")] ICategoryChannel categoryChannel)
-        {
-            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
-            settings.Current = Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
-
-            settings.Current.ServerSubSettings = settings.Current.ServerSubSettings with
-            {
-                CategoryChannelId = categoryChannel.Id
-            };
-
-
-            await Context.Db.SaveChangesAsync();
-
-
-            await ReplyEmbedAsync(EmbedStyle.Successfull, "Категория успешно установлена");
-        }
-
-
-
-
         [Command("Текущие")]
         [Alias("тек", "т")]
         [Summary("Показать все текущие настройки мафии для этого сервера")]
@@ -609,6 +525,7 @@ public class MafiaModule : GameModule
 
             settings.Current = Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
 
+            // Mapper
 
             await ShowSettingsAsync(settings.Current.ServerSubSettings, "Настройки сервера");
             await ShowSettingsAsync(settings.Current.GameSubSettings, "Настройки игры");
@@ -617,13 +534,14 @@ public class MafiaModule : GameModule
         }
 
 
+
         private async Task ShowSettingsAsync<T>(T settings, string title) where T : notnull
         {
             var parameters = settings.GetType().GetProperties().ToList();
 
             var fields = parameters.Select(p => new EmbedFieldBuilder()
             {
-                Name = p.GetPropertyFullName(),
+                Name = GetPropertyName(p),
                 Value = p.GetValue(settings) ?? "Null",
                 IsInline = true,
             });
@@ -740,8 +658,72 @@ public class MafiaModule : GameModule
         }
 
 
+        private void SetParameters<TData, TViewModel>(TData data, TViewModel viewModel)
+            where TData : notnull
+            where TViewModel : notnull
+        {
+            var dataParameters = data.GetType().GetProperties().Where(p => p.CanWrite).ToDictionary(p => p.Name);
+            var vmParameters = viewModel.GetType().GetProperties().Where(p => p.CanWrite);
+
+            foreach (var vmParam in vmParameters)
+            {
+                if (!dataParameters.TryGetValue(vmParam.Name, out var dataParam))
+                {
+                    GuildLogger.Warning(LogTemplate, nameof(SetParameters),
+                        $"View Model parameter {vmParam.Name} was not found in Data parameters");
+
+                    continue;
+                }
+
+                if (vmParam.PropertyType != dataParam.PropertyType)
+                {
+                    GuildLogger.Warning(LogTemplate, nameof(SetParameters),
+                        $"Param {dataParam.Name}: Data param type ({dataParam.PropertyType}) is not equals to ViewModel param type ({vmParam.PropertyType})");
+
+                    continue;
+                }
+
+
+                if (vmParam.PropertyType == typeof(bool?) || vmParam.PropertyType == typeof(bool))
+                {
+                    var vmValue = vmParam.GetValue(viewModel);
+
+                    if (vmValue is not null)
+                        dataParam.SetValue(data, vmValue);
+                }
+                else if (vmParam.PropertyType == typeof(int?) || vmParam.PropertyType == typeof(int))
+                {
+                    var vmValue = vmParam.GetValue(viewModel);
+
+                    if (vmValue is not null)
+                    {
+                        if (vmValue.Equals(-1))
+                            dataParam.SetValue(data, default);
+                        else
+                            dataParam.SetValue(data, vmValue);
+                    }
+                }
+                else
+                {
+                    var vmValue = vmParam.GetValue(viewModel);
+
+                    dataParam.SetValue(data, vmValue);
+                }
+            }
+        }
+
+
         private static IEnumerable<string> GetPropertiesName(IEnumerable<PropertyInfo> props)
-            => props.Select(p => p.GetPropertyFullName());
+            => props.Select(p => GetPropertyName(p));
+
+        private static string GetPropertyName(PropertyInfo prop)
+        {
+            var displayNameAttribute = prop.GetCustomAttribute<DisplayNameAttribute>();
+
+            return displayNameAttribute is not null
+            ? $"{displayNameAttribute.DisplayName} {prop.GetPropertyShortType()}"
+            : prop.GetPropertyFullName();
+        }
     }
 
 
@@ -1179,7 +1161,7 @@ public class MafiaModule : GameModule
         }
         finally
         {
-            if (_settings.Current.ServerSubSettings.GeneralTextChannelId != _mafiaData.GeneralTextChannel.Id)
+            if (_settings.GeneralTextChannelId != _mafiaData.GeneralTextChannel.Id)
                 await SetAndSaveSettingsToDbAsync();
 
 
@@ -1197,24 +1179,20 @@ public class MafiaModule : GameModule
         GuildLogger.Debug(LogTemplate, nameof(PreSetupGuildAsync), "Begin presetup guild...");
 
 
-        var messagesToDelete = Context.Guild.CurrentUser.GuildPermissions.ManageMessages ? 500 : 0;
+        var messagesToDelete = 500;
 
-        var serverSettings = _settings.Current.ServerSubSettings;
+        _settings.CategoryChannelId ??= (await Context.Guild.CreateCategoryChannelAsync("Мафия")).Id;
 
-        if (serverSettings.CategoryChannelId is null)
-            serverSettings = serverSettings with
-            {
-                CategoryChannelId = (await Context.Guild.CreateCategoryChannelAsync("Мафия")).Id
-            };
+        var mafiaData = new MafiaData(
+               await Context.Guild.GetTextChannelOrCreateAsync(_settings.GeneralTextChannelId, "мафия-общий", messagesToDelete, SetCategoryChannel),
+               await Context.Guild.GetTextChannelOrCreateAsync(_settings.MurdersTextChannelId, "мафия-убийцы", messagesToDelete, SetCategoryChannel),
+               Context.Guild.GetTextChannel(_settings.WatchersTextChannelId ?? 0),
+               Context.Guild.GetVoiceChannel(_settings.GeneralVoiceChannelId ?? 0),
+               Context.Guild.GetVoiceChannel(_settings.MurdersVoiceChannelId ?? 0),
+               Context.Guild.GetVoiceChannel(_settings.WatchersVoiceChannelId ?? 0),
+               await Context.Guild.GetRoleOrCreateAsync(_settings.MafiaRoleId, "Игрок мафии", null, Color.Blue, true, true),
+               Context.Guild.GetRole(_settings.WatcherRoleId ?? 0));
 
-        var mafiaData = new MafiaData(await Context.Guild.GetTextChannelOrCreateAsync(serverSettings.GeneralTextChannelId, "мафия-общий", messagesToDelete, SetCategoryChannel),
-               await Context.Guild.GetTextChannelOrCreateAsync(serverSettings.MurdersTextChannelId, "мафия-убийцы", messagesToDelete, SetCategoryChannel),
-               await Context.Guild.GetTextChannelOrCreateAsync(serverSettings.WatchersTextChannelId, "мафия-наблюдатели", messagesToDelete, SetCategoryChannel),
-               await Context.Guild.GetVoiceChannelOrCreateAsync(serverSettings.GeneralVoiceChannelId, "мафия-общий", SetCategoryChannel),
-               await Context.Guild.GetVoiceChannelOrCreateAsync(serverSettings.MurdersVoiceChannelId, "мафия-убийцы", SetCategoryChannel),
-               await Context.Guild.GetVoiceChannelOrCreateAsync(serverSettings.WatchersVoiceChannelId, "мафия-наблюдатели", SetCategoryChannel),
-               await Context.Guild.GetRoleOrCreateAsync(serverSettings.MafiaRoleId, "Игрок мафии", null, Color.Blue, true, true),
-               await Context.Guild.GetRoleOrCreateAsync(serverSettings.WatcherRoleId, "Наблюдатель мафии", null, Color.DarkBlue, true, true));
 
         GuildLogger.Debug(LogTemplate, nameof(PreSetupGuildAsync), "End presetup guild");
 
@@ -1224,9 +1202,8 @@ public class MafiaModule : GameModule
 
 
         void SetCategoryChannel(GuildChannelProperties props)
-            => props.CategoryId = serverSettings.CategoryChannelId;
+            => props.CategoryId = _settings.CategoryChannelId;
     }
-
 
     private async Task SetupGuildAsync()
     {
@@ -1566,7 +1543,7 @@ public class MafiaModule : GameModule
         }
 
         //if (_mafiaData.WatcherTextChannel is not null)
-            //await _mafiaData.WatcherTextChannel.SendMessageAsync(embed: CreateEmbedBuilder(EmbedStyle.Information, _mafiaData.PlayerGameRoles, "Роли игроков", addSmilesToDescription: false).Build());
+        //await _mafiaData.WatcherTextChannel.SendMessageAsync(embed: CreateEmbedBuilder(EmbedStyle.Information, _mafiaData.PlayerGameRoles, "Роли игроков", addSmilesToDescription: false).Build());
 
         GuildLogger.Debug(LogTemplate, nameof(NotifyPlayersAsync), "End notify players");
     }
@@ -2073,7 +2050,7 @@ public class MafiaModule : GameModule
                 {
                     tasks.Add(DoRoleMoveAsync(await hooker.Player.GetOrCreateDMChannelAsync(), hooker));
                 }
-                    
+
                 await _mafiaData.GeneralTextChannel.SendMessageAsync("Путана выбирает клиента");
 
                 Task.WaitAll(tasks.ToArray());
@@ -2505,11 +2482,9 @@ public class MafiaModule : GameModule
         GuildLogger.Debug(LogTemplate, nameof(SetAndSaveSettingsToDbAsync), "Settings saving...");
 
 
-        _settings.Current.ServerSubSettings = _settings.Current.ServerSubSettings with
-        {
-            GeneralTextChannelId = _mafiaData.GeneralTextChannel.Id,
-            MurdersTextChannelId = _mafiaData.MurderTextChannel.Id
-        };
+        _settings.GeneralTextChannelId = _mafiaData.GeneralTextChannel.Id;
+        _settings.MurdersTextChannelId = _mafiaData.MurderTextChannel.Id;
+
 
         await Context.Db.SaveChangesAsync();
 

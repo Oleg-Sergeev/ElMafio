@@ -9,6 +9,31 @@ public class MafiaSettings : GameSettings
 
     public string CurrentTemplateName { get; set; }
 
+
+    public ulong? CategoryChannelId { get; set; }
+
+
+    public ulong? GeneralTextChannelId { get; set; }
+
+    public ulong? GeneralVoiceChannelId { get; set; }
+
+
+    public ulong? MurdersTextChannelId { get; set; }
+
+    public ulong? MurdersVoiceChannelId { get; set; }
+
+
+    public ulong? WatchersTextChannelId { get; set; }
+
+    public ulong? WatchersVoiceChannelId { get; set; }
+
+
+    public ulong? MafiaRoleId { get; set; }
+
+    public ulong? WatcherRoleId { get; set; }
+
+
+
     public List<SettingsTemplate> SettingsTemplates { get; private set; } = null!;
 
 
@@ -18,7 +43,7 @@ public class MafiaSettings : GameSettings
 
     public MafiaSettings()
     {
-        CurrentTemplateName = "_Default";
+        CurrentTemplateName = "_Current";
 
         Current = new(CurrentTemplateName);
     }
