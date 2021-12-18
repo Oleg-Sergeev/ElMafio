@@ -18,9 +18,19 @@ public record class RoleAmountSubSettings
     public int? HookersCount { get; init; }
 
 
-    public int? RedRolesCount => InnocentCount is null && DoctorsCount is null && SheriffsCount is null ? null : (InnocentCount ?? 0) + (DoctorsCount ?? 0) + (SheriffsCount ?? 0);
+    public bool AllRedRolesSetted => (InnocentCount + DoctorsCount + SheriffsCount) is not null;
 
+    public bool AllBlackRolesSetted => (MurdersCount + DonsCount) is not null;
+
+    public bool AllNeuttralRolesSetted => (ManiacsCount + HookersCount) is not null;
+
+
+    public int? RedRolesCount => InnocentCount is null && DoctorsCount is null && SheriffsCount is null ? null : (InnocentCount ?? 0) + (DoctorsCount ?? 0) + (SheriffsCount ?? 0);
+    
     public int? BlackRolesCount => MurdersCount is null && DonsCount is null ? null : (MurdersCount ?? 0) + (DonsCount ?? 0);
 
-    public int MinimumPlayersCount => (RedRolesCount ?? 0) + (BlackRolesCount ?? 0) + (ManiacsCount ?? 0) + (HookersCount ?? 0);
+    public int? NeutralRolesCount => ManiacsCount is null && HookersCount is null ? null : (ManiacsCount ?? 0) + (HookersCount ?? 0);
+
+
+    public int MinimumPlayersCount => (RedRolesCount ?? 0) + (BlackRolesCount ?? 0) + (NeutralRolesCount ?? 0);
 }

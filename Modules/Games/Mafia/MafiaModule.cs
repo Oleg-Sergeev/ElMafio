@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.ComponentModel;
 using System.Data;
 using System.Linq;
@@ -784,7 +785,7 @@ public class MafiaModule : GameModule
         ArgumentNullException.ThrowIfNull(_settings);
         ArgumentNullException.ThrowIfNull(GameData);
 
-        // ??????????/
+
         if (_settings.Current.GameSubSettings.IsCustomGame)
         {
             var roleAmountSettings = _settings.Current.RoleAmountSubSettings;
@@ -792,12 +793,12 @@ public class MafiaModule : GameModule
             if (GameData.Players.Count < roleAmountSettings.MinimumPlayersCount)
             {
                 failMessage = $"Недостаточно игроков. Минимальное количество игроков согласно пользовательским настройкам игры: {roleAmountSettings.MinimumPlayersCount}";
-
+                
                 return false;
             }
 
 
-            if (roleAmountSettings.RedRolesCount == 0 && roleAmountSettings.InnocentCount is not null)
+            if (roleAmountSettings.RedRolesCount == 0 && roleAmountSettings.AllRedRolesSetted)
             {
                 failMessage = "Для игры необходимо наличие хотя бы одной красной роли. " +
                     "Измените настройки ролей, добавив красную роль, или установите значение для роли по умолчанию";
@@ -805,7 +806,7 @@ public class MafiaModule : GameModule
                 return false;
             }
 
-            if (roleAmountSettings.BlackRolesCount == 0 && roleAmountSettings.MurdersCount is not null && roleAmountSettings.DonsCount is not null)
+            if (roleAmountSettings.BlackRolesCount == 0 && roleAmountSettings.AllBlackRolesSetted)
             {
                 failMessage = "Для игры необходимо наличие хотя бы одной черной роли. " +
                     "Измените настройки ролей, добавив черную роль, или установите значение для роли по умолчанию";
@@ -1361,8 +1362,6 @@ public class MafiaModule : GameModule
         GuildLogger.Debug(LogTemplate, nameof(SetupPlayersAsync), "End setup players");
     }
 
-
-
     private async Task SetupRolesAsync()
     {
         ArgumentNullException.ThrowIfNull(_mafiaData);
@@ -1385,32 +1384,47 @@ public class MafiaModule : GameModule
 
         var rolesInfo = _settings.Current.RolesInfoSubSettings;
         var isCustomGame = _settings.Current.GameSubSettings.IsCustomGame;
+        var mafiaCoefficient = _settings.Current.GameSubSettings.MafiaCoefficient;
         var roleAmount = _settings.Current.RoleAmountSubSettings;
 
+        var blackRolesCount = Math.Max(GameData.Players.Count / mafiaCoefficient, 1);
+        var redRolesCount = Math.Max((int)(blackRolesCount / 2.5f), 1);
+
+        var doctorsCount = 0;
+        var sheriffsCount = 0;
+        var murdersCount = 0;
+        var donsCount = 0;
 
 
-        var doctorsCount = (isCustomGame && roleAmount.DoctorsCount is not null)
-            ? roleAmount.DoctorsCount.Value
-            : isCustomGame && roleAmount.InnocentCount is not null ? 0 : 1;
+        if (isCustomGame)
+        {
+            var neutralsCount = roleAmount.NeutralRolesCount ?? 0;
 
-        var sheriffsCount = (isCustomGame && roleAmount.SheriffsCount is not null)
-            ? roleAmount.SheriffsCount.Value
-            : isCustomGame && roleAmount.InnocentCount is not null ? 0 : 1;
+            var exceptInnocentsCount = GameData.Players.Count - roleAmount.InnocentCount;
 
-
-        var murdersCount = (isCustomGame && roleAmount.MurdersCount is not null)
-            ? roleAmount.MurdersCount
-            : (GameData.Players.Count / _settings.Current.GameSubSettings.MafiaCoefficient);
-
-        if (isCustomGame && roleAmount.InnocentCount is not null)
-            murdersCount = GameData.Players.Count - roleAmount.InnocentCount.Value - roleAmount.ManiacsCount ?? 0 - roleAmount.HookersCount ?? 0;
+            var redRolesRemainsCount = exceptInnocentsCount - (roleAmount.BlackRolesCount ?? blackRolesCount) - neutralsCount;
 
 
-        var donsCount = (isCustomGame && roleAmount.DonsCount is not null)
-            ? roleAmount.DonsCount
-            : (murdersCount > 2 ? 1 : 0);
+            doctorsCount = roleAmount.DoctorsCount ?? Math.Min(redRolesRemainsCount ?? redRolesCount, redRolesCount);
 
-        murdersCount -= donsCount;
+            sheriffsCount = roleAmount.SheriffsCount ?? Math.Min((redRolesRemainsCount - doctorsCount) ?? redRolesCount, redRolesCount);
+
+
+            murdersCount = roleAmount.MurdersCount ?? (exceptInnocentsCount - doctorsCount - sheriffsCount - neutralsCount) ?? blackRolesCount;
+
+            donsCount = roleAmount.DonsCount ?? (murdersCount > 2 ? 1 : 0);
+        }
+        else
+        {
+            doctorsCount = redRolesCount;
+
+            sheriffsCount = redRolesCount;
+
+            murdersCount = blackRolesCount;
+
+            donsCount = murdersCount > 2 ? 1 : 0;
+        }
+
 
         for (int i = 0; i < murdersCount; i++, offset++)
         {
@@ -1461,7 +1475,6 @@ public class MafiaModule : GameModule
         GuildLogger.Verbose(LogTemplate, nameof(SetupRolesAsync), "Setuping red roles");
 
 
-        doctorsCount = Math.Min(doctorsCount, GameData.Players.Count - offset);
         for (int i = 0; i < doctorsCount; i++, offset++)
         {
             var doctor = new Doctor(GameData.Players[offset], GameRoleOptions, 40, rolesInfo.DoctorSelfHealsCount ?? 1);
@@ -1474,7 +1487,6 @@ public class MafiaModule : GameModule
         }
 
 
-        sheriffsCount = Math.Min(sheriffsCount, GameData.Players.Count - offset);
         for (int i = 0; i < sheriffsCount; i++, offset++)
         {
             var sheriff = new Sheriff(GameData.Players[offset], SheriffOptions, 40, rolesInfo.SheriffShotsCount ?? default, _mafiaData.Murders.Values);
@@ -1503,7 +1515,6 @@ public class MafiaModule : GameModule
 
         GuildLogger.Debug(LogTemplate, nameof(SetupRolesAsync), "End setup roles");
     }
-
     private async Task NotifyPlayersAsync()
     {
         ArgumentNullException.ThrowIfNull(_mafiaData);
@@ -1547,7 +1558,6 @@ public class MafiaModule : GameModule
 
         GuildLogger.Debug(LogTemplate, nameof(NotifyPlayersAsync), "End notify players");
     }
-
     private async Task SetupRolesAndNotifyPlayersAsync()
     {
         await SetupRolesAsync();
@@ -2557,7 +2567,6 @@ public class MafiaModule : GameModule
             Dons = new();
             Maniacs = new();
             Hookers = new();
-
 
             // MafiaStatsHelper = new(this);
 
