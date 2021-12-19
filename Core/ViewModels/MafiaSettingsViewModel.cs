@@ -1,6 +1,4 @@
-﻿using System.ComponentModel;
-
-namespace Core.ViewModels;
+﻿namespace Core.ViewModels;
 
 public class MafiaSettingsViewModel
 {
@@ -9,14 +7,14 @@ public class MafiaSettingsViewModel
 
     public ulong? GeneralTextChannelId { get; init; }
 
-    public ulong? GeneralVoiceChannelId { get; init; }
-
     public ulong? MurdersTextChannelId { get; init; }
 
-    public ulong? MurdersVoiceChannelId { get; init; }
-
-
     public ulong? WatchersTextChannelId { get; init; }
+
+
+    public ulong? GeneralVoiceChannelId { get; init; }
+
+    public ulong? MurdersVoiceChannelId { get; init; }
 
     public ulong? WatchersVoiceChannelId { get; init; }
 

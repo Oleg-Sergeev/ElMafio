@@ -4,7 +4,7 @@ using Infrastructure.Data.Models.Games.Settings.Mafia.SubSettings;
 
 namespace Infrastructure.Data.Models.Games.Settings.Mafia;
 
-public class SettingsTemplate
+public record class SettingsTemplate
 {
     public int Id { get; set; }
 

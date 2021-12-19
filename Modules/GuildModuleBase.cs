@@ -23,6 +23,7 @@ public abstract class GuildModuleBase : InteractiveBase<DbSocketCommandContext>
 
     protected static readonly IEmote ConfirmEmote = new Emoji("✅");
     protected static readonly IEmote DenyEmote = new Emoji("❌");
+    protected static readonly IEmote CancelEmote = new Emoji("⏹️");
 
     private ILogger? _guildLogger;
     protected ILogger GuildLogger => _guildLogger ??= GetGuildLogger(Context.Guild.Id);
@@ -220,7 +221,7 @@ public abstract class GuildModuleBase : InteractiveBase<DbSocketCommandContext>
         return msg;
     }
 
-    public async Task<IEmote?> NextReactionAsync(IUserMessage message, TimeSpan? timeout = null, IList<IEmote>? emotes = null)
+    public async Task<IEmote?> NextReactionAsync(IUserMessage message, TimeSpan? timeout = null, IList<IEmote>? emotes = null, bool hasCancellationSmile = false)
     {
         emotes ??= message.Reactions.Keys.ToList();
 
@@ -229,6 +230,9 @@ public abstract class GuildModuleBase : InteractiveBase<DbSocketCommandContext>
             emotes.Add(ConfirmEmote);
             emotes.Add(DenyEmote);
         }
+
+        if (hasCancellationSmile)
+            emotes.Add(CancelEmote);
 
         timeout ??= TimeSpan.FromSeconds(15);
 
