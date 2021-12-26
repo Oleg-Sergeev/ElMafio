@@ -12,7 +12,14 @@ public record GameSubSettings
 
     public bool ConditionAliveAtLeast1Innocent { get; init; }
 
+    public bool ConditionContinueGameWithNeutrals { get; init; }
+
     public bool IsTurnByTurnVote { get; init; }
+
+
+    public int VoteTime { get; init; }
+
+
 
 
     public GameSubSettings()
@@ -27,6 +34,11 @@ public record GameSubSettings
 
         ConditionAliveAtLeast1Innocent = false;
 
+        ConditionContinueGameWithNeutrals = false;
+
         IsTurnByTurnVote = false;
+
+
+        VoteTime = 40;
     }
 }

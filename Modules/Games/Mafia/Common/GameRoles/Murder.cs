@@ -11,10 +11,16 @@ public class Murder : GameRole, IKiller
     public IGuildUser? KilledPlayer { get; protected set; }
 
 
-    public Murder(IGuildUser player, IOptionsSnapshot<GameRoleData> options, int voteTime) : base(player, options, voteTime)
+    public Murder(IGuildUser player, IOptionsSnapshot<GameRoleData> options) : base(player, options)
     {
     }
+    public override void SetPhase(bool isNight)
+    {
+        base.SetPhase(isNight);
 
+        if (isNight)
+            KilledPlayer = null;
+    }
     public override void ProcessMove(IGuildUser? selectedPlayer, bool isSkip)
     {
         base.ProcessMove(selectedPlayer, isSkip);

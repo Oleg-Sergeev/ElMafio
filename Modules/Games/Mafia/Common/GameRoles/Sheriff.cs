@@ -30,11 +30,22 @@ public class Sheriff : Innocent, IKiller, IChecker
     public IEnumerable<GameRole> CheckableRoles { get; }
 
 
-    public Sheriff(IGuildUser player, IOptionsSnapshot<GameRoleData> options, int voteTime, int maxShotsCount, IEnumerable<Murder> murders) : base(player, options, voteTime)
+    public Sheriff(IGuildUser player, IOptionsSnapshot<GameRoleData> options, int maxShotsCount, IEnumerable<Murder> murders) : base(player, options)
     {
         ShotsCount = maxShotsCount;
 
         CheckableRoles = murders;
+    }
+
+    public override void SetPhase(bool isNight)
+    {
+        base.SetPhase(isNight);
+
+        if (isNight)
+        {
+            CheckedRole = null;
+            KilledPlayer = null;
+        }
     }
 
 

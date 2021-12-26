@@ -13,7 +13,7 @@ public class Hooker : Neutral, IHooker
     public IGuildUser? BlockedPlayer { get; protected set; }
 
 
-    public Hooker(IGuildUser player, IOptionsSnapshot<GameRoleData> options, int voteTime) : base(player, options, voteTime)
+    public Hooker(IGuildUser player, IOptionsSnapshot<GameRoleData> options) : base(player, options)
     {
     }
 
@@ -28,6 +28,17 @@ public class Hooker : Neutral, IHooker
             except.Add(HealedPlayer);
 
         return except;
+    }
+
+    public override void SetPhase(bool isNight)
+    {
+        base.SetPhase(isNight);
+
+        if (isNight)
+        {
+            HealedPlayer = null;
+            BlockedPlayer = null;
+        }
     }
 
     public override void ProcessMove(IGuildUser? selectedPlayer, bool isSkip)

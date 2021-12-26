@@ -19,7 +19,7 @@ public class Don : Murder, IChecker
     public IEnumerable<GameRole> CheckableRoles { get; }
 
 
-    public Don(IGuildUser player, IOptionsSnapshot<GameRoleData> options, int voteTime, IEnumerable<Sheriff> sheriffs) : base(player, options, voteTime)
+    public Don(IGuildUser player, IOptionsSnapshot<GameRoleData> options, IEnumerable<Sheriff> sheriffs) : base(player, options)
     {
         CheckableRoles = sheriffs;
     }

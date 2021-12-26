@@ -4,6 +4,9 @@ public static class ListExtensions
 {
     public static IList<T> Shuffle<T>(this IList<T> list, int iterations = 1)
     {
+        if (iterations < 0)
+            throw new ArgumentOutOfRangeException(nameof(iterations), "the value must be at least zero");
+
         var random = new Random();
 
         for (int i = 0; i < iterations; i++)
@@ -15,37 +18,25 @@ public static class ListExtensions
 
                 int k = random.Next(n + 1);
 
-                T value = list[k];
-                list[k] = list[n];
-                list[n] = value;
+                (list[k], list[n]) = (list[n], list[k]);
             }
         }
 
         return list;
     }
 
-
     public static IEnumerable<T> Shuffle<T>(this IEnumerable<T> source)
-    {
-        return source.Shuffle(new Random());
-    }
+        => source.ShuffleIterator();
 
-    public static IEnumerable<T> Shuffle<T>(this IEnumerable<T> source, Random rng)
+    private static IEnumerable<T> ShuffleIterator<T>(this IEnumerable<T> source)
     {
-        if (source == null)
-            throw new ArgumentNullException(nameof(source));
-        if (rng == null)
-            throw new ArgumentNullException(nameof(rng));
+        var rnd = new Random();
 
-        return source.ShuffleIterator(rng);
-    }
-
-    private static IEnumerable<T> ShuffleIterator<T>(this IEnumerable<T> source, Random rng)
-    {
         var buffer = source.ToList();
+
         for (int i = 0; i < buffer.Count; i++)
         {
-            int j = rng.Next(i, buffer.Count);
+            int j = rnd.Next(i, buffer.Count);
             yield return buffer[j];
 
             buffer[j] = buffer[i];

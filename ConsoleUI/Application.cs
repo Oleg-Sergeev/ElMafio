@@ -5,15 +5,14 @@ using Core.Extensions;
 using Core.Interfaces;
 using Discord;
 using Discord.Addons.Hosting;
-using Discord.Addons.Interactive;
 using Discord.Commands;
 using Discord.WebSocket;
+using Fergun.Interactive;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Options;
 using Modules.Games.Mafia.Common.GameRoles;
 using Modules.Games.Mafia.Common.GameRoles.Data;
 using Serilog;
@@ -77,19 +76,8 @@ public static class Application
             {
                 LogLevel = LogSeverity.Verbose,
                 MessageCacheSize = 1000,
-                ExclusiveBulkDelete = true,
                 UseSystemClock = true,
-                GatewayIntents =
-              GatewayIntents.Guilds
-            | GatewayIntents.GuildBans
-            | GatewayIntents.GuildEmojis
-            | GatewayIntents.GuildMembers
-            | GatewayIntents.GuildMessages
-            | GatewayIntents.GuildPresences
-            | GatewayIntents.GuildVoiceStates
-            | GatewayIntents.GuildMessageReactions
-            | GatewayIntents.DirectMessageReactions
-            | GatewayIntents.DirectMessages
+                GatewayIntents = GatewayIntents.All
             };
 
             discrodConfig.Token = context.Configuration["Tokens:DiscordBot"];

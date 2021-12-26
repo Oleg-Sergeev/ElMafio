@@ -7,6 +7,7 @@ using Core.Extensions;
 using Discord;
 using Discord.Commands;
 using Discord.Net;
+using Fergun.Interactive;
 using Microsoft.Extensions.Configuration;
 
 namespace Modules;
@@ -20,7 +21,7 @@ public class HelpModule : GuildModuleBase
     private readonly IConfiguration _config;
 
 
-    public HelpModule(CommandService commands, IConfiguration config)
+    public HelpModule(InteractiveService interactiveService, CommandService commands, IConfiguration config) : base(interactiveService)
     {
         _commandService = commands;
         _config = config;
@@ -32,7 +33,7 @@ public class HelpModule : GuildModuleBase
     [Remarks("Список содержит только те команды, которые доступны вам")]
     public async Task HelpAsync(bool sendToServer = false)
     {
-        IMessageChannel channel = !sendToServer ? await Context.User.GetOrCreateDMChannelAsync() : Context.Channel;
+        IMessageChannel channel = !sendToServer ? await Context.User.CreateDMChannelAsync() : Context.Channel;
 
         await channel.TriggerTypingAsync();
 

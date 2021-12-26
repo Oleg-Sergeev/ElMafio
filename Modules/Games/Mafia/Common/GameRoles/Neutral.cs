@@ -6,7 +6,7 @@ namespace Modules.Games.Mafia.Common.GameRoles;
 
 public abstract class Neutral : GameRole
 {
-    protected Neutral(IGuildUser player, IOptionsSnapshot<GameRoleData> options, int voteTime) : base(player, options, voteTime)
+    protected Neutral(IGuildUser player, IOptionsSnapshot<GameRoleData> options) : base(player, options)
     {
     }
 }

@@ -6,7 +6,7 @@ namespace Modules.Games.Mafia.Common.GameRoles.RolesGroups;
 
 public class AliveGroup : RolesGroup
 {
-    public AliveGroup(IReadOnlyList<GameRole> roles, IOptionsSnapshot<GameRoleData> options, int voteTime) : base(roles, options, voteTime)
+    public AliveGroup(IReadOnlyList<GameRole> roles, IOptionsSnapshot<GameRoleData> options) : base(roles, options)
     {
 
     }

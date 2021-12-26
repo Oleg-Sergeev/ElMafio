@@ -8,6 +8,7 @@ using Core.Extensions;
 using Core.Interfaces;
 using Discord;
 using Discord.Commands;
+using Fergun.Interactive;
 
 namespace Modules;
 
@@ -17,7 +18,7 @@ public class FunModule : GuildModuleBase
     private readonly IRandomService _random;
 
 
-    public FunModule(IRandomService random)
+    public FunModule(InteractiveService interactiveService, IRandomService random) : base(interactiveService)
     {
         _random = random;
     }

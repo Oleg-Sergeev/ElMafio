@@ -6,16 +6,18 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Core.Common;
+using Core.Common.Chronology;
 using Core.Exceptions;
 using Core.Extensions;
 using Core.Interfaces;
 using Core.TypeReaders;
 using Core.ViewModels;
 using Discord;
-using Discord.Addons.Interactive;
 using Discord.Commands;
 using Discord.Net;
 using Discord.WebSocket;
+using Fergun.Interactive;
+using Fergun.Interactive.Pagination;
 using Infrastructure.Data.Models.Games.Settings.Mafia;
 using Infrastructure.Data.Models.Games.Stats;
 using Microsoft.EntityFrameworkCore;
@@ -26,6 +28,7 @@ using Modules.Games.Mafia.Common.GameRoles.Data;
 using Modules.Games.Mafia.Common.GameRoles.RolesGroups;
 using Modules.Games.Mafia.Common.Interfaces;
 using Serilog;
+using static System.Collections.Specialized.BitVector32;
 
 namespace Modules.Games.Mafia;
 
@@ -33,21 +36,16 @@ namespace Modules.Games.Mafia;
 [Alias("маф", "м")]
 public class MafiaModule : GameModule
 {
-    // !!!!!!!!
-    private bool CanContinueGame => _settings!.Current.GameSubSettings.ConditionAliveAtLeast1Innocent
-        ? _mafiaData!.Murders.Values.Any(m => m.IsAlive) && _mafiaData.Innocents.Values.Any(i => i.IsAlive)
-        : _mafiaData!.Murders.Values.Any(m => m.IsAlive) && _mafiaData.AllRoles.Values.Count(r => r.IsAlive) > 2 * _mafiaData.Murders.Values.Count(m => m.IsAlive);
-
-
     protected IOptionsSnapshot<GameRoleData> GameRoleOptions { get; }
     protected IOptionsSnapshot<CheckerData> CheckerOptions { get; }
     protected IOptionsSnapshot<SheriffData> SheriffOptions { get; }
+
 
     private MafiaData? _mafiaData;
 
     private MafiaSettings? _settings;
 
-    private readonly GameChronology _chronology = new();
+    private readonly MafiaChronology _chronology;
 
 
     private OverwritePermissions _denyView;
@@ -57,815 +55,20 @@ public class MafiaModule : GameModule
 
 
 
-    public MafiaModule(IConfiguration config,
+    public MafiaModule(InteractiveService interactiveService,
+                       IConfiguration config,
                        IRandomService random,
                        IOptionsSnapshot<GameRoleData> gameRoleOptions,
                        IOptionsSnapshot<CheckerData> checkerOptions,
-                       IOptionsSnapshot<SheriffData> sheriffOptions) : base(config, random)
+                       IOptionsSnapshot<SheriffData> sheriffOptions) : base(interactiveService, config, random)
     {
         GameRoleOptions = gameRoleOptions;
         CheckerOptions = checkerOptions;
         SheriffOptions = sheriffOptions;
+
+        _chronology = new();
     }
 
-
-
-
-    [Group("Шаблоны")]
-    [Alias("ш")]
-    [RequireUserPermission(GuildPermission.Administrator)]
-    public class TemplatesModule : GuildModuleBase
-    {
-        [Command("Клонировать")]
-        [Alias("клон", "к")]
-        public async Task CloneTemplate(string newTemplateName, string? originalTemplateName = null)
-        {
-            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
-
-            originalTemplateName ??= settings.CurrentTemplateName;
-
-            if (newTemplateName == originalTemplateName)
-            {
-                await ReplyEmbedAsync(EmbedStyle.Error, $"Шаблон с именем **{originalTemplateName}** уже существует");
-
-                return;
-            }
-
-            settings.Current = Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
-
-
-            var template = originalTemplateName == settings.CurrentTemplateName
-                ? settings.Current
-                : await Context.Db.MafiaSettingsTemplates
-                    .AsTracking()
-                    .FirstOrDefaultAsync(s => s.MafiaSettingsId == settings.Id && s.Name == originalTemplateName);
-
-            if (template is null)
-            {
-                await ReplyEmbedAsync(EmbedStyle.Error, "Шаблон-образец не найден");
-
-                return;
-            }
-
-            var newTemplate = new SettingsTemplate(newTemplateName)
-            {
-                MafiaSettingsId = settings.Id,
-                ServerSubSettings = template.ServerSubSettings,
-                GameSubSettings = template.GameSubSettings,
-                RoleAmountSubSettings = template.RoleAmountSubSettings,
-                RolesInfoSubSettings = template.RolesInfoSubSettings
-            };
-
-
-            await Context.Db.MafiaSettingsTemplates.AddAsync(newTemplate);
-
-            settings.CurrentTemplateName = newTemplateName;
-
-            await Context.Db.SaveChangesAsync();
-
-
-
-            await ReplyEmbedAsync(EmbedStyle.Successfull, $"Шаблон **{newTemplateName}** успешно клонирован из шаблона **{originalTemplateName}**");
-        }
-
-
-        [Command("Загрузить")]
-        [Alias("згр", "з")]
-        public async Task LoadTemplate(string name = MafiaSettings.DefaultTemplateName)
-        {
-            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
-
-            var template = Context.Db.MafiaSettingsTemplates.FirstOrDefault(s => s.MafiaSettingsId == settings.Id && s.Name == name);
-
-            if (template is null)
-            {
-                await ReplyEmbedAsync(EmbedStyle.Error, "Шаблон не найден");
-
-                return;
-            }
-
-            settings.CurrentTemplateName = name;
-
-            await Context.Db.SaveChangesAsync();
-
-            await ReplyEmbedAsync(EmbedStyle.Successfull, $"Шаблон **{name}** успешно загружен");
-        }
-
-
-        [Command("Текущий")]
-        [Alias("тек", "т")]
-        public async Task ShowCurrentTemplate()
-        {
-            var settings = await Context.GetGameSettingsAsync<MafiaSettings>(false);
-
-            await ReplyEmbedAsync(EmbedStyle.Information, $"Текущий шаблон - **{settings.CurrentTemplateName}**");
-        }
-
-
-        [Command("Список")]
-        [Alias("сп")]
-        public async Task ShowAllTemplates()
-        {
-            var settings = await Context.GetGameSettingsAsync<MafiaSettings>(false);
-
-            var templates = Context.Db.MafiaSettingsTemplates
-                .AsNoTracking()
-                .Where(t => t.MafiaSettingsId == settings.Id);
-
-            var str = "";
-
-            foreach (var template in templates)
-                str += $"**{template.Name}**\n";
-
-            await ReplyEmbedAsync(EmbedStyle.Information, str, "Список шаблонов");
-        }
-
-
-
-        [Command("Сообщение")]
-        [Alias("сбщ")]
-        [Priority(-1)]
-        public async Task ShowPreGameMessage()
-        {
-            var settings = await Context.GetGameSettingsAsync<MafiaSettings>(false);
-
-            settings.Current = Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
-
-
-            await ReplyEmbedAsync(EmbedStyle.Information, settings.Current.PreGameMessage ?? "*Сообщение отсутствует*", "Сообщение перед игрой");
-        }
-
-        [Command("Сообщение")]
-        [Alias("сбщ")]
-        public async Task UpdatePreGameMessage([Remainder] string message)
-        {
-            var settings = await Context.GetGameSettingsAsync<MafiaSettings>(false);
-
-            var template = Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
-
-
-            template.PreGameMessage = message;
-
-            await Context.Db.SaveChangesAsync();
-
-
-            await ReplyEmbedAsync(EmbedStyle.Successfull, "Сообщение успешно изменено");
-        }
-
-
-        [Command("Имя")]
-        public async Task UpdateTemplateName(string newName, string? templateName = null)
-        {
-            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
-
-            templateName ??= settings.CurrentTemplateName;
-
-            var templateToUpdate = Context.Db.MafiaSettingsTemplates.FirstOrDefault(s => s.MafiaSettingsId == settings.Id && s.Name == templateName);
-
-
-            if (templateToUpdate is null)
-            {
-                await ReplyEmbedAsync(EmbedStyle.Error, $"Шаблон для замены имени **{templateName}** не найден");
-
-                return;
-            }
-
-            var templateNames = await Context.Db.MafiaSettingsTemplates
-                .AsNoTracking()
-                .Where(t => t.MafiaSettingsId == settings.Id)
-                .Select(t => t.Name)
-                .ToListAsync();
-
-            if (templateNames.Contains(newName))
-            {
-                await ReplyEmbedAsync(EmbedStyle.Error, "Имя шаблона уже используется");
-
-                return;
-            }
-
-
-            var oldName = templateToUpdate.Name;
-
-            templateToUpdate.Name = newName;
-            settings.CurrentTemplateName = newName;
-
-            await Context.Db.SaveChangesAsync();
-
-
-            await ReplyEmbedAsync(EmbedStyle.Successfull, $"Имя шаблона успешно изменено: **{oldName}** -> **{newName}**");
-        }
-
-
-        [Command("Сброс")]
-        public async Task ResetTemplate(string? name = null)
-        {
-            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
-
-            name ??= settings.CurrentTemplateName;
-
-            var template = Context.Db.MafiaSettingsTemplates.FirstOrDefault(s => s.MafiaSettingsId == settings.Id && s.Name == name);
-
-            if (template is null)
-            {
-                await ReplyEmbedAsync(EmbedStyle.Error, "Шаблон не найден");
-
-                return;
-            }
-
-            template.GameSubSettings = new();
-            template.ServerSubSettings = new();
-            template.RolesInfoSubSettings = new();
-            template.RoleAmountSubSettings = new();
-
-            await Context.Db.SaveChangesAsync();
-
-            await ReplyEmbedAsync(EmbedStyle.Successfull, $"Шаблон **{name}** успешно сброшен");
-        }
-
-
-        [Command("Удалить")]
-        public async Task DeleteTemplate(string? name = null)
-        {
-            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
-
-            name ??= settings.CurrentTemplateName;
-
-            if (name == MafiaSettings.DefaultTemplateName)
-            {
-                await ReplyEmbedAsync(EmbedStyle.Error, "Невозможно удалить шаблон по умолчанию");
-
-                return;
-            }
-
-            if (name == settings.CurrentTemplateName)
-            {
-                await ReplyEmbedAsync(EmbedStyle.Error, "Невозможно удалить активный шаблон");
-
-                return;
-            }
-
-
-            var template = Context.Db.MafiaSettingsTemplates.FirstOrDefault(s => s.MafiaSettingsId == settings.Id && s.Name == name);
-
-            if (template is null)
-            {
-                await ReplyEmbedAsync(EmbedStyle.Error, "Шаблон не найден");
-
-                return;
-            }
-
-
-            Context.Db.MafiaSettingsTemplates.Remove(template);
-
-            await Context.Db.SaveChangesAsync();
-
-
-            await ReplyEmbedAsync(EmbedStyle.Successfull, $"Шаблон **{name}** успешно удален");
-        }
-    }
-
-
-
-    [Group("Настройки")]
-    [Alias("н")]
-    [RequireUserPermission(GuildPermission.Administrator)]
-    [Summary("Настройки для мафии включают в себя настройки сервера(используемые роли, каналы и категорию каналов) и настройки самой игры. " +
-        "Для подробностей введите команду **Мафия.Настройки.Помощь**")]
-    public class SettingsModule : GuildModuleBase
-    {
-        [Priority(-1)]
-        [Command]
-        [Alias("Общие", "о")]
-        [Summary("Настроить используемые каналы для игры")]
-        public async Task SetSettingsAsync()
-        {
-            var settingsVM = new MafiaSettingsViewModel();
-
-            var success = await TrySetParameters(settingsVM);
-
-
-            if (!success)
-            {
-                await ReplyEmbedAsync(EmbedStyle.Warning, "Общие настройки мафии не были сохранены");
-
-                return;
-            }
-
-            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
-
-            SetParameters(settings, settingsVM);
-
-            await Context.Db.SaveChangesAsync();
-
-            await ReplyEmbedAsync(EmbedStyle.Successfull, "Общие настройки мафии успешно сохранены");
-        }
-
-
-        [Command("Роли")]
-        [Alias("р")]
-        public async Task SetRoleAmountSettingsAsync()
-        {
-            var settingsVM = new RoleAmountSubSettingsViewModel();
-
-            var success = await TrySetParameters(settingsVM);
-
-            if (!success)
-            {
-                await ReplyEmbedAsync(EmbedStyle.Warning, "Настройки ролей не были сохранены");
-
-                return;
-            }
-
-            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
-            settings.Current = Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
-
-            var roleAmountSettings = settings.Current.RoleAmountSubSettings;
-            SetParameters(roleAmountSettings, settingsVM);
-            settings.Current.RoleAmountSubSettings = roleAmountSettings;
-
-
-            if (settings.Current.RoleAmountSubSettings.MurdersCount == 0 && settings.Current.RoleAmountSubSettings.DonsCount == 0)
-            {
-                await ReplyEmbedAndDeleteAsync(EmbedStyle.Error, "Для игры необходима хотя бы одна черная роль");
-
-                return;
-            }
-
-
-            await Context.Db.SaveChangesAsync();
-
-
-            await ReplyEmbedAndDeleteAsync(EmbedStyle.Successfull, "Настройки ролей успешно сохранены");
-        }
-
-        [Command("РолиДействия")]
-        [Alias("РДействия", "рд")]
-        public async Task SetRolesInfoSubSettingsAsync()
-        {
-            var settingsVM = new RolesInfoSubSettingsViewModel();
-
-            var success = await TrySetParameters(settingsVM);
-
-            if (!success)
-            {
-                await ReplyEmbedAsync(EmbedStyle.Warning, "Дополнительные настройки ролей не были сохранены");
-
-                return;
-            }
-
-            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
-
-            settings.Current ??= Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
-
-
-            var rolesSettings = settings.Current.RolesInfoSubSettings;
-            SetParameters(rolesSettings, settingsVM);
-            settings.Current.RolesInfoSubSettings = rolesSettings;
-
-
-            var MurdersKnowEachOther = settings.Current.RolesInfoSubSettings.MurdersKnowEachOther;
-            var MurdersVoteTogether = settings.Current.RolesInfoSubSettings.MurdersVoteTogether;
-
-            if (!MurdersKnowEachOther && MurdersVoteTogether)
-            {
-                await ReplyEmbedAndDeleteAsync(EmbedStyle.Error, $"Конфликт настроек. " +
-                    $"Параметры {nameof(MurdersKnowEachOther)} ({MurdersKnowEachOther}) и {nameof(MurdersVoteTogether)} ({MurdersVoteTogether}) взаимоисключают друг друга. " +
-                    $"Измените значение одного или двух параметров для устранения конфликта");
-
-                return;
-            }
-
-
-            await Context.Db.SaveChangesAsync();
-
-
-            await ReplyEmbedAndDeleteAsync(EmbedStyle.Successfull, "Дополнительные настройки ролей успешно сохранены");
-        }
-
-        [Command("Сервер")]
-        [Alias("серв", "с")]
-        public async Task SetServerSubSettingsAsync()
-        {
-            var serverSettingsVM = new ServerSubSettingsViewModel();
-
-            var success = await TrySetParameters(serverSettingsVM);
-
-
-            if (!success)
-            {
-                await ReplyEmbedAsync(EmbedStyle.Warning, "Серверные настройки не были сохранены");
-
-                return;
-            }
-
-            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
-
-            settings.Current ??= Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
-
-
-            var serverSettings = settings.Current.ServerSubSettings;
-            SetParameters(serverSettings, serverSettingsVM);
-            settings.Current.ServerSubSettings = serverSettings;
-
-
-            await Context.Db.SaveChangesAsync();
-
-            await ReplyEmbedAsync(EmbedStyle.Successfull, "Настройки сервера успешно сохранены");
-        }
-
-        [Command("Игра")]
-        [Alias("и")]
-        public async Task SetGameSubSettingsAsync()
-        {
-            var settingsVM = new GameSubSettingsViewModel();
-
-            var success = await TrySetParameters(settingsVM);
-
-
-            if (!success)
-            {
-                await ReplyEmbedAsync(EmbedStyle.Warning, "Настройки игры не были сохранены");
-
-                return;
-            }
-
-            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
-
-            settings.Current = Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
-
-
-            var gameSettings = settings.Current.GameSubSettings;
-            SetParameters(gameSettings, settingsVM);
-            settings.Current.GameSubSettings = gameSettings;
-
-
-            if (settings.Current.GameSubSettings.MafiaCoefficient <= 1)
-            {
-                await ReplyEmbedAndDeleteAsync(EmbedStyle.Warning, "Коэффиент мафии не может быть меньше 2. Установлено стандартное значение **3**");
-
-                settings.Current.GameSubSettings = gameSettings with
-                {
-                    MafiaCoefficient = 3
-                };
-            }
-
-            await Context.Db.SaveChangesAsync();
-
-            await ReplyEmbedAsync(EmbedStyle.Successfull, "Настройки сервера успешно сохранены");
-        }
-
-
-        [Command("Текущие")]
-        [Alias("тек", "т")]
-        [Summary("Показать все текущие настройки мафии для этого сервера")]
-        public async Task ShowAllSettingsAsync()
-        {
-            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
-
-            settings.Current = Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
-
-            // Mapper
-
-            var settingsVM = new MafiaSettingsViewModel()
-            {
-                CategoryChannelId = settings.CategoryChannelId,
-                GeneralTextChannelId = settings.GeneralTextChannelId,
-                MurdersTextChannelId = settings.MurdersTextChannelId,
-                WatchersTextChannelId = settings.WatchersTextChannelId,
-                GeneralVoiceChannelId = settings.GeneralVoiceChannelId,
-                MurdersVoiceChannelId = settings.MurdersVoiceChannelId,
-                WatchersVoiceChannelId = settings.WatchersVoiceChannelId,
-                MafiaRoleId = settings.MafiaRoleId,
-                WatcherRoleId = settings.WatcherRoleId
-            };
-
-            await ShowSettingsAsync(settingsVM, "Общие настройки");
-            await ShowSettingsAsync(settings.Current.ServerSubSettings, "Настройки сервера");
-            await ShowSettingsAsync(settings.Current.GameSubSettings, "Настройки игры");
-            await ShowSettingsAsync(settings.Current.RoleAmountSubSettings, "Настройки количества ролей");
-            await ShowSettingsAsync(settings.Current.RolesInfoSubSettings, "Настройки действий ролей");
-        }
-
-
-
-        private async Task ShowSettingsAsync<T>(T settings, string title) where T : notnull
-        {
-            var parameters = settings.GetType().GetProperties().ToList();
-
-            var fields = parameters.Select(p => new EmbedFieldBuilder()
-            {
-                Name = GetPropertyName(p),
-                Value = p.GetValue(settings) ?? "Null",
-                IsInline = true,
-            });
-
-            var embedBuilder = new EmbedBuilder()
-                .WithTitle(title)
-                .WithFields(fields)
-                .WithInformationMessage(false)
-                .WithUserFooter(Context.User)
-                .WithCurrentTimestamp();
-
-
-            await ReplyAsync(embed: embedBuilder.Build());
-        }
-
-
-        private async Task<bool> TrySetParameters<T>(T settings) where T : notnull
-        {
-            var wasSetSettings = false;
-
-
-            var parameters = settings.GetType().GetProperties().Where(p => p.CanWrite).ToList();
-
-            var parameterNames = GetPropertiesName(parameters).ToList();
-
-            var emotes = GetEmotesList(parameterNames.Count, parameterNames, out var text);
-
-
-            while (true)
-            {
-                var message = await ReplyEmbedAsync(EmbedStyle.Information, $"Выберите интересующий вас параметр\n{text}");
-
-
-                var selectedEmote = await NextReactionAsync(message, TimeSpan.FromSeconds(30), emotes, true);
-
-                if (selectedEmote is null)
-                {
-                    await ReplyEmbedAsync(EmbedStyle.Warning, "Вы не выбрали параметр");
-
-                    break;
-                }
-
-                if (selectedEmote.Name == CancelEmote.Name)
-                {
-                    await ReplyEmbedAsync(EmbedStyle.Information, "Вы отменили выбор");
-
-                    break;
-                }
-
-                var index = emotes.IndexOf(selectedEmote);
-
-
-                if (index == -1 || index > parameters.Count)
-                {
-                    await ReplyEmbedAsync(EmbedStyle.Error, "Параметр не найден");
-
-                    break;
-                }
-
-
-                var embed = CreateEmbed(EmbedStyle.Information, $"Напишите значение выбранного параметра **{parameterNames[index]}**");
-                var valueMessage = await NextMessageAsync(embed: embed);
-
-                if (valueMessage is null)
-                {
-                    await ReplyEmbedAndDeleteAsync(EmbedStyle.Warning, $"Вы не указали значение параметра **{parameterNames[index]}**");
-
-                    break;
-                }
-
-
-                if (parameters[index].PropertyType == typeof(bool?) || parameters[index].PropertyType == typeof(bool))
-                {
-                    var result = await new BooleanTypeReader().ReadAsync(Context, valueMessage.Content);
-
-                    if (result.IsSuccess)
-                        parameters[index].SetValue(settings, result.Values is not null ? result.BestMatch : null);
-                    else
-                    {
-                        await ReplyEmbedAsync(EmbedStyle.Error, $"Не удалось установить значение параметра **{parameterNames[index]}**");
-
-                        break;
-                    }
-                }
-                else
-                {
-                    var converter = TypeDescriptor.GetConverter(parameters[index].PropertyType);
-
-                    if (converter.IsValid(valueMessage.Content))
-                    {
-                        var value = converter.ConvertFrom(valueMessage.Content);
-
-                        parameters[index].SetValue(settings, value);
-                    }
-                    else
-                    {
-                        await ReplyEmbedAsync(EmbedStyle.Error, $"Не удалось установить значение параметра **{parameterNames[index]}**");
-
-                        break;
-                    }
-                }
-
-                wasSetSettings = true;
-
-                await ReplyEmbedAndDeleteAsync(EmbedStyle.Successfull, $"Значение параметра **{parameterNames[index]}** успешно установлено");
-
-
-                var isContinue = await ConfirmActionAsync("Продолжить настройку?");
-
-                if (isContinue is not true)
-                    break;
-            }
-
-
-            if (wasSetSettings)
-                await ReplyEmbedAndDeleteAsync(EmbedStyle.Successfull, "Настройки успешно установлены");
-            else
-                await ReplyEmbedAndDeleteAsync(EmbedStyle.Warning, "Настройки не были установлены");
-
-            return wasSetSettings;
-        }
-
-
-        private void SetParameters<TData, TViewModel>(TData data, TViewModel viewModel)
-            where TData : notnull
-            where TViewModel : notnull
-        {
-            var dataParameters = data.GetType().GetProperties().Where(p => p.CanWrite).ToDictionary(p => p.Name);
-            var vmParameters = viewModel.GetType().GetProperties().Where(p => p.CanWrite);
-
-            foreach (var vmParam in vmParameters)
-            {
-                if (!dataParameters.TryGetValue(vmParam.Name, out var dataParam))
-                {
-                    GuildLogger.Warning(LogTemplate, nameof(SetParameters),
-                        $"View Model parameter {vmParam.Name} was not found in Data parameters");
-
-                    continue;
-                }
-
-                if (vmParam.PropertyType != dataParam.PropertyType && Nullable.GetUnderlyingType(vmParam.PropertyType) != dataParam.PropertyType)
-                {
-                    var msg = $"Param {dataParam.Name}: Data param type ({dataParam.PropertyType}) is not equals to ViewModel param type ({vmParam.PropertyType})";
-
-                    GuildLogger.Warning(LogTemplate, nameof(SetParameters), msg);
-
-                    Log.Warning(LogTemplate, nameof(SetParameters), $"[{Context.Guild.Name} {Context.Guild.Id}] {msg}");
-
-                    continue;
-                }
-
-
-                if (vmParam.PropertyType == typeof(bool?) || vmParam.PropertyType == typeof(bool))
-                {
-                    var vmValue = vmParam.GetValue(viewModel);
-
-                    if (vmValue is not null)
-                        dataParam.SetValue(data, vmValue);
-                }
-                else if (vmParam.PropertyType == typeof(int?) || vmParam.PropertyType == typeof(int))
-                {
-                    var vmValue = vmParam.GetValue(viewModel);
-
-                    if (vmValue is not null)
-                    {
-                        if (vmValue.Equals(-1))
-                            dataParam.SetValue(data, default);
-                        else
-                            dataParam.SetValue(data, vmValue);
-                    }
-                }
-                else if (vmParam.PropertyType == typeof(ulong?) || vmParam.PropertyType == typeof(ulong))
-                {
-                    var vmValue = vmParam.GetValue(viewModel);
-
-                    if (vmValue is not null)
-                    {
-                        if (vmValue.Equals(0))
-                            dataParam.SetValue(data, default);
-                        else
-                            dataParam.SetValue(data, vmValue);
-                    }
-                }
-                else
-                {
-                    var vmValue = vmParam.GetValue(viewModel);
-
-                    dataParam.SetValue(data, vmValue);
-                }
-            }
-        }
-
-
-        private static IEnumerable<string> GetPropertiesName(IEnumerable<PropertyInfo> props)
-            => props.Select(p => GetPropertyName(p));
-
-        private static string GetPropertyName(PropertyInfo prop)
-        {
-            var displayNameAttribute = prop.GetCustomAttribute<DisplayNameAttribute>();
-
-            return displayNameAttribute is not null
-            ? $"{displayNameAttribute.DisplayName} {prop.GetPropertyShortType()}"
-            : prop.GetPropertyFullName();
-        }
-    }
-
-
-
-
-    public class MafiaHelpModule : HelpModule
-    {
-        public MafiaHelpModule(IConfiguration config) : base(config)
-        {
-        }
-
-
-        [Command("Роли")]
-        public virtual async Task ShowGameRolesAsync(bool sendToServer = false)
-        {
-            var gameRulesSection = GetGameSection("Roles");
-
-            if (gameRulesSection is null)
-            {
-                await ReplyEmbedAsync(EmbedStyle.Error, "Список ролей не найден");
-
-                return;
-            }
-
-
-            var title = gameRulesSection.GetTitle() ?? "Роли";
-
-            var builder = new EmbedBuilder()
-                .WithTitle(title)
-                .WithInformationMessage();
-
-            foreach (var section in gameRulesSection.GetChildren())
-            {
-                var roleField = section.GetEmbedFieldInfo();
-
-                if (roleField is not null)
-                    builder.AddField(roleField?.Item1, roleField?.Item2);
-            }
-
-            if (!sendToServer)
-                await Context.User.SendMessageAsync(embed: builder.Build());
-            else
-                await ReplyAsync(embed: builder.Build());
-        }
-    }
-
-
-
-    // Name from config
-    protected override GameModuleData CreateGameData(IGuildUser creator)
-        => new("Мафия", 3, creator);
-
-    protected override bool CanStart(out string? failMessage)
-    {
-        if (!base.CanStart(out failMessage))
-            return false;
-
-        ArgumentNullException.ThrowIfNull(_settings);
-        ArgumentNullException.ThrowIfNull(GameData);
-
-
-        if (_settings.Current.GameSubSettings.IsCustomGame)
-        {
-            var roleAmountSettings = _settings.Current.RoleAmountSubSettings;
-
-            if (GameData.Players.Count < roleAmountSettings.MinimumPlayersCount)
-            {
-                failMessage = $"Недостаточно игроков. Минимальное количество игроков согласно пользовательским настройкам игры: {roleAmountSettings.MinimumPlayersCount}";
-
-                return false;
-            }
-
-
-            if (roleAmountSettings.RedRolesCount == 0 && roleAmountSettings.AllRedRolesSetted)
-            {
-                failMessage = "Для игры необходимо наличие хотя бы одной красной роли. " +
-                    "Измените настройки ролей, добавив красную роль, или установите значение для роли по умолчанию";
-
-                return false;
-            }
-
-            if (roleAmountSettings.BlackRolesCount == 0 && roleAmountSettings.AllBlackRolesSetted)
-            {
-                failMessage = "Для игры необходимо наличие хотя бы одной черной роли. " +
-                    "Измените настройки ролей, добавив черную роль, или установите значение для роли по умолчанию";
-
-                return false;
-            }
-
-
-            if (roleAmountSettings.BlackRolesCount == GameData.Players.Count)
-            {
-                failMessage = "Недостаточно игроков. Все участвующие игроки являются черными ролями. Добавьте еще одного игрока, или измените настройки игры";
-
-                return false;
-            }
-
-            if (roleAmountSettings.RedRolesCount == GameData.Players.Count)
-            {
-                failMessage = "Недостаточно игроков. Все участвующие игроки являются красными ролями. Добавьте еще одного игрока, или измените настройки игры";
-
-                return false;
-            }
-        }
-
-        return true;
-    }
 
 
 
@@ -917,61 +120,7 @@ public class MafiaModule : GameModule
 
     public override async Task ShowRating()
     {
-        var allStats = await Context.Db.MafiaStats
-            .AsNoTracking()
-            .Where(s => s.GuildSettingsId == Context.Guild.Id && s.Rating > 0)
-            .OrderByDescending(stat => stat.Rating)
-            .ThenByDescending(stat => stat.WinRate + stat.BlacksWinRate)
-            .ThenBy(stat => stat.GamesCount)
-            .Include(stat => stat.User)
-            .ToListAsync();
-
-
-        if (allStats.Count == 0)
-        {
-            await ReplyEmbedAsync(EmbedStyle.Warning, "Рейтинг отсутствует");
-
-            return;
-        }
-
-
-        var playersId = allStats
-            .Select(s => s.UserId)
-            .ToHashSet();
-
-        var players = Context.Guild.Users
-            .Where(u => playersId.Contains(u.Id))
-            .ToDictionary(u => u.Id);
-
-        var pages = new List<string>();
-        var msg = new PaginatedMessage()
-        {
-            Title = "Рейтинг мафии",
-            Color = Color.Gold,
-            Pages = pages
-        };
-
-        var ratingsPerPage = 10;
-
-        var page = "";
-        for (int i = 0, j = 0; i < allStats.Count; i++, j++)
-        {
-            if (!players.TryGetValue(allStats[i].UserId, out var user))
-                continue;
-
-            page += $"{i + 1}. **{user.GetFullName()}** – {allStats[i].Rating:0.##}\n";
-
-            if ((j + 1) % ratingsPerPage == 0)
-            {
-                pages.Add(page);
-                page = "";
-            }
-        }
-
-        if (!string.IsNullOrEmpty(page))
-            pages.Add(page);
-
-        await PagedReplyAsync(msg);
+        await Task.Delay(1);
     }
 
     public override Task ResetRatingAsync()
@@ -1046,6 +195,69 @@ public class MafiaModule : GameModule
     #endregion
 
 
+
+    // Name from config
+    protected override GameModuleData CreateGameData(IGuildUser creator)
+        => new("Мафия", 3, creator);
+
+    protected override bool CanStart(out string? failMessage)
+    {
+        if (!base.CanStart(out failMessage))
+            return false;
+
+        ArgumentNullException.ThrowIfNull(_settings);
+        ArgumentNullException.ThrowIfNull(GameData);
+
+
+        if (_settings.Current.GameSubSettings.IsCustomGame)
+        {
+            var roleAmountSettings = _settings.Current.RoleAmountSubSettings;
+
+            if (GameData.Players.Count < roleAmountSettings.MinimumPlayersCount)
+            {
+                failMessage = $"Недостаточно игроков. Минимальное количество игроков согласно пользовательским настройкам игры: {roleAmountSettings.MinimumPlayersCount}";
+
+                return false;
+            }
+
+
+            if (roleAmountSettings.RedRolesCount == 0 && roleAmountSettings.AllRedRolesSetted)
+            {
+                failMessage = "Для игры необходимо наличие хотя бы одной красной роли. " +
+                    "Измените настройки ролей, добавив красную роль, или установите значение для роли по умолчанию";
+
+                return false;
+            }
+
+            if (roleAmountSettings.BlackRolesCount == 0 && roleAmountSettings.AllBlackRolesSetted)
+            {
+                failMessage = "Для игры необходимо наличие хотя бы одной черной роли. " +
+                    "Измените настройки ролей, добавив черную роль, или установите значение для роли по умолчанию";
+
+                return false;
+            }
+
+
+            if (roleAmountSettings.BlackRolesCount == GameData.Players.Count)
+            {
+                failMessage = "Недостаточно игроков. Все участвующие игроки являются черными ролями. Добавьте еще одного игрока, или измените настройки игры";
+
+                return false;
+            }
+
+            if (roleAmountSettings.RedRolesCount == GameData.Players.Count)
+            {
+                failMessage = "Недостаточно игроков. Все участвующие игроки являются красными ролями. Добавьте еще одного игрока, или измените настройки игры";
+
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+
+
     [RequireOwner]
     [Command("тест")]
     public async Task DebugStartAsync(int count)
@@ -1085,7 +297,7 @@ public class MafiaModule : GameModule
 
         await ReplyEmbedStampAsync(EmbedStyle.Information, "Игра завершена");
 
-        //await ReplyAsync(string.Join('\n', _mafiaData.AllRoles.Values.Select(r => $"{r.Player} - {r.Name}")));
+        await ReplyAsync(string.Join('\n', _mafiaData.AllRoles.Values.Select(r => $"{r.Player} - {r.Name}")));
     }
 
 
@@ -1140,60 +352,24 @@ public class MafiaModule : GameModule
             await SetupRolesAndNotifyPlayersAsync();
 
 
+            if (_mafiaData.WatcherTextChannel is not null)
+                await SendPlayerRolesToSpectatorsAsync();
+
+
             GuildLogger.Debug(LogTemplate, nameof(StartAsync), "End setup game");
 
 
-            GuildLogger.Debug(LogTemplate, nameof(StartAsync), "Game started");
+            await PlayAsync();
 
-            //await PlayAsync();
-
-            GuildLogger.Debug(LogTemplate, nameof(StartAsync), "Game finishing...");
-
-
-            await _mafiaData.GeneralTextChannel.SendMessageAsync("Игра завершена");
-
-
-            bool? isMafiaWon = _settings.Current.GameSubSettings.IsCustomGame && _settings.Current.GameSubSettings.ConditionAliveAtLeast1Innocent
-                ? _mafiaData.Murders.Values.Any(r => r.IsAlive) && !_mafiaData.Innocents.Values.Any(i => i.IsAlive)
-                : _mafiaData.Murders.Values.Any(r => r.IsAlive) || !_mafiaData.AllRoles.Values.Any(r => r.IsAlive);
-
-            if (_settings.Current.GameSubSettings.IsCustomGame && _mafiaData.Maniacs.Values.Count(m => m.IsAlive) >= _mafiaData.AllRoles.Values.Count(r => r.IsAlive) - 1)
-                isMafiaWon = null;
-
-            await FinishAsync(isMafiaWon);
-
-
-            if (GameData.IsPlaying)
-            {
-                var msg1 = isMafiaWon switch
-                {
-                    true => "Мафия победила!",
-                    false => "Мирные жители победили!",
-                    _ => "Никто не победил. Город опустел..."
-                };
-
-                await ReplyEmbedAsync(EmbedStyle.Information, $"{msg1} Благодарим за участие!");
-
-                //await ReplyEmbedAsync(EmbedStyle.Information, _mafiaData.PlayerGameRoles, "Участники и их роли", addSmilesToDescription: false);
-
-                await ReplyEmbedAsync(EmbedStyle.Information, _chronology.FlattenActionHistory(), "Хронология игры");
-            }
-
-
-            if (GameData.IsPlaying && _settings.Current.GameSubSettings.IsRatingGame)
-                await SaveStatsAsync();
-
-            await ReplyEmbedStampAsync(EmbedStyle.Information, "Игра завершена");
-
-            GuildLogger.Debug(LogTemplate, nameof(StartAsync), "Game finished");
+            await FinishAsync();
         }
         catch (GameAbortedException e)
         {
             GuildLogger.Debug(e, "Game was stopped");
 
-            await ReplyEmbedAsync(EmbedStyle.Warning, $"Игра остановлена. Причина: {e.Message}");
+            await ReplyEmbedAsync(EmbedStyle.Warning, $"Игра остановлена\n{e.Message}");
 
-            await FinishAsync(false, true);
+            await FinishAsync(true);
         }
         catch (Exception e)
         {
@@ -1202,21 +378,143 @@ public class MafiaModule : GameModule
 
             await ReplyEmbedAsync(EmbedStyle.Error, "Игра аварийно прервана");
 
-            await FinishAsync(false, true);
+            await FinishAsync(true);
 
             throw;
         }
         finally
         {
-            if (_settings.GeneralTextChannelId != _mafiaData.GeneralTextChannel.Id)
-                await SetAndSaveSettingsToDbAsync();
-
-
             DeleteGameData();
 
             GuildLogger.Debug(LogTemplate, nameof(StartAsync), "Gamedata deleted");
         }
     }
+
+
+    private async Task FinishAsync(bool isAbort = false)
+    {
+        ArgumentNullException.ThrowIfNull(_mafiaData);
+        ArgumentNullException.ThrowIfNull(_settings);
+        ArgumentNullException.ThrowIfNull(GameData);
+
+        GuildLogger.Debug(LogTemplate, nameof(StartAsync), "Game finishing...");
+
+
+        await _mafiaData.GeneralTextChannel.SendMessageAsync("Игра завершена");
+
+
+        bool? isMurdersWon = IsMurdersWon();
+
+
+        if (GameData.IsPlaying)
+        {
+            var winnerMessage = isMurdersWon switch
+            {
+                true => "Мафия победила!",
+                false => "Мирные жители победили!",
+                _ => "Никто не победил. Город опустел..."
+            };
+
+            await ReplyEmbedAsync(EmbedStyle.Information, $"{winnerMessage}\nБлагодарим за участие!");
+
+
+            var playerRoles = string.Join("\n", _mafiaData.AllRoles.Values.Select(r => $"{r.Name} - {r.Player.GetFullName()}"));
+
+            await ReplyEmbedAsync(EmbedStyle.Information, playerRoles, "Участники и их роли");
+
+
+            var chonologyDays = _chronology.GetActionsHistory();
+
+            var paginator = new LazyPaginatorBuilder()
+                .WithPageFactory(GeneratePageBuilderAsync)
+                .WithMaxPageIndex(chonologyDays.Count - 1)
+                .WithCacheLoadedPages(true)
+                .WithUsers(_mafiaData.AllRoles.Keys)
+                .Build();
+
+            _ = Interactive.SendPaginatorAsync(paginator, Context.Channel, TimeSpan.FromMinutes(1));
+
+
+            Task<PageBuilder> GeneratePageBuilderAsync(int index)
+            {
+                var pageBuilder = new PageBuilder()
+                    .WithDescription(chonologyDays[index].FlattenActionsHistory())
+                    .WithTitle($"День {index + 1}");
+
+                return Task.FromResult(pageBuilder);
+            }
+        }
+
+
+        await ReplyEmbedStampAsync(EmbedStyle.Information, "Игра завершена");
+
+
+        GuildLogger.Debug(LogTemplate, nameof(StartAsync), "Game finished");
+
+        await ReturnPlayersDataAsync();
+    }
+
+    private async Task ReturnPlayersDataAsync()
+    {
+        ArgumentNullException.ThrowIfNull(_mafiaData);
+
+
+        GuildLogger.Debug(LogTemplate, nameof(FinishAsync), $"Returning players data...");
+
+        await Context.Guild.DownloadUsersAsync();
+
+
+        foreach (var role in _mafiaData.AllRoles.Values)
+        {
+            var player = role.Player;
+
+            var playerExistInGuild = Context.Guild.GetUser(player.Id) is not null;
+
+            if (!playerExistInGuild)
+            {
+                await ReplyEmbedAsync(EmbedStyle.Warning, $"Игрок **{player.GetFullName()}** отсутствует на сервере");
+
+                continue;
+            }
+
+
+            try
+            {
+                await EjectPlayerAsync(player, false);
+            }
+            catch (Exception e)
+            {
+                await ReplyEmbedAsync(EmbedStyle.Warning, $"Не удалось вернуть данные игрока {player.GetFullMention()}");
+
+                GuildLogger.Debug(e, LogTemplate, nameof(EjectPlayerAsync), $"Failed to revert guild data of player {player.GetFullName()}");
+
+                continue;
+            }
+        }
+
+        foreach (var player in _mafiaData.KilledPlayers)
+        {
+            GuildLogger.Verbose(LogTemplate, nameof(FinishAsync), $"Removing watcher role from user {player.GetFullName()}");
+
+            try
+            {
+                await player.RemoveRoleAsync(_mafiaData.WatcherRole);
+            }
+            catch (Exception e)
+            {
+                await ReplyEmbedAsync(EmbedStyle.Warning, $"Не удалось убрать роль наблюдателя у игрока {player.GetFullMention()}");
+
+                GuildLogger.Debug(e, LogTemplate, nameof(EjectPlayerAsync), $"Failed to remove watcher role from player {player.GetFullName()}");
+
+                continue;
+            }
+
+            GuildLogger.Verbose(LogTemplate, nameof(FinishAsync), $"Watcher role removed from user {player.GetFullName()}");
+        }
+
+        GuildLogger.Debug(LogTemplate, nameof(FinishAsync), $"Players data returned");
+    }
+
 
 
     private async Task<MafiaData> PreSetupGuildAsync()
@@ -1227,19 +525,31 @@ public class MafiaModule : GameModule
         GuildLogger.Debug(LogTemplate, nameof(PreSetupGuildAsync), "Begin presetup guild...");
 
 
-        var messagesToDelete = 500;
-
         _settings.CategoryChannelId ??= (await Context.Guild.CreateCategoryChannelAsync("Мафия")).Id;
 
+
+
         var mafiaData = new MafiaData(
-               await Context.Guild.GetTextChannelOrCreateAsync(_settings.GeneralTextChannelId, "мафия-общий", messagesToDelete, SetCategoryChannel),
-               await Context.Guild.GetTextChannelOrCreateAsync(_settings.MurdersTextChannelId, "мафия-убийцы", messagesToDelete, SetCategoryChannel),
+               await Context.Guild.GetTextChannelOrCreateAsync(_settings.GeneralTextChannelId, "мафия-общий", SetCategoryChannel),
+               await Context.Guild.GetTextChannelOrCreateAsync(_settings.MurdersTextChannelId, "мафия-убийцы", SetCategoryChannel),
                Context.Guild.GetTextChannel(_settings.WatchersTextChannelId ?? 0),
                Context.Guild.GetVoiceChannel(_settings.GeneralVoiceChannelId ?? 0),
                Context.Guild.GetVoiceChannel(_settings.MurdersVoiceChannelId ?? 0),
                Context.Guild.GetVoiceChannel(_settings.WatchersVoiceChannelId ?? 0),
                await Context.Guild.GetRoleOrCreateAsync(_settings.MafiaRoleId, "Игрок мафии", null, Color.Blue, true, true),
-               Context.Guild.GetRole(_settings.WatcherRoleId ?? 0));
+               Context.Guild.GetRole(_settings.WatcherRoleId ?? 0),
+               _settings.Current.GameSubSettings.VoteTime);
+
+
+        if (_settings.ClearChannelsOnStart)
+        {
+            await mafiaData.GeneralTextChannel.ClearAsync();
+
+            await mafiaData.MurderTextChannel.ClearAsync();
+
+            if (mafiaData.WatcherTextChannel is not null)
+                await mafiaData.WatcherTextChannel.ClearAsync();
+        }
 
 
         GuildLogger.Debug(LogTemplate, nameof(PreSetupGuildAsync), "End presetup guild");
@@ -1248,10 +558,19 @@ public class MafiaModule : GameModule
         return mafiaData;
 
 
-
         void SetCategoryChannel(GuildChannelProperties props)
-            => props.CategoryId = _settings.CategoryChannelId;
+        {
+            props.CategoryId = _settings.CategoryChannelId;
+
+            var overwrites = new List<Overwrite>
+                {
+                    new(Context.Guild.EveryoneRole.Id, PermissionTarget.Role, new OverwritePermissions(viewChannel: PermValue.Deny))
+                };
+
+            props.PermissionOverwrites = overwrites;
+        }
     }
+
 
     private async Task SetupGuildAsync()
     {
@@ -1518,6 +837,10 @@ public class MafiaModule : GameModule
             murdersCount = roleAmount.MurdersCount ?? (exceptInnocentsCount - doctorsCount - sheriffsCount - neutralsCount) ?? blackRolesCount;
 
             donsCount = roleAmount.DonsCount ?? (murdersCount > 2 ? 1 : 0);
+
+            if (roleAmount.DonsCount is null)
+                murdersCount -= donsCount;
+
         }
         else
         {
@@ -1533,7 +856,7 @@ public class MafiaModule : GameModule
 
         for (int i = 0; i < murdersCount; i++, offset++)
         {
-            var murder = new Murder(GameData.Players[offset], GameRoleOptions, 40);
+            var murder = new Murder(GameData.Players[offset], GameRoleOptions);
 
             _mafiaData.Murders.Add(murder.Player, murder);
 
@@ -1542,7 +865,7 @@ public class MafiaModule : GameModule
 
         for (int i = 0; i < donsCount; i++, offset++)
         {
-            var don = new Don(GameData.Players[offset], CheckerOptions, 40, _mafiaData.Sheriffs.Values);
+            var don = new Don(GameData.Players[offset], CheckerOptions, _mafiaData.Sheriffs.Values);
 
             _mafiaData.Murders.Add(don.Player, don);
 
@@ -1556,9 +879,11 @@ public class MafiaModule : GameModule
         {
             for (int i = 0; i < roleAmount.ManiacsCount; i++, offset++)
             {
-                var maniac = new Maniac(GameData.Players[offset], GameRoleOptions, 40);
+                var maniac = new Maniac(GameData.Players[offset], GameRoleOptions);
 
                 _mafiaData.Maniacs.Add(maniac.Player, maniac);
+
+                _mafiaData.Neutrals.Add(maniac.Player, maniac);
 
                 _mafiaData.AllRoles.Add(maniac.Player, maniac);
             }
@@ -1566,9 +891,11 @@ public class MafiaModule : GameModule
 
             for (int i = 0; i < roleAmount.HookersCount; i++, offset++)
             {
-                var hooker = new Hooker(GameData.Players[offset], GameRoleOptions, 40);
+                var hooker = new Hooker(GameData.Players[offset], GameRoleOptions);
 
                 _mafiaData.Hookers.Add(hooker.Player, hooker);
+
+                _mafiaData.Neutrals.Add(hooker.Player, hooker);
 
                 _mafiaData.AllRoles.Add(hooker.Player, hooker);
             }
@@ -1583,7 +910,7 @@ public class MafiaModule : GameModule
 
         for (int i = 0; i < doctorsCount; i++, offset++)
         {
-            var doctor = new Doctor(GameData.Players[offset], GameRoleOptions, 40, rolesInfo.DoctorSelfHealsCount ?? 1);
+            var doctor = new Doctor(GameData.Players[offset], GameRoleOptions, rolesInfo.DoctorSelfHealsCount ?? 1);
 
             _mafiaData.Doctors.Add(doctor.Player, doctor);
 
@@ -1595,7 +922,7 @@ public class MafiaModule : GameModule
 
         for (int i = 0; i < sheriffsCount; i++, offset++)
         {
-            var sheriff = new Sheriff(GameData.Players[offset], SheriffOptions, 40, rolesInfo.SheriffShotsCount ?? default, _mafiaData.Murders.Values);
+            var sheriff = new Sheriff(GameData.Players[offset], SheriffOptions, rolesInfo.SheriffShotsCount ?? 0, _mafiaData.Murders.Values);
 
 
             _mafiaData.Sheriffs.Add(sheriff.Player, sheriff);
@@ -1609,7 +936,7 @@ public class MafiaModule : GameModule
 
         for (int i = offset; i < GameData.Players.Count; i++)
         {
-            var innocent = new Innocent(GameData.Players[i], GameRoleOptions, 40);
+            var innocent = new Innocent(GameData.Players[i], GameRoleOptions);
 
             _mafiaData.AllRoles.Add(innocent.Player, innocent);
 
@@ -1661,6 +988,19 @@ public class MafiaModule : GameModule
         await NotifyPlayersAsync();
     }
 
+    private async Task SendPlayerRolesToSpectatorsAsync()
+    {
+        ArgumentNullException.ThrowIfNull(_mafiaData);
+
+        if (_mafiaData.WatcherTextChannel is null)
+            return;
+
+
+        var playerRoles = string.Join("\n", _mafiaData.AllRoles.Values.Select(r => $"{r.Name} - {r.Player.GetFullName()}"));
+
+        await _mafiaData.WatcherTextChannel.SendMessageAsync(embed: CreateEmbed(EmbedStyle.Information, playerRoles, "Роли игроков"));
+    }
+
 
     private async Task SendMessageAsync(IGuildUser user, string message, string errorMsg, string errorLogMsg)
     {
@@ -1677,7 +1017,7 @@ public class MafiaModule : GameModule
             Log.Error(e, LogTemplate, nameof(SendWelcomeMessagesAsync), $"[{Context.Guild.Name} {Context.Guild.Id}] {errorLogMsg}");
             GuildLogger.Error(e, LogTemplate, nameof(SendWelcomeMessagesAsync), errorLogMsg);
 
-            await FinishAsync(false, true);
+            await FinishAsync(true);
 
             throw;
         }
@@ -1698,84 +1038,13 @@ public class MafiaModule : GameModule
             Log.Error(e, LogTemplate, nameof(SendWelcomeMessagesAsync), $"[{Context.Guild.Name} {Context.Guild.Id}] {errorLogMsg}");
             GuildLogger.Error(e, LogTemplate, nameof(SendWelcomeMessagesAsync), errorLogMsg);
 
-            await FinishAsync(false, true);
+            await FinishAsync(true);
 
             throw;
         }
     }
 
 
-    private async Task FinishAsync(bool? isMafiaWon, bool isAbort = false)
-    {
-        ArgumentNullException.ThrowIfNull(_mafiaData);
-        ArgumentNullException.ThrowIfNull(GameData);
-
-        GuildLogger.Debug(LogTemplate, nameof(FinishAsync), $"Begin {(isAbort ? "abort" : "finish")} game...");
-
-        await Context.Guild.DownloadUsersAsync();
-
-
-        foreach (var role in _mafiaData.AllRoles.Values)
-        {
-            var player = role.Player;
-
-            var playerExistInGuild = Context.Guild.GetUser(player.Id) is not null;
-            if (!playerExistInGuild)
-            {
-                await ReplyEmbedAsync(EmbedStyle.Warning, $"Игрок {player.GetFullName()} отсутствует на сервере");
-
-                GuildLogger.Debug(LogTemplate, nameof(EjectPlayerAsync), $"Player {player.GetFullName()} does not exists in guild");
-
-                continue;
-            }
-
-
-            if (GameData.IsPlaying && !isAbort)
-            {
-                GuildLogger.Verbose(LogTemplate, nameof(FinishAsync), $"Begin update game stat to {player.GetFullName()}...");
-
-                //_mafiaData.MafiaStatsHelper.UpdateWinsStat(isMafiaWon, player);
-
-                GuildLogger.Verbose(LogTemplate, nameof(FinishAsync), $"End update game stat to {player.GetFullName()}");
-            }
-
-
-            try
-            {
-                await EjectPlayerAsync(player, false);
-            }
-            catch (Exception e)
-            {
-                await ReplyEmbedAsync(EmbedStyle.Warning, $"Не удалось вернуть данные игрока {player.GetFullMention()}");
-
-                GuildLogger.Debug(e, LogTemplate, nameof(EjectPlayerAsync), $"Failed to revert guild data of player {player.GetFullName()}");
-
-                continue;
-            }
-        }
-
-        foreach (var player in _mafiaData.KilledPlayers)
-        {
-            GuildLogger.Verbose(LogTemplate, nameof(FinishAsync), $"Removing watcher role from user {player.GetFullName()}");
-
-            try
-            {
-                await player.RemoveRoleAsync(_mafiaData.WatcherRole);
-            }
-            catch (Exception e)
-            {
-                await ReplyEmbedAsync(EmbedStyle.Warning, $"Не удалось убрать роль наблюдателя у игрока {player.GetFullMention()}");
-
-                GuildLogger.Debug(e, LogTemplate, nameof(EjectPlayerAsync), $"Failed to remove watcher role from player {player.GetFullName()}");
-
-                continue;
-            }
-
-            GuildLogger.Verbose(LogTemplate, nameof(FinishAsync), $"Watcher role removed from user {player.GetFullName()}");
-        }
-
-        GuildLogger.Debug(LogTemplate, nameof(FinishAsync), $"End {(isAbort ? "abort" : "finish")} game");
-    }
 
     private async Task PlayAsync()
     {
@@ -1785,7 +1054,7 @@ public class MafiaModule : GameModule
 
         GuildLogger.Debug(LogTemplate, nameof(PlayAsync), "Begin playing game...");
 
-        await ChangePermissionsGenaralChannelsAsync(_denyWrite, _denyView);
+        await ChangeGenaralChannelPermissionsAsync(_denyWrite, _denyView);
 
         if (_settings.Current.GameSubSettings.IsCustomGame && _settings.Current.PreGameMessage is not null)
             await _mafiaData.GeneralTextChannel.SendMessageAsync(embed: CreateEmbed(EmbedStyle.Information, _settings.Current.PreGameMessage, "Сообщение перед игрой"));
@@ -1796,49 +1065,30 @@ public class MafiaModule : GameModule
 
 
         if (_mafiaData.Murders.Count > 1 && _settings.Current.RolesInfoSubSettings.MurdersKnowEachOther)
-        {
-            var meetTime = _mafiaData.Murders.Count * 10;
-
-            if (_settings.Current.RolesInfoSubSettings.MurdersKnowEachOther)
-                await ChangePermissionsMurderChannelsAsync(_allowWrite, _allowSpeak);
-
-            await _mafiaData.MurderTextChannel.SendMessageAsync("Добро пожаловать в мафию! Сейчас ночь, весь город спит, самое время познакомиться с остальными мафиозниками");
+            await IntroduceMurdersAsync();
 
 
-            var murdersList = string.Join("\n", _mafiaData.Murders.Keys.Select(m => m.GetFullName()));
-
-            await _mafiaData.MurderTextChannel.SendMessageAsync($"Список мафиози:\n{murdersList}");
-
-
-            var donsList = string.Join("\n", _mafiaData.Dons.Keys.Select(d => d.GetFullName()));
-
-            await _mafiaData.MurderTextChannel.SendMessageAsync($"Список донов:\n{donsList}");
-
-
-            await WaitForTimerAsync(meetTime, _mafiaData.GeneralTextChannel, _mafiaData.MurderTextChannel);
-
-            await _mafiaData.MurderTextChannel.SendMessageAsync("Время вышло! Переходите в общий канал и старайтесь не подавать виду, что вы мафиозник.");
-        }
-
-
-        //var nightMurderVoteTime = 30;
-        var nightInnocentVoteTime = 40 + _mafiaData.Murders.Count * 10;
         var nightTime = 30 + _mafiaData.Murders.Count * 5;
-        var dayVoteTime = 30;
         var lastWordNightCount = _settings.Current.GameSubSettings.LastWordNightCount;
 
 
-        while (GameData.IsPlaying && CanContinueGame)
+        while (GameData.IsPlaying && CanContinueGame())
         {
             try
             {
+                _chronology.NextDay();
+
+                if (_mafiaData.WatcherTextChannel is not null)
+                    await _mafiaData.WatcherTextChannel.SendMessageAsync(embed: CreateEmbed(EmbedStyle.Information, "Новый день"));
+
                 if (_settings.Current.RolesInfoSubSettings.MurdersKnowEachOther)
-                    await ChangePermissionsMurderChannelsAsync(_denyWrite, _denyView);
+                    await ChangeMurdersChannelPermissionsAsync(_denyWrite, _denyView);
 
                 await _mafiaData.GeneralTextChannel.SendMessageAsync($"{_mafiaData.MafiaRole.Mention} Доброе утро, жители города! Самое время пообщаться всем вместе.");
 
 
                 var lastWordTasks = new List<Task<string>>();
+
 
                 if (!_mafiaData.IsFirstNight)
                 {
@@ -1846,146 +1096,13 @@ public class MafiaModule : GameModule
 
                     var delay = Task.Delay(3000);
 
-                    if (!_settings.Current.RolesInfoSubSettings.MurdersVoteTogether)
-                    {
-                        if (_settings.Current.RolesInfoSubSettings.MurdersMustVoteForOnePlayer)
-                        {
-                            var killedPlayer = _mafiaData.Murders.Values.First().KilledPlayer;
-                            if (!_mafiaData.Murders.Values.Where(m => m.IsAlive).All(m => m.KilledPlayer == killedPlayer))
-                                foreach (var murder in _mafiaData.Murders.Values)
-                                    murder.ProcessMove(null, false);
-                        }
-                        else
-                        {
-                            var votes = new Dictionary<IGuildUser, int>();
 
-                            foreach (var murder in _mafiaData.Murders.Values.Where(m => m.IsAlive && m.KilledPlayer is not null))
-                                votes[murder.KilledPlayer!] = votes.TryGetValue(murder.KilledPlayer!, out var count) ? count + 1 : 1;
-
-                            IGuildUser? selectedPlayer = null;
-
-                            if (votes.Count == 1)
-                                selectedPlayer = votes.Keys.First();
-                            else if (votes.Count > 1)
-                            {
-                                var votesList = votes.ToList();
-
-                                votesList.Sort((v1, v2) => v2.Value - v1.Value);
-
-                                if (votesList[0].Value > votesList[1].Value)
-                                    selectedPlayer = votesList[0].Key;
-                            }
-
-                            foreach (var murder in _mafiaData.Murders.Values)
-                                murder.ProcessMove(selectedPlayer, false);
-                        }
-                    }
-
-                    IGuildUser? killedPlayerByInnocents = null;
-                    if (_settings.Current.RolesInfoSubSettings.CanInnocentsKillAtNight)
-                    {
-                        var innocents = _mafiaData.Innocents.Values.Where(i => i.GetType() == typeof(Innocent) && i.IsAlive);
-
-                        if (innocents.Any())
-                        {
-                            if (_settings.Current.RolesInfoSubSettings.InnocentsMustVoteForOnePlayer)
-                            {
-                                var killedPlayer = innocents.First().LastMove;
-                                if (!innocents.All(i => i.LastMove == killedPlayer))
-                                    foreach (var innocent in innocents)
-                                        innocent.ProcessMove(null, false);
-                                else
-                                    killedPlayerByInnocents = killedPlayer;
-                            }
-                            else
-                            {
-                                var votes = new Dictionary<IGuildUser, int>();
-
-                                foreach (var innocent in innocents.Where(i => i.LastMove is not null))
-                                    votes[innocent.LastMove!] = votes.TryGetValue(innocent.LastMove!, out var count) ? count + 1 : 1;
-
-                                IGuildUser? selectedPlayer = null;
-
-                                if (votes.Count == 1)
-                                    selectedPlayer = votes.Keys.First();
-                                else if (votes.Count > 1)
-                                {
-                                    var votesList = votes.ToList();
-
-                                    votesList.Sort((v1, v2) => v2.Value - v1.Value);
-
-                                    if (votesList[0].Value > votesList[1].Value)
-                                        selectedPlayer = votesList[0].Key;
-                                }
-
-                                foreach (var innocent in innocents)
-                                    innocent.ProcessMove(selectedPlayer, false);
-
-                                killedPlayerByInnocents = selectedPlayer;
-                            }
-                        }
-                    }
-
-
-                    var killers = (IEnumerable<IKiller>)_mafiaData.AllRoles.Values.Where(r => r.IsAlive && r is IKiller);
-
-                    var kills = killers
-                        .Where(k => k.KilledPlayer is not null)
-                        .Select(k => k.KilledPlayer!)
-                        .ToList();
-
-                    if (killedPlayerByInnocents is not null)
-                        kills.Add(killedPlayerByInnocents);
-
-
-                    var healers = (IEnumerable<IHealer>)_mafiaData.AllRoles.Values
-                        .Where(r => r.IsAlive && r is IHealer);
-
-                    var heals = healers
-                        .Where(h => h.HealedPlayer is not null)
-                        .Select(k => k.HealedPlayer!);
-
-
-                    var corpses = kills
-                        .Except(heals)
-                        .ToList();
-
-                    var maniacKills = _mafiaData.Maniacs.Values
-                        .Where(m => m.KilledPlayer is not null)
-                        .Select(m => m.KilledPlayer!)
-                        .Except(_mafiaData.Hookers.Values
-                            .Where(m => m.HealedPlayer is not null)
-                            .Select(m => m.HealedPlayer!));
-
-                    corpses.AddRange(maniacKills);
-
-
-                    var revealedManiacsNames = new List<string>();
-
-                    foreach (var hooker in _mafiaData.Hookers.Values)
-                    {
-                        if (!hooker.IsAlive || hooker.HealedPlayer is null)
-                            continue;
-
-
-                        if (corpses.Contains(hooker.Player))
-                            corpses.Add(hooker.HealedPlayer);
-
-                        if (_mafiaData.Maniacs.ContainsKey(hooker.HealedPlayer))
-                            revealedManiacsNames.Add(hooker.HealedPlayer.GetFullName());
-                    }
-
-
-                    corpses = corpses
-                        .Distinct()
-                        .ToList();
+                    var corpses = GetCorpses(out var revealedManiacs);
 
 
                     var msg = "";
                     if (corpses.Count > 0)
                     {
-                        corpses.Shuffle();
-
                         msg += corpses.Count == 1 ? "Был обнаружен труп:\n" : "Были обнаружены трупы:\n";
 
                         for (int i = 0; i < corpses.Count; i++)
@@ -1999,11 +1116,21 @@ public class MafiaModule : GameModule
 
                     await _mafiaData.GeneralTextChannel.SendMessageAsync(msg);
 
-                    if (revealedManiacsNames.Count > 0)
-                    {
-                        var str = "Слухи доносят, что следующие игроки являются маньяками: \n";
 
-                        str += string.Join('\n', revealedManiacsNames);
+                    if (revealedManiacs.Count > 0)
+                    {
+                        var str = "Слухи доносят, что следующие игроки являются маньяками:";
+
+                        for (int i = 0; i < revealedManiacs.Count; i++)
+                        {
+                            string action = _chronology.AddAction("Роль раскрыта", _mafiaData.Maniacs[revealedManiacs[i]]);
+
+                            if (_mafiaData.WatcherTextChannel is not null)
+                                await _mafiaData.WatcherTextChannel.SendMessageAsync(embed: CreateEmbed(EmbedStyle.Information, action));
+
+
+                            str += $"\n{revealedManiacs[i].GetFullMention()}";
+                        }
 
                         if (_settings.Current.GameSubSettings.IsCustomGame && _settings.Current.RolesInfoSubSettings.MurdersKnowEachOther)
                             await _mafiaData.GeneralTextChannel.SendMessageAsync(str);
@@ -2013,8 +1140,15 @@ public class MafiaModule : GameModule
                                     await murder.Player.SendMessageAsync(str);
                     }
 
+
                     for (int i = 0; i < corpses.Count; i++)
                     {
+                        string action = _chronology.AddAction("Труп", _mafiaData.AllRoles[corpses[i]]);
+
+                        if (_mafiaData.WatcherTextChannel is not null)
+                            await _mafiaData.WatcherTextChannel.SendMessageAsync(embed: CreateEmbed(EmbedStyle.Information, action));
+
+
                         await EjectPlayerAsync(corpses[i]);
 
                         if (lastWordNightCount > 0)
@@ -2027,32 +1161,34 @@ public class MafiaModule : GameModule
 
                         async Task<string> HandleAsync(IGuildUser player)
                         {
-                            var dmChannel = await player.GetOrCreateDMChannelAsync();
+                            var dmChannel = await player.CreateDMChannelAsync();
 
-                            var criteria = new Criteria<SocketMessage>()
-                            .AddCriterion(new EnsureFromUserCriterion(player))
-                            .AddCriterion(new EnsureFromChannelCriterion(dmChannel));
-
-                            var msg = await NextMessageAsync(criteria,
+                            var result = await NextMessageAsync(
                                 embed: CreateEmbed(EmbedStyle.Information, $"{player.Username}, у вас есть 30с для последнего слова, воспользуйтесь этим временем с умом. Напишите здесь сообщение, которое увидят все игроки Мафии"),
                                 timeout: TimeSpan.FromSeconds(30),
                                 messageChannel: dmChannel);
 
-                            if (msg is not null)
+                            if (result.IsSuccess && result.Value is not null)
+                            {
                                 await dmChannel.SendMessageAsync(embed: CreateEmbed(EmbedStyle.Successfull, "Сообщение успешно отправлено"));
 
-                            return msg is not null
-                            ? $"{player.GetFullName()} перед смертью сказал следующее:\n{msg?.Content ?? "*пустое сообщение*"}"
-                            : $"{player.GetFullName()} умер молча";
+                                return $"{player.GetFullName()} перед смертью сказал следующее:\n{result.Value.Content ?? "*пустое сообщение*"}";
+                            }
+                            else
+                            {
+                                return $"{player.GetFullName()} умер молча";
+                            }
                         }
                     }
+
 
                     lastWordNightCount--;
 
 
-                    if (!CanContinueGame)
+                    if (!CanContinueGame())
                         break;
                 }
+
 
                 var dayTime = _mafiaData.AllRoles.Values.Count(r => r.IsAlive) * 20;
 
@@ -2065,13 +1201,21 @@ public class MafiaModule : GameModule
 
                 await _mafiaData.GeneralTextChannel.SendMessageAsync($"Обсуждайте. ({dayTime}с)");
 
-                await ChangePermissionsGenaralChannelsAsync(_allowWrite, _allowSpeak);
+                await ChangeGenaralChannelPermissionsAsync(_allowWrite, _allowSpeak);
 
                 var timer = WaitForTimerAsync(dayTime, _mafiaData.GeneralTextChannel);
 
 
+                var fooledPlayers = new List<IGuildUser>();
+
                 foreach (var role in _mafiaData.AllRoles.Values)
+                {
+                    if (role.BlockedByHooker)
+                        fooledPlayers.Add(role.Player);
+
                     role.SetPhase(false);
+                    role.UnblockAll();
+                }
 
 
                 await Task.WhenAll(lastWordTasks);
@@ -2080,9 +1224,11 @@ public class MafiaModule : GameModule
                 while (lastWordTasks.Count > 0)
                 {
                     var receivedMessageTask = await Task.WhenAny(lastWordTasks);
+
                     lastWordTasks.Remove(receivedMessageTask);
 
                     var msg = await receivedMessageTask;
+
 
                     await _mafiaData.GeneralTextChannel.SendMessageAsync(embed: CreateEmbed(EmbedStyle.Information, msg));
                 }
@@ -2090,93 +1236,46 @@ public class MafiaModule : GameModule
 
                 await timer;
 
-                await ChangePermissionsGenaralChannelsAsync(_denyWrite, _denyView);
+                await ChangeGenaralChannelPermissionsAsync(_denyWrite, _denyView);
 
 
                 if (!_mafiaData.IsFirstNight)
                 {
-                    await _mafiaData.GeneralTextChannel.SendMessageAsync(
-                        $"{_mafiaData.MafiaRole.Mention} Время голосовать! Выбирайте жителя, который будет изгнан сегодня. ({dayVoteTime}с)");
-
-                    await Task.Delay(1000);
-
-                    IGuildUser? move = null;
-
-                    if (!_settings.Current.GameSubSettings.IsTurnByTurnVote)
-                    {
-                        await _mafiaData.GeneralTextChannel.RemovePermissionOverwriteAsync(_mafiaData.WatcherRole);
-
-                        var aliveGroup = new AliveGroup(_mafiaData.AllRoles.Values.Where(r => r.IsAlive).ToList(), GameRoleOptions, 40);
-
-
-                        await DoRoleMoveAsync(_mafiaData.GeneralTextChannel, aliveGroup);
-
-                        move = aliveGroup.LastMove;
-
-
-                        await _mafiaData.GeneralTextChannel.AddPermissionOverwriteAsync(_mafiaData.WatcherRole, _denyWrite);
-                    }
-                    else
-                    {
-                        var votes = new Dictionary<IGuildUser, int>();
-
-                        foreach (var role in _mafiaData.AllRoles.Values.Where(r => r.IsAlive))
-                        {
-                            var channel = await role.Player.GetOrCreateDMChannelAsync();
-
-                            var embed = CreateEmbed(EmbedStyle.Information,
-                                string.Join("\n", votes.Select(v => $"**{v.Key.GetFullName()}** - {v.Value}")),
-                                "Распределение голосов игроков");
-
-                            await channel.SendMessageAsync(embed: embed);
-
-                            await DoRoleMoveAsync(channel, role, 10);
-
-                            if (role.LastMove is not null)
-                                votes[role.LastMove] = votes.TryGetValue(role.LastMove, out var count) ? count + 1 : 1;
-                        }
-
-                        IGuildUser? selectedPlayer = null;
-
-                        if (votes.Count == 1)
-                            selectedPlayer = votes.Keys.First();
-                        else if (votes.Count > 1)
-                        {
-                            var votesList = votes.ToList();
-
-                            votesList.Sort((v1, v2) => v2.Value - v1.Value);
-
-                            if (votesList[0].Value > votesList[1].Value)
-                                selectedPlayer = votesList[0].Key;
-                        }
-
-                        foreach (var role in _mafiaData.AllRoles.Values.Where(r => r.IsAlive))
-                            role.ProcessMove(selectedPlayer, false);
-
-                        move = selectedPlayer;
-                    }
-
+                    var move = await DoDayVotingAsync(_mafiaData.VoteTime);
 
                     if (move is not null)
                     {
                         var role = _mafiaData.AllRoles[move];
 
-                        if (!role.BlockedByHooker)
+                        string action = "";
+
+                        if (!fooledPlayers.Contains(role.Player))
                         {
+                            action = _chronology.AddAction("Труп", _mafiaData.AllRoles[move]);
+
+
                             await EjectPlayerAsync(move);
                         }
                         else
                         {
+                            action = _chronology.AddAction("Использование алиби", _mafiaData.AllRoles[move]);
+
+
                             await _mafiaData.GeneralTextChannel.SendMessageAsync(
                                 embed: CreateEmbed(EmbedStyle.Warning, $"{move.GetFullMention()} не покидает игру, так как у него есть алиби"));
                         }
+
+                        if (_mafiaData.WatcherTextChannel is not null)
+                            await _mafiaData.WatcherTextChannel.SendMessageAsync(embed: CreateEmbed(EmbedStyle.Information, action));
                     }
                 }
                 else
                     _mafiaData.IsFirstNight = false;
 
-                if (!GameData.IsPlaying || !CanContinueGame)
+
+                if (!GameData.IsPlaying || !CanContinueGame())
                     break;
+
 
                 await Task.Delay(2000);
 
@@ -2189,159 +1288,7 @@ public class MafiaModule : GameModule
                     role.SetPhase(true);
 
 
-                var tasks = new List<Task>();
-
-                var except = new List<GameRole>();
-                except.AddRange(_mafiaData.Murders.Values);
-                except.AddRange(_mafiaData.Sheriffs.Values);
-                except.AddRange(_mafiaData.Hookers.Values);
-
-                foreach (var hooker in _mafiaData.Hookers.Values)
-                {
-                    tasks.Add(DoRoleMoveAsync(await hooker.Player.GetOrCreateDMChannelAsync(), hooker));
-                }
-
-                await _mafiaData.GeneralTextChannel.SendMessageAsync("Путана выбирает клиента");
-
-                await Task.WhenAll(tasks);
-
-                await _mafiaData.GeneralTextChannel.SendMessageAsync("Путана выбрала клиента");
-
-                foreach (var hooker in _mafiaData.Hookers.Values)
-                {
-                    if (!hooker.IsAlive || hooker.BlockedPlayer is null)
-                        continue;
-
-                    _mafiaData.AllRoles[hooker.BlockedPlayer].Block(hooker);
-                }
-
-
-                foreach (var role in _mafiaData.AllRoles.Values.Except(except))
-                    tasks.Add(DoRoleMoveAsync(await role.Player.GetOrCreateDMChannelAsync(), role));
-
-
-                if (_settings.Current.RolesInfoSubSettings.MurdersKnowEachOther)
-                    await ChangePermissionsMurderChannelsAsync(_allowWrite, _allowSpeak);
-
-
-                if (_settings.Current.RolesInfoSubSettings.MurdersVoteTogether)
-                {
-                    var except1 = new List<Murder>();
-
-                    foreach (var murder in _mafiaData.Murders.Values)
-                        if (murder.BlockedByHooker)
-                        {
-                            except1.Add(murder);
-
-                            await murder.Player.SendMessageAsync("Вас охмурила путана. Развлекайтесь с ней");
-
-                            var player = murder.Player;
-
-                            await _mafiaData.MurderTextChannel.AddPermissionOverwriteAsync(player, _denyView);
-
-                            if (_mafiaData.MurderVoiceChannel is not null)
-                                await _mafiaData.MurderVoiceChannel.AddPermissionOverwriteAsync(player, _denyView);
-
-                            await player.ModifyAsync(props => props.Channel = null);
-
-
-                            murder.ProcessMove(null, true);
-                        }
-
-
-
-                    await _mafiaData.MurderTextChannel.SendMessageAsync("Время обсуждить кто станет жертвой (20с)");
-
-                    await WaitForTimerAsync(20, _mafiaData.MurderTextChannel);
-
-                    await ChangePermissionsMurderChannelsAsync(_denyWrite, _denyView);
-
-                    var murders = _mafiaData.Murders.Values.Except(except1).ToList();
-
-                    if (murders.Count > 0)
-                    {
-                        var murdersGroup = new MurdersGroup(_mafiaData.Murders.Values.Except(except1).ToList(), GameRoleOptions, 20);
-                        tasks.Add(DoRoleMoveAsync(_mafiaData.MurderTextChannel, murdersGroup));
-                    }
-                }
-                else
-                    foreach (var murder in _mafiaData.Murders.Values)
-                        tasks.Add(DoRoleMoveAsync(await murder.Player.GetOrCreateDMChannelAsync(), murder));
-
-                foreach (var sheriff in _mafiaData.Sheriffs.Values)
-                {
-                    var task = Task.Run(async () =>
-                    {
-                        var channel = await sheriff.Player.GetOrCreateDMChannelAsync();
-
-                        var choiceVoteTime = Math.Max(sheriff.VoteTime / 3, 20);
-
-                        if (sheriff.IsAvailableToShot && !sheriff.BlockedByHooker)
-                        {
-                            await channel.SendMessageAsync(embed: CreateEmbed(EmbedStyle.Information, $"{sheriff.Name}, выбирайте ваше действие ({choiceVoteTime}с)"));
-
-                            var options = new List<bool>()
-                            {
-                                true,
-                                false
-                            };
-
-                            var displayOptions = new List<string>()
-                            {
-                                "Сделать выстрел",
-                                "Выполнить проверку"
-                            };
-
-                            var (shotSelected, _) = await WaitForVotingAsync(channel, choiceVoteTime, options, displayOptions);
-
-                            sheriff.ConfigureMove(shotSelected);
-
-                            if (_mafiaData.WatcherTextChannel is not null)
-                            {
-                                string action = _chronology.AddAction(shotSelected ? "Выбран выстрел" : "Выбрана проверка на мафиози", sheriff);
-
-                                await _mafiaData.WatcherTextChannel.SendMessageAsync(embed: CreateEmbed(EmbedStyle.Information, action));
-                            }
-                        }
-                        else
-                            choiceVoteTime = 0;
-
-
-                        await DoRoleMoveAsync(channel, sheriff, sheriff.VoteTime - choiceVoteTime);
-                    });
-
-                    tasks.Add(task);
-                }
-
-
-                try
-                {
-                    await Task.WhenAll(tasks);
-
-                    if (_mafiaData.Dons.Count > 0)
-                    {
-                        await _mafiaData.GeneralTextChannel.SendMessageAsync("Дон выбирает к кому наведаться ночью");
-
-                        foreach (var don in _mafiaData.Dons.Values)
-                        {
-                            don.SetChecking(true);
-
-                            tasks.Add(DoRoleMoveAsync(await don.Player.GetOrCreateDMChannelAsync(), don));
-                        }
-
-
-                        await Task.WhenAll(tasks);
-                    }
-                }
-                catch (AggregateException ae)
-                {
-                    var flattenAe = ae.Flatten();
-
-                    Log.Error(flattenAe, LogTemplate, nameof(PlayAsync), $"[{Context.Guild.Name} {Context.Guild.Id}] Failed to do night moves");
-                    GuildLogger.Error(flattenAe, LogTemplate, nameof(PlayAsync), "Failed to do night moves");
-
-                    throw flattenAe;
-                }
+                await DoNightMovesAsync();
 
 
                 GuildLogger.Verbose(LogTemplate, nameof(PlayAsync), "End do night moves");
@@ -2355,18 +1302,526 @@ public class MafiaModule : GameModule
             }
         }
 
+
         GuildLogger.Debug(LogTemplate, nameof(PlayAsync), "End playing game");
     }
 
 
+    private async Task IntroduceMurdersAsync()
+    {
+        ArgumentNullException.ThrowIfNull(_mafiaData);
+        ArgumentNullException.ThrowIfNull(_settings);
 
-    private async Task DoRoleMoveAsync(IMessageChannel channel, GameRole role, int? overrideVoteTime = null)
+        var meetTime = _mafiaData.Murders.Count * 10;
+
+        if (_settings.Current.RolesInfoSubSettings.MurdersKnowEachOther)
+            await ChangeMurdersChannelPermissionsAsync(_allowWrite, _allowSpeak);
+
+        await _mafiaData.MurderTextChannel.SendMessageAsync("Добро пожаловать в мафию! Сейчас ночь, весь город спит, самое время познакомиться с остальными мафиозниками");
+
+
+        var murdersList = string.Join("\n", _mafiaData.Murders.Keys.Select(m => m.GetFullName()));
+
+        await _mafiaData.MurderTextChannel.SendMessageAsync($"Список мафиози:\n{murdersList}");
+
+
+        var donsList = string.Join("\n", _mafiaData.Dons.Keys.Select(d => d.GetFullName()));
+
+        await _mafiaData.MurderTextChannel.SendMessageAsync($"Список донов:\n{donsList}");
+
+
+        await WaitForTimerAsync(meetTime, _mafiaData.GeneralTextChannel, _mafiaData.MurderTextChannel);
+
+        await _mafiaData.MurderTextChannel.SendMessageAsync("Время вышло! Переходите в общий канал и старайтесь не подавать виду, что вы мафиозник.");
+    }
+
+    private async Task<IGuildUser?> DoDayVotingAsync(int dayVoteTime)
+    {
+        ArgumentNullException.ThrowIfNull(_mafiaData);
+        ArgumentNullException.ThrowIfNull(_settings);
+
+
+        await _mafiaData.GeneralTextChannel.SendMessageAsync(
+            $"{_mafiaData.MafiaRole.Mention} Время голосовать! Выбирайте жителя, который будет изгнан сегодня. ({dayVoteTime}с)");
+
+        await Task.Delay(1000);
+
+        IGuildUser? move = null;
+
+        if (!_settings.Current.GameSubSettings.IsTurnByTurnVote)
+        {
+            await _mafiaData.GeneralTextChannel.RemovePermissionOverwriteAsync(_mafiaData.WatcherRole);
+
+            var aliveGroup = new AliveGroup(_mafiaData.AllRoles.Values.Where(r => r.IsAlive).ToList(), GameRoleOptions);
+
+
+            await DoRoleMoveAsync(_mafiaData.GeneralTextChannel, aliveGroup, false);
+
+            move = aliveGroup.LastMove;
+
+
+            await _mafiaData.GeneralTextChannel.AddPermissionOverwriteAsync(_mafiaData.WatcherRole, _denyWrite);
+        }
+        else
+        {
+            var votes = new Dictionary<IGuildUser, int>();
+            var skipCount = 0;
+
+            foreach (var role in _mafiaData.AllRoles.Values.Where(r => r.IsAlive))
+            {
+                var channel = await role.Player.CreateDMChannelAsync();
+
+                if (votes.Count > 0)
+                {
+                    var str = string.Join("\n", votes.Select(v => $"**{v.Key.GetFullName()}** - {v.Value}")) + $"\nПропуск голосования- {skipCount}";
+
+                    var embed = CreateEmbed(EmbedStyle.Information, str, "Распределение голосов игроков");
+
+                    await channel.SendMessageAsync(embed: embed);
+                }
+                else
+                    await channel.SendMessageAsync(embed: CreateEmbed(EmbedStyle.Information, "Голосов еще нет", "Распределение голосов игроков"));
+
+                var innocent = new Innocent(role.Player, GameRoleOptions);
+
+                await DoRoleMoveAsync(channel, innocent, false);
+
+                if (innocent.LastMove is not null)
+                    votes[innocent.LastMove] = votes.TryGetValue(innocent.LastMove, out var count) ? count + 1 : 1;
+                else if (innocent.IsSkip)
+                    skipCount++;
+            }
+
+            IGuildUser? selectedPlayer = null;
+            var isSkip = true;
+
+            if (votes.Count == 1)
+            {
+                var player = votes.Keys.First();
+
+                if (skipCount < votes[player])
+                {
+                    selectedPlayer = player;
+
+                    isSkip = false;
+                }
+            }
+            else if (votes.Count > 1)
+            {
+                var votesList = votes.ToList();
+
+                votesList.Sort((v1, v2) => v2.Value - v1.Value);
+
+                if (votesList[0].Value > votesList[1].Value && votesList[0].Value > skipCount)
+                {
+                    selectedPlayer = votesList[0].Key;
+
+                    isSkip = false;
+                }
+            }
+
+            foreach (var role in _mafiaData.AllRoles.Values.Where(r => r.IsAlive))
+                role.ProcessMove(selectedPlayer, isSkip);
+
+            move = selectedPlayer;
+
+            var msg = (isSkip, move is null) switch
+            {
+                (false, false) => $"Город изгнал {move!.GetFullName()}",
+                (false, true) => "Сегодня никто не был изгнан",
+                _ => "Город пропустил голосование"
+            };
+
+            await _mafiaData.GeneralTextChannel.SendMessageAsync(msg);
+        }
+
+
+        return move;
+    }
+
+    private async Task DoNightMovesAsync()
+    {
+        ArgumentNullException.ThrowIfNull(_mafiaData);
+        ArgumentNullException.ThrowIfNull(_settings);
+
+
+        var tasks = new List<Task>();
+
+        var exceptRoles = new List<GameRole>();
+        exceptRoles.AddRange(_mafiaData.Murders.Values);
+        exceptRoles.AddRange(_mafiaData.Sheriffs.Values);
+        exceptRoles.AddRange(_mafiaData.Hookers.Values);
+
+
+        foreach (var hooker in _mafiaData.Hookers.Values)
+        {
+            tasks.Add(DoRoleMoveAsync(await hooker.Player.CreateDMChannelAsync(), hooker));
+        }
+
+        await _mafiaData.GeneralTextChannel.SendMessageAsync("Путана выбирает клиента");
+
+        await Task.WhenAll(tasks);
+
+        await _mafiaData.GeneralTextChannel.SendMessageAsync("Путана выбрала клиента");
+
+        foreach (var hooker in _mafiaData.Hookers.Values)
+        {
+            if (!hooker.IsAlive || hooker.BlockedPlayer is null)
+                continue;
+
+            _mafiaData.AllRoles[hooker.BlockedPlayer].Block(hooker);
+        }
+
+
+        foreach (var role in _mafiaData.AllRoles.Values.Except(exceptRoles))
+            tasks.Add(DoRoleMoveAsync(await role.Player.CreateDMChannelAsync(), role));
+
+
+        if (_settings.Current.RolesInfoSubSettings.MurdersKnowEachOther)
+            await ChangeMurdersChannelPermissionsAsync(_allowWrite, _allowSpeak);
+
+
+        if (_settings.Current.RolesInfoSubSettings.MurdersVoteTogether)
+        {
+            var exceptBlockedMurders = new List<Murder>();
+
+            await ChangeMurdersChannelPermissionsAsync(_denyWrite, _denyView);
+
+            foreach (var murder in _mafiaData.Murders.Values)
+                if (murder.BlockedByHooker)
+                {
+                    exceptBlockedMurders.Add(murder);
+
+                    await murder.Player.SendMessageAsync("Вас охмурила путана. Развлекайтесь с ней");
+
+                    var player = murder.Player;
+
+                    await _mafiaData.MurderTextChannel.AddPermissionOverwriteAsync(player, _denyView);
+
+                    if (_mafiaData.MurderVoiceChannel is not null)
+                        await _mafiaData.MurderVoiceChannel.AddPermissionOverwriteAsync(player, _denyView);
+
+                    await player.ModifyAsync(props => props.Channel = null);
+
+
+                    murder.ProcessMove(null, true);
+                }
+
+
+
+            await _mafiaData.MurderTextChannel.SendMessageAsync("Время обсуждить кто станет жертвой (20с)");
+
+            await WaitForTimerAsync(20, _mafiaData.MurderTextChannel);
+
+
+            var murders = _mafiaData.Murders.Values.Except(exceptBlockedMurders).ToList();
+
+            if (murders.Count > 0)
+            {
+                var murdersGroup = new MurdersGroup(_mafiaData.Murders.Values.Except(exceptBlockedMurders).ToList(), GameRoleOptions);
+                tasks.Add(DoRoleMoveAsync(_mafiaData.MurderTextChannel, murdersGroup));
+            }
+        }
+        else
+            foreach (var murder in _mafiaData.Murders.Values)
+                tasks.Add(DoRoleMoveAsync(await murder.Player.CreateDMChannelAsync(), murder));
+
+
+        foreach (var sheriff in _mafiaData.Sheriffs.Values)
+        {
+            var task = Task.Run(async () =>
+            {
+                var channel = await sheriff.Player.CreateDMChannelAsync();
+
+                var choiceVoteTime = Math.Max(_mafiaData.VoteTime / 3, 20);
+
+                if (sheriff.IsAvailableToShot && !sheriff.BlockedByHooker)
+                {
+                    await channel.SendMessageAsync(embed: CreateEmbed(EmbedStyle.Information, $"{sheriff.Name}, выбирайте ваше действие ({choiceVoteTime}с)"));
+
+                    var options = new List<bool>()
+                    {
+                        true,
+                        false
+                    };
+
+                    var displayOptions = new List<string>()
+                    {
+                        "Сделать выстрел",
+                        "Выполнить проверку"
+                    };
+
+                    var (shotSelected, _) = await WaitForVotingAsync(channel, choiceVoteTime, options, displayOptions);
+
+                    sheriff.ConfigureMove(shotSelected);
+
+
+                    if (_mafiaData.WatcherTextChannel is not null)
+                    {
+                        string action = _chronology.AddAction(shotSelected ? "Выбран выстрел" : "Выбрана проверка на мафиози", sheriff);
+
+                        await _mafiaData.WatcherTextChannel.SendMessageAsync(embed: CreateEmbed(EmbedStyle.Information, action));
+                    }
+                }
+                else
+                    choiceVoteTime = 0;
+
+
+                await DoRoleMoveAsync(channel, sheriff, true, _mafiaData.VoteTime - choiceVoteTime);
+            });
+
+            tasks.Add(task);
+        }
+
+
+        await Task.WhenAll(tasks);
+
+        if (_mafiaData.Dons.Count > 0)
+        {
+            await _mafiaData.GeneralTextChannel.SendMessageAsync("Дон выбирает к кому наведаться ночью");
+
+            foreach (var don in _mafiaData.Dons.Values)
+            {
+                don.SetChecking(true);
+
+                tasks.Add(DoRoleMoveAsync(await don.Player.CreateDMChannelAsync(), don));
+            }
+
+
+            await Task.WhenAll(tasks);
+        }
+    }
+
+    private IGuildUser? GetInnocentKill(bool innocentsMustVoteForOnePlayer)
+    {
+        ArgumentNullException.ThrowIfNull(_mafiaData);
+
+
+        IGuildUser? killedPlayerByInnocents = null;
+
+        var innocents = _mafiaData.Innocents.Values.Where(i => i.GetType() == typeof(Innocent) && i.IsAlive);
+
+        if (innocents.Any())
+        {
+            if (innocentsMustVoteForOnePlayer)
+            {
+                var killedPlayer = innocents.First().LastMove;
+                if (!innocents.All(i => i.LastMove == killedPlayer))
+                    foreach (var innocent in innocents)
+                        innocent.ProcessMove(null, false);
+                else
+                    killedPlayerByInnocents = killedPlayer;
+            }
+            else
+            {
+                var votes = new Dictionary<IGuildUser, int>();
+
+                foreach (var innocent in innocents.Where(i => i.LastMove is not null))
+                    votes[innocent.LastMove!] = votes.TryGetValue(innocent.LastMove!, out var count) ? count + 1 : 1;
+
+                IGuildUser? selectedPlayer = null;
+
+                if (votes.Count == 1)
+                    selectedPlayer = votes.Keys.First();
+                else if (votes.Count > 1)
+                {
+                    var votesList = votes.ToList();
+
+                    votesList.Sort((v1, v2) => v2.Value - v1.Value);
+
+                    if (votesList[0].Value > votesList[1].Value)
+                        selectedPlayer = votesList[0].Key;
+                }
+
+                foreach (var innocent in innocents)
+                    innocent.ProcessMove(selectedPlayer, false);
+
+                killedPlayerByInnocents = selectedPlayer;
+            }
+        }
+
+        return killedPlayerByInnocents;
+    }
+
+    private IReadOnlyList<IGuildUser> GetCorpses(out IList<IGuildUser> revealedManiacs)
+    {
+        ArgumentNullException.ThrowIfNull(_mafiaData);
+        ArgumentNullException.ThrowIfNull(_settings);
+
+        if (!_settings.Current.RolesInfoSubSettings.MurdersVoteTogether)
+        {
+            if (_settings.Current.RolesInfoSubSettings.MurdersMustVoteForOnePlayer)
+            {
+                var killedPlayer = _mafiaData.Murders.Values.First().KilledPlayer;
+                if (!_mafiaData.Murders.Values.Where(m => m.IsAlive).All(m => m.KilledPlayer == killedPlayer))
+                    foreach (var murder in _mafiaData.Murders.Values)
+                        murder.ProcessMove(null, false);
+            }
+            else
+            {
+                var votes = new Dictionary<IGuildUser, int>();
+
+                foreach (var murder in _mafiaData.Murders.Values.Where(m => m.IsAlive && m.KilledPlayer is not null))
+                    votes[murder.KilledPlayer!] = votes.TryGetValue(murder.KilledPlayer!, out var count) ? count + 1 : 1;
+
+                IGuildUser? selectedPlayer = null;
+
+                if (votes.Count == 1)
+                    selectedPlayer = votes.Keys.First();
+                else if (votes.Count > 1)
+                {
+                    var votesList = votes.ToList();
+
+                    votesList.Sort((v1, v2) => v2.Value - v1.Value);
+
+                    if (votesList[0].Value > votesList[1].Value)
+                        selectedPlayer = votesList[0].Key;
+                }
+
+                foreach (var murder in _mafiaData.Murders.Values)
+                    murder.ProcessMove(selectedPlayer, false);
+            }
+        }
+
+        IGuildUser? killedPlayerByInnocents = null;
+        if (_settings.Current.RolesInfoSubSettings.CanInnocentsKillAtNight)
+            killedPlayerByInnocents = GetInnocentKill(_settings.Current.RolesInfoSubSettings.InnocentsMustVoteForOnePlayer);
+
+
+        var killers = _mafiaData.AllRoles.Values
+            .Where(r => r.IsAlive && r is IKiller)
+            .Cast<IKiller>();
+
+        var kills = killers
+            .Where(k => k.KilledPlayer is not null)
+            .Select(k => k.KilledPlayer!)
+            .ToList();
+
+        if (killedPlayerByInnocents is not null)
+            kills.Add(killedPlayerByInnocents);
+
+
+        var healers = _mafiaData.AllRoles.Values
+            .Where(r => r.IsAlive && r is IHealer)
+            .Cast<IHealer>();
+
+        var heals = healers
+            .Where(h => h.HealedPlayer is not null)
+            .Select(k => k.HealedPlayer!);
+
+
+        var corpses = kills
+            .Except(heals)
+            .ToList();
+
+        var maniacKills = _mafiaData.Maniacs.Values
+            .Where(m => m.KilledPlayer is not null)
+            .Select(m => m.KilledPlayer!)
+            .Except(_mafiaData.Hookers.Values
+                .Where(m => m.HealedPlayer is not null)
+                .Select(m => m.HealedPlayer!));
+
+        corpses.AddRange(maniacKills);
+
+
+        revealedManiacs = new List<IGuildUser>();
+
+        foreach (var hooker in _mafiaData.Hookers.Values)
+        {
+            if (!hooker.IsAlive || hooker.HealedPlayer is null)
+                continue;
+
+
+            if (corpses.Contains(hooker.Player))
+                corpses.Add(hooker.HealedPlayer);
+
+            if (_mafiaData.Maniacs.ContainsKey(hooker.HealedPlayer))
+                revealedManiacs.Add(hooker.HealedPlayer);
+        }
+
+
+        return corpses
+            .Distinct()
+            .Shuffle()
+            .ToList();
+    }
+
+
+    private bool CanContinueGame()
+    {
+        ArgumentNullException.ThrowIfNull(_settings);
+        ArgumentNullException.ThrowIfNull(_mafiaData);
+
+
+        var aliveMurdersCount = _mafiaData.Murders.Values.Count(m => m.IsAlive);
+
+        var alivePlayersCount = _mafiaData.AllRoles.Values.Count(r => r.IsAlive);
+
+        var defaultCondition = alivePlayersCount > aliveMurdersCount * 2;
+
+
+        var gameSettings = _settings.Current.GameSubSettings;
+
+        if (gameSettings.IsCustomGame)
+        {
+            var canContinue = aliveMurdersCount > 0;
+
+            if (gameSettings.ConditionContinueGameWithNeutrals)
+            {
+                var hasAnyNeutral = _mafiaData.Neutrals.Values.Any(n => n.IsAlive && n is IKiller);
+
+                canContinue |= hasAnyNeutral;
+            }
+
+            if (gameSettings.ConditionAliveAtLeast1Innocent)
+            {
+                var hasAnyInnocent = _mafiaData.Innocents.Values.Any(i => i.IsAlive);
+
+                canContinue &= hasAnyInnocent;
+            }
+            else
+                canContinue &= defaultCondition;
+
+
+            return canContinue;
+        }
+        else
+        {
+            var canContinue = aliveMurdersCount > 0 && defaultCondition;
+
+            return canContinue;
+        }
+    }
+
+    private bool? IsMurdersWon()
+    {
+        ArgumentNullException.ThrowIfNull(_settings);
+        ArgumentNullException.ThrowIfNull(_mafiaData);
+
+
+        var hasAnyMurder = _mafiaData.Murders.Values.Any(m => m.IsAlive);
+
+        if (hasAnyMurder)
+            return true;
+
+
+        var hasAnyALiveInnocent = _mafiaData.Innocents.Values.Any(i => i.IsAlive);
+
+        if (hasAnyALiveInnocent)
+            return false;
+
+
+        return null;
+    }
+
+
+    private async Task DoRoleMoveAsync(IMessageChannel channel, GameRole role, bool isNightMove = true, int? overrideVoteTime = null)
     {
         ArgumentNullException.ThrowIfNull(_mafiaData);
 
         GuildLogger.Debug(LogTemplate, nameof(DoRoleMoveAsync), $"Begin do {role.Name} move...");
 
-        overrideVoteTime ??= role.VoteTime;
+        overrideVoteTime ??= _mafiaData.VoteTime;
 
         if (role.IsAlive && !role.BlockedByHooker)
         {
@@ -2397,12 +1852,19 @@ public class MafiaModule : GameModule
             foreach (var (embedStyle, message) in messages)
                 await channel.SendMessageAsync(embed: CreateEmbed(embedStyle, message));
 
-
-            await channel.SendMessageAsync(embed: CreateEmbed(EmbedStyle.Information, "Ожидайте наступления утра"));
+            if (isNightMove)
+                await channel.SendMessageAsync(embed: CreateEmbed(EmbedStyle.Information, "Ожидайте наступления утра"));
 
             if (_mafiaData.WatcherTextChannel is not null)
             {
-                string action = _chronology.AddAction((!isSkip ? $"На голосовании был выбран {selectedPlayer?.GetFullName() ?? "никто"}" : "Пропуск голосования"), role);
+                var str = (isSkip, selectedPlayer is null) switch
+                {
+                    (false, false) => $"На голосовании был выбран {selectedPlayer!.GetFullName()}",
+                    (false, true) => "Никто не был выбран на голосовании",
+                    _ => "Пропуск голосования"
+                };
+
+                string action = _chronology.AddAction(str, role);
 
                 await _mafiaData.WatcherTextChannel.SendMessageAsync(embed: CreateEmbed(EmbedStyle.Information, action));
             }
@@ -2418,7 +1880,8 @@ public class MafiaModule : GameModule
         GuildLogger.Debug(LogTemplate, nameof(DoRoleMoveAsync), $"End do {role.Name} move");
     }
 
-    private async Task ChangePermissionsMurderChannelsAsync(OverwritePermissions textPerms, OverwritePermissions? voicePerms)
+
+    private async Task ChangeMurdersChannelPermissionsAsync(OverwritePermissions textPerms, OverwritePermissions? voicePerms)
     {
         ArgumentNullException.ThrowIfNull(_mafiaData);
 
@@ -2444,7 +1907,7 @@ public class MafiaModule : GameModule
         }
     }
 
-    private async Task ChangePermissionsGenaralChannelsAsync(OverwritePermissions textPerms, OverwritePermissions? voicePerms)
+    private async Task ChangeGenaralChannelPermissionsAsync(OverwritePermissions textPerms, OverwritePermissions? voicePerms)
     {
         ArgumentNullException.ThrowIfNull(_mafiaData);
 
@@ -2569,86 +2032,909 @@ public class MafiaModule : GameModule
     }
 
 
-    private async Task SaveStatsAsync()
+
+
+    [Group("Шаблоны")]
+    [Alias("ш")]
+    [RequireUserPermission(GuildPermission.Administrator)]
+    public class TemplatesModule : GuildModuleBase
     {
-        ArgumentNullException.ThrowIfNull(GameData);
-
-        var playersId = new HashSet<ulong>(GameData.Players.Select(p => p.Id));
-
-        await AddNewUsersAsync(playersId);
-
-        var playersStat = await Context.Db.MafiaStats
-                  .AsTracking()
-                  .Where(stat => playersId.Contains(stat.UserId) && stat.GuildSettingsId == Context.Guild.Id)
-                  .ToListAsync();
-
-        var newPlayersId = playersId
-            .Except(playersStat.Select(s => s.UserId))
-            .ToList();
-
-        if (newPlayersId.Count > 0)
+        public TemplatesModule(Fergun.Interactive.InteractiveService interactiveService) : base(interactiveService)
         {
-            var newPlayersStats = newPlayersId.Select(id => new MafiaStats
+        }
+
+        [Command("Клонировать")]
+        [Alias("клон", "к")]
+        public async Task CloneTemplate(string newTemplateName, string? originalTemplateName = null)
+        {
+            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
+
+            originalTemplateName ??= settings.CurrentTemplateName;
+
+            if (newTemplateName == originalTemplateName)
             {
-                UserId = id,
-                GuildSettingsId = Context.Guild.Id
-            })
-            .ToList();
+                await ReplyEmbedAsync(EmbedStyle.Error, $"Шаблон с именем **{originalTemplateName}** уже существует");
 
-            await Context.Db.MafiaStats.AddRangeAsync(newPlayersStats);
+                return;
+            }
 
-            playersStat.AddRange(newPlayersStats);
+            settings.Current = Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
+
+
+            var template = originalTemplateName == settings.CurrentTemplateName
+                ? settings.Current
+                : await Context.Db.MafiaSettingsTemplates
+                    .AsTracking()
+                    .FirstOrDefaultAsync(s => s.MafiaSettingsId == settings.Id && s.Name == originalTemplateName);
+
+            if (template is null)
+            {
+                await ReplyEmbedAsync(EmbedStyle.Error, "Шаблон-образец не найден");
+
+                return;
+            }
+
+            var newTemplate = new SettingsTemplate(newTemplateName)
+            {
+                MafiaSettingsId = settings.Id,
+                ServerSubSettings = template.ServerSubSettings,
+                GameSubSettings = template.GameSubSettings,
+                RoleAmountSubSettings = template.RoleAmountSubSettings,
+                RolesInfoSubSettings = template.RolesInfoSubSettings
+            };
+
+
+            await Context.Db.MafiaSettingsTemplates.AddAsync(newTemplate);
+
+            settings.CurrentTemplateName = newTemplateName;
+
+            await Context.Db.SaveChangesAsync();
+
+
+
+            await ReplyEmbedAsync(EmbedStyle.Successfull, $"Шаблон **{newTemplateName}** успешно клонирован из шаблона **{originalTemplateName}**");
         }
 
 
-        //foreach (var playerStat in playersStat)
-        //{
-        //    var gameStat = _mafiaData.MafiaStatsHelper[playerStat.UserId];
+        [Command("Загрузить")]
+        [Alias("згр", "з")]
+        public async Task LoadTemplate(string name = MafiaSettings.DefaultTemplateName)
+        {
+            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
 
-        //    playerStat.GamesCount++;
-        //    playerStat.WinsCount += gameStat.WinsCount;
+            var template = Context.Db.MafiaSettingsTemplates.FirstOrDefault(s => s.MafiaSettingsId == settings.Id && s.Name == name);
 
-        //    playerStat.BlacksGamesCount += gameStat.BlacksGamesCount;
-        //    playerStat.BlacksWinsCount += gameStat.BlacksWinsCount;
+            if (template is null)
+            {
+                await ReplyEmbedAsync(EmbedStyle.Error, "Шаблон не найден");
 
-        //    playerStat.DoctorMovesCount += gameStat.DoctorMovesCount;
-        //    playerStat.DoctorSuccessfullMovesCount += gameStat.DoctorSuccessfullMovesCount;
+                return;
+            }
 
-        //    playerStat.CommissionerMovesCount += gameStat.CommissionerMovesCount;
-        //    playerStat.CommissionerSuccessfullFoundsCount += gameStat.CommissionerSuccessfullFoundsCount;
-        //    playerStat.CommissionerSuccessfullShotsCount += gameStat.CommissionerSuccessfullShotsCount;
+            settings.CurrentTemplateName = name;
 
-        //    playerStat.DonMovesCount += gameStat.DonMovesCount;
-        //    playerStat.DonSuccessfullMovesCount += gameStat.DonSuccessfullMovesCount;
+            await Context.Db.SaveChangesAsync();
 
-
-        //    playerStat.ExtraScores += gameStat.ExtraScores;
-
-        //    playerStat.PenaltyScores += gameStat.PenaltyScores;
-        //}
+            await ReplyEmbedAsync(EmbedStyle.Successfull, $"Шаблон **{name}** успешно загружен");
+        }
 
 
-        await Context.Db.SaveChangesAsync();
+        [Command("Текущий")]
+        [Alias("тек", "т")]
+        public async Task ShowCurrentTemplate()
+        {
+            var settings = await Context.GetGameSettingsAsync<MafiaSettings>(false);
+
+            await ReplyEmbedAsync(EmbedStyle.Information, $"Текущий шаблон - **{settings.CurrentTemplateName}**");
+        }
+
+
+        [Command("Список")]
+        [Alias("сп")]
+        public async Task ShowAllTemplates()
+        {
+            var settings = await Context.GetGameSettingsAsync<MafiaSettings>(false);
+
+            var templates = Context.Db.MafiaSettingsTemplates
+                .AsNoTracking()
+                .Where(t => t.MafiaSettingsId == settings.Id);
+
+            var str = "";
+
+            foreach (var template in templates)
+                str += $"**{template.Name}**\n";
+
+            await ReplyEmbedAsync(EmbedStyle.Information, str, "Список шаблонов");
+        }
+
+
+
+        [Command("Сообщение")]
+        [Alias("сбщ")]
+        [Priority(-1)]
+        public async Task ShowPreGameMessage()
+        {
+            var settings = await Context.GetGameSettingsAsync<MafiaSettings>(false);
+
+            settings.Current = Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
+
+
+            await ReplyEmbedAsync(EmbedStyle.Information, settings.Current.PreGameMessage ?? "*Сообщение отсутствует*", "Сообщение перед игрой");
+        }
+
+        [Command("Сообщение")]
+        [Alias("сбщ")]
+        public async Task UpdatePreGameMessage([Remainder] string message)
+        {
+            var settings = await Context.GetGameSettingsAsync<MafiaSettings>(false);
+
+            var template = Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
+
+
+            template.PreGameMessage = message;
+
+            await Context.Db.SaveChangesAsync();
+
+
+            await ReplyEmbedAsync(EmbedStyle.Successfull, "Сообщение успешно изменено");
+        }
+
+
+        [Command("Имя")]
+        public async Task UpdateTemplateName(string newName, string? templateName = null)
+        {
+            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
+
+            templateName ??= settings.CurrentTemplateName;
+
+            var templateToUpdate = Context.Db.MafiaSettingsTemplates.FirstOrDefault(s => s.MafiaSettingsId == settings.Id && s.Name == templateName);
+
+
+            if (templateToUpdate is null)
+            {
+                await ReplyEmbedAsync(EmbedStyle.Error, $"Шаблон для замены имени **{templateName}** не найден");
+
+                return;
+            }
+
+            var templateNames = await Context.Db.MafiaSettingsTemplates
+                .AsNoTracking()
+                .Where(t => t.MafiaSettingsId == settings.Id)
+                .Select(t => t.Name)
+                .ToListAsync();
+
+            if (templateNames.Contains(newName))
+            {
+                await ReplyEmbedAsync(EmbedStyle.Error, "Имя шаблона уже используется");
+
+                return;
+            }
+
+
+            var oldName = templateToUpdate.Name;
+
+            templateToUpdate.Name = newName;
+            settings.CurrentTemplateName = newName;
+
+            await Context.Db.SaveChangesAsync();
+
+
+            await ReplyEmbedAsync(EmbedStyle.Successfull, $"Имя шаблона успешно изменено: **{oldName}** -> **{newName}**");
+        }
+
+
+        [Command("Сброс")]
+        public async Task ResetTemplate(string? name = null)
+        {
+            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
+
+            name ??= settings.CurrentTemplateName;
+
+            var template = Context.Db.MafiaSettingsTemplates.FirstOrDefault(s => s.MafiaSettingsId == settings.Id && s.Name == name);
+
+            if (template is null)
+            {
+                await ReplyEmbedAsync(EmbedStyle.Error, "Шаблон не найден");
+
+                return;
+            }
+
+            template.GameSubSettings = new();
+            template.ServerSubSettings = new();
+            template.RolesInfoSubSettings = new();
+            template.RoleAmountSubSettings = new();
+
+            await Context.Db.SaveChangesAsync();
+
+            await ReplyEmbedAsync(EmbedStyle.Successfull, $"Шаблон **{name}** успешно сброшен");
+        }
+
+
+        [Command("Удалить")]
+        public async Task DeleteTemplate(string? name = null)
+        {
+            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
+
+            name ??= settings.CurrentTemplateName;
+
+            if (name == MafiaSettings.DefaultTemplateName)
+            {
+                await ReplyEmbedAsync(EmbedStyle.Error, "Невозможно удалить шаблон по умолчанию");
+
+                return;
+            }
+
+            if (name == settings.CurrentTemplateName)
+            {
+                await ReplyEmbedAsync(EmbedStyle.Error, "Невозможно удалить активный шаблон");
+
+                return;
+            }
+
+
+            var template = Context.Db.MafiaSettingsTemplates.FirstOrDefault(s => s.MafiaSettingsId == settings.Id && s.Name == name);
+
+            if (template is null)
+            {
+                await ReplyEmbedAsync(EmbedStyle.Error, "Шаблон не найден");
+
+                return;
+            }
+
+
+            Context.Db.MafiaSettingsTemplates.Remove(template);
+
+            await Context.Db.SaveChangesAsync();
+
+
+            await ReplyEmbedAsync(EmbedStyle.Successfull, $"Шаблон **{name}** успешно удален");
+        }
     }
 
 
-    private async Task SetAndSaveSettingsToDbAsync()
+
+    [Group("Настройки")]
+    [Alias("н")]
+    [RequireUserPermission(GuildPermission.Administrator)]
+    [Summary("Настройки для мафии включают в себя настройки сервера(используемые роли, каналы и категорию каналов) и настройки самой игры. " +
+        "Для подробностей введите команду **Мафия.Настройки.Помощь**")]
+    public class SettingsModule : GuildModuleBase
     {
-        ArgumentNullException.ThrowIfNull(_settings);
-        ArgumentNullException.ThrowIfNull(_mafiaData);
+        public SettingsModule(InteractiveService interactiveService) : base(interactiveService)
+        {
+        }
 
 
-        GuildLogger.Debug(LogTemplate, nameof(SetAndSaveSettingsToDbAsync), "Settings saving...");
+        [Command("Общие")]
+        [Alias("о")]
+        public async Task SetGeneralSettingsAsync()
+        {
+            var settingsVM = new MafiaSettingsViewModel();
+
+            var success = await TrySetParameters(settingsVM);
 
 
-        _settings.GeneralTextChannelId = _mafiaData.GeneralTextChannel.Id;
-        _settings.MurdersTextChannelId = _mafiaData.MurderTextChannel.Id;
+            if (!success)
+            {
+                await ReplyEmbedAsync(EmbedStyle.Warning, "Общие настройки мафии не были сохранены");
+
+                return;
+            }
+
+            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
+
+            SetParameters(settings, settingsVM);
+
+            await Context.Db.SaveChangesAsync();
+
+            await ReplyEmbedAsync(EmbedStyle.Successfull, "Общие настройки мафии успешно сохранены");
+        }
 
 
-        await Context.Db.SaveChangesAsync();
+        [Command("Автонастройка")]
+        [Alias("ан")]
+        public async Task AutoSetGeneralSettingsAsync()
+        {
+            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
 
-        GuildLogger.Debug(LogTemplate, nameof(SetAndSaveSettingsToDbAsync), "Settings saved");
+
+            var categoryChannel = await Context.Guild.GetCategoryChannelOrCreateAsync(settings.CategoryChannelId, "Мафия", SetCategoryChannel);
+
+            settings.CategoryChannelId = categoryChannel.Id;
+
+
+            var generalTextChannelTask = Context.Guild.GetTextChannelOrCreateAsync(settings.GeneralTextChannelId, "мафия-общий", SetCategoryChannel);
+            var murderTextChannelTask = Context.Guild.GetTextChannelOrCreateAsync(settings.MurdersTextChannelId, "мафия-убийцы", SetCategoryChannel);
+            var spectatorsTextChannelTask = Context.Guild.GetTextChannelOrCreateAsync(settings.MurdersTextChannelId, "мафия-наблюдатели", SetCategoryChannel);
+            var generalVoiceChannelTask = Context.Guild.GetVoiceChannelOrCreateAsync(settings.GeneralVoiceChannelId, "мафия-общий", SetCategoryChannel);
+            var murdersVoiceChannelTask = Context.Guild.GetVoiceChannelOrCreateAsync(settings.MurdersVoiceChannelId, "мафия-убийцы", SetCategoryChannel);
+
+            var spectatorssVoiceChannelTask = Context.Guild.GetVoiceChannelOrCreateAsync(settings.WatchersVoiceChannelId, "мафия-наблюдатели", SetCategoryChannel);
+            var mafiaRoleTask = Context.Guild.GetRoleOrCreateAsync(settings.MafiaRoleId, "Игрок мафии", null, Color.Blue, true, true);
+            var spectatorRoleTask = Context.Guild.GetRoleOrCreateAsync(settings.MafiaRoleId, "Наблюдатель мафии", null, Color.DarkBlue, true, true);
+
+
+            var settigsVM = new MafiaSettingsViewModel()
+            {
+                GeneralTextChannelId = (await generalTextChannelTask).Id,
+                MurdersTextChannelId = (await murderTextChannelTask).Id,
+                WatchersTextChannelId = (await spectatorsTextChannelTask).Id,
+                GeneralVoiceChannelId = (await generalVoiceChannelTask).Id,
+                MurdersVoiceChannelId = (await murdersVoiceChannelTask).Id,
+                WatchersVoiceChannelId = (await spectatorssVoiceChannelTask).Id,
+                MafiaRoleId = (await mafiaRoleTask).Id,
+                WatcherRoleId = (await spectatorRoleTask).Id
+            };
+
+
+            SetParameters(settings, settigsVM);
+
+            await Context.Db.SaveChangesAsync();
+
+
+            await ReplyEmbedStampAsync(EmbedStyle.Successfull, "Автонастройка успешно завершена");
+
+
+            void SetCategoryChannel(GuildChannelProperties props)
+            {
+                props.CategoryId = settings.CategoryChannelId;
+
+                var overwrites = new List<Overwrite>
+                {
+                    new(Context.Guild.EveryoneRole.Id, PermissionTarget.Role, new OverwritePermissions(viewChannel: PermValue.Deny))
+                };
+
+                props.PermissionOverwrites = overwrites;
+            }
+        }
+
+
+        [Command("Сброс")]
+        public async Task ResetGeneralSettingsAsync()
+        {
+            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
+
+
+            var tasksNullable = new List<Task?>
+            {
+                Context.Guild.GetCategoryChannel(settings.CategoryChannelId ?? 0)?.DeleteAsync(),
+                Context.Guild.GetTextChannel(settings.GeneralTextChannelId ?? 0)?.DeleteAsync(),
+                Context.Guild.GetTextChannel(settings.MurdersTextChannelId ?? 0)?.DeleteAsync(),
+                Context.Guild.GetTextChannel(settings.WatchersTextChannelId ?? 0)?.DeleteAsync(),
+                Context.Guild.GetVoiceChannel(settings.GeneralVoiceChannelId ?? 0)?.DeleteAsync(),
+                Context.Guild.GetVoiceChannel(settings.MurdersVoiceChannelId ?? 0)?.DeleteAsync(),
+                Context.Guild.GetVoiceChannel(settings.WatchersVoiceChannelId ?? 0)?.DeleteAsync(),
+                Context.Guild.GetRole(settings.MafiaRoleId ?? 0)?.DeleteAsync(),
+                Context.Guild.GetRole(settings.WatcherRoleId ?? 0)?.DeleteAsync()
+            };
+
+            List<Task> tasks = tasksNullable.Where(t => t is not null).ToList()!;
+
+            await Task.WhenAll(tasks);
+
+
+            settings.CategoryChannelId = null;
+            settings.GeneralTextChannelId = null;
+            settings.MurdersTextChannelId = null;
+            settings.WatchersTextChannelId = null;
+            settings.GeneralVoiceChannelId = null;
+            settings.MurdersVoiceChannelId = null;
+            settings.WatchersVoiceChannelId = null;
+            settings.MafiaRoleId = null;
+            settings.WatcherRoleId = null;
+
+
+            await Context.Db.SaveChangesAsync();
+
+
+            await ReplyEmbedStampAsync(EmbedStyle.Successfull, "Общие настройки успешно сброшены");
+        }
+
+
+        [Command("Роли")]
+        [Alias("р")]
+        public async Task SetRoleAmountSettingsAsync()
+        {
+            var settingsVM = new RoleAmountSubSettingsViewModel();
+
+            var success = await TrySetParameters(settingsVM);
+
+            if (!success)
+            {
+                await ReplyEmbedAsync(EmbedStyle.Warning, "Настройки ролей не были сохранены");
+
+                return;
+            }
+
+            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
+            settings.Current = Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
+
+            var roleAmountSettings = settings.Current.RoleAmountSubSettings;
+            SetParameters(roleAmountSettings, settingsVM);
+            settings.Current.RoleAmountSubSettings = roleAmountSettings;
+
+
+            if (settings.Current.RoleAmountSubSettings.MurdersCount == 0 && settings.Current.RoleAmountSubSettings.DonsCount == 0)
+            {
+                await ReplyEmbedAndDeleteAsync(EmbedStyle.Error, "Для игры необходима хотя бы одна черная роль");
+
+                return;
+            }
+
+
+            await Context.Db.SaveChangesAsync();
+
+
+            await ReplyEmbedAndDeleteAsync(EmbedStyle.Successfull, "Настройки ролей успешно сохранены");
+        }
+
+        [Command("РолиДействия")]
+        [Alias("РДействия", "рд")]
+        public async Task SetRolesInfoSubSettingsAsync()
+        {
+            var settingsVM = new RolesInfoSubSettingsViewModel();
+
+            var success = await TrySetParameters(settingsVM);
+
+            if (!success)
+            {
+                await ReplyEmbedAsync(EmbedStyle.Warning, "Дополнительные настройки ролей не были сохранены");
+
+                return;
+            }
+
+            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
+
+            settings.Current ??= Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
+
+
+            var rolesSettings = settings.Current.RolesInfoSubSettings;
+            SetParameters(rolesSettings, settingsVM);
+            settings.Current.RolesInfoSubSettings = rolesSettings;
+
+
+            var MurdersKnowEachOther = settings.Current.RolesInfoSubSettings.MurdersKnowEachOther;
+            var MurdersVoteTogether = settings.Current.RolesInfoSubSettings.MurdersVoteTogether;
+
+            if (!MurdersKnowEachOther && MurdersVoteTogether)
+            {
+                await ReplyEmbedAndDeleteAsync(EmbedStyle.Error, $"Конфликт настроек. " +
+                    $"Параметры {nameof(MurdersKnowEachOther)} ({MurdersKnowEachOther}) и {nameof(MurdersVoteTogether)} ({MurdersVoteTogether}) взаимоисключают друг друга. " +
+                    $"Измените значение одного или двух параметров для устранения конфликта");
+
+                return;
+            }
+
+
+            await Context.Db.SaveChangesAsync();
+
+
+            await ReplyEmbedAndDeleteAsync(EmbedStyle.Successfull, "Дополнительные настройки ролей успешно сохранены");
+        }
+
+        [Command("Сервер")]
+        [Alias("серв", "с")]
+        public async Task SetServerSubSettingsAsync()
+        {
+            var serverSettingsVM = new ServerSubSettingsViewModel();
+
+            var success = await TrySetParameters(serverSettingsVM);
+
+
+            if (!success)
+            {
+                await ReplyEmbedAsync(EmbedStyle.Warning, "Серверные настройки не были сохранены");
+
+                return;
+            }
+
+            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
+
+            settings.Current ??= Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
+
+
+            var serverSettings = settings.Current.ServerSubSettings;
+            SetParameters(serverSettings, serverSettingsVM);
+            settings.Current.ServerSubSettings = serverSettings;
+
+
+            await Context.Db.SaveChangesAsync();
+
+            await ReplyEmbedAsync(EmbedStyle.Successfull, "Настройки сервера успешно сохранены");
+        }
+
+        [Command("Игра")]
+        [Alias("и")]
+        public async Task SetGameSubSettingsAsync()
+        {
+            var settingsVM = new GameSubSettingsViewModel();
+
+            var success = await TrySetParameters(settingsVM);
+
+
+            if (!success)
+            {
+                await ReplyEmbedAsync(EmbedStyle.Warning, "Настройки игры не были сохранены");
+
+                return;
+            }
+
+            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
+
+            settings.Current = Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
+
+
+            var gameSettings = settings.Current.GameSubSettings;
+            SetParameters(gameSettings, settingsVM);
+            settings.Current.GameSubSettings = gameSettings;
+
+
+            if (settings.Current.GameSubSettings.MafiaCoefficient <= 1)
+            {
+                await ReplyEmbedAndDeleteAsync(EmbedStyle.Warning, "Коэффиент мафии не может быть меньше 2. Установлено стандартное значение **3**");
+
+                settings.Current.GameSubSettings = gameSettings with
+                {
+                    MafiaCoefficient = 3
+                };
+            }
+
+            if (settings.Current.GameSubSettings.VoteTime <= 0)
+            {
+                await ReplyEmbedAndDeleteAsync(EmbedStyle.Warning, "Установлено стандартное значение времени голосования: **40**");
+
+                settings.Current.GameSubSettings = gameSettings with
+                {
+                    VoteTime = 40
+                };
+            }
+
+            await Context.Db.SaveChangesAsync();
+
+            await ReplyEmbedAsync(EmbedStyle.Successfull, "Настройки сервера успешно сохранены");
+        }
+
+
+        [Command("Текущие")]
+        [Alias("тек", "т")]
+        public async Task ShowAllSettingsAsync()
+        {
+            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
+
+            settings.Current = Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
+
+            // Mapper
+
+            var settingsVM = new MafiaSettingsViewModel()
+            {
+                CategoryChannelId = settings.CategoryChannelId,
+                GeneralTextChannelId = settings.GeneralTextChannelId,
+                MurdersTextChannelId = settings.MurdersTextChannelId,
+                WatchersTextChannelId = settings.WatchersTextChannelId,
+                GeneralVoiceChannelId = settings.GeneralVoiceChannelId,
+                MurdersVoiceChannelId = settings.MurdersVoiceChannelId,
+                WatchersVoiceChannelId = settings.WatchersVoiceChannelId,
+                MafiaRoleId = settings.MafiaRoleId,
+                WatcherRoleId = settings.WatcherRoleId
+            };
+
+            await ShowSettingsAsync(settingsVM, "Общие настройки");
+            await ShowSettingsAsync(settings.Current.ServerSubSettings, "Настройки сервера");
+            await ShowSettingsAsync(settings.Current.GameSubSettings, "Настройки игры");
+            await ShowSettingsAsync(settings.Current.RoleAmountSubSettings, "Настройки количества ролей");
+            await ShowSettingsAsync(settings.Current.RolesInfoSubSettings, "Настройки действий ролей");
+        }
+
+
+        [Command("Проверка")]
+        [Alias("чек")]
+        public async Task CheckSettingsAsync()
+        {
+            var settings = await Context.GetGameSettingsAsync<MafiaSettings>(false);
+
+
+            var message = "";
+
+            message += Handle(settings.CategoryChannelId, nameof(settings.CategoryChannelId), Context.Guild.GetCategoryChannel) + "\n";
+            message += Handle(settings.MafiaRoleId, nameof(settings.MafiaRoleId), Context.Guild.GetRole) + "\n";
+            message += Handle(settings.WatcherRoleId, nameof(settings.WatcherRoleId), Context.Guild.GetRole) + "\n";
+            message += Handle(settings.GeneralTextChannelId, nameof(settings.GeneralTextChannelId), Context.Guild.GetTextChannel) + "\n";
+            message += Handle(settings.MurdersTextChannelId, nameof(settings.MurdersTextChannelId), Context.Guild.GetTextChannel) + "\n";
+            message += Handle(settings.WatchersTextChannelId, nameof(settings.WatchersTextChannelId), Context.Guild.GetTextChannel) + "\n";
+            message += Handle(settings.GeneralVoiceChannelId, nameof(settings.GeneralVoiceChannelId), Context.Guild.GetVoiceChannel) + "\n";
+            message += Handle(settings.MurdersVoiceChannelId, nameof(settings.MurdersVoiceChannelId), Context.Guild.GetVoiceChannel) + "\n";
+            message += Handle(settings.WatchersVoiceChannelId, nameof(settings.WatchersVoiceChannelId), Context.Guild.GetVoiceChannel);
+
+
+            await ReplyEmbedStampAsync(EmbedStyle.Information, message, "Проверка настроек");
+
+
+            static string Handle<T>(ulong? id, string propName, Func<ulong, T?> action)
+            {
+                var str = $"**{propName}** [{id?.ToString() ?? "Null"}]";
+
+                if (id is null)
+                    return $"{str} - ()";
+
+                var result = action(id ?? 0);
+
+                return result is not null
+                    ? $"{str} - {ConfirmEmote.Name}"
+                    : $"{str} - {DenyEmote.Name}";
+            }
+        }
+
+
+        private async Task ShowSettingsAsync<T>(T settings, string title) where T : notnull
+        {
+            var parameters = settings.GetType().GetProperties().ToList();
+
+            var fields = parameters.Select(p => new EmbedFieldBuilder()
+            {
+                Name = GetPropertyName(p),
+                Value = p.GetValue(settings) ?? "Null",
+                IsInline = true,
+            });
+
+            var embedBuilder = new EmbedBuilder()
+                .WithTitle(title)
+                .WithFields(fields)
+                .WithInformationMessage(false)
+                .WithUserFooter(Context.User)
+                .WithCurrentTimestamp();
+
+
+            await ReplyAsync(embed: embedBuilder.Build());
+        }
+
+
+        private async Task<bool> TrySetParameters<T>(T settings) where T : notnull
+        {
+            var wasSetSettings = false;
+
+
+            var parameters = settings.GetType().GetProperties().Where(p => p.CanWrite).ToList();
+
+            var parameterNames = GetPropertiesName(parameters).ToList();
+
+            var emotes = GetEmotesList(parameterNames.Count, parameterNames, out var text);
+
+
+            while (true)
+            {
+                var message = await ReplyEmbedAsync(EmbedStyle.Information, $"Выберите интересующий вас параметр\n{text}");
+
+
+                var reactionResult = await NextReactionAsync(message, TimeSpan.FromSeconds(30), emotes, true);
+
+
+                if (!reactionResult.IsSuccess)
+                {
+                    await ReplyEmbedAsync(EmbedStyle.Warning, "Вы не выбрали параметр");
+
+                    break;
+                }
+
+                if (reactionResult?.Value.Emote is not IEmote selectedEmote)
+                {
+                    await ReplyEmbedAsync(EmbedStyle.Warning, "Неверный параметр");
+
+                    break;
+                }
+
+                if (selectedEmote.Name == CancelEmote.Name)
+                {
+                    await ReplyEmbedAsync(EmbedStyle.Information, "Вы отменили выбор");
+
+                    break;
+                }
+
+                var index = emotes.IndexOf(selectedEmote);
+
+
+                if (index == -1 || index > parameters.Count)
+                {
+                    await ReplyEmbedAsync(EmbedStyle.Error, "Параметр не найден");
+
+                    break;
+                }
+
+
+                var embed = CreateEmbed(EmbedStyle.Information, $"Напишите значение выбранного параметра **{parameterNames[index]}**");
+                var valueMessageResult = await NextMessageAsync(embed: embed);
+
+                if (!valueMessageResult.IsSuccess)
+                {
+                    await ReplyEmbedAndDeleteAsync(EmbedStyle.Warning, $"Вы не указали значение параметра **{parameterNames[index]}**");
+
+                    break;
+                }
+
+                if (valueMessageResult?.Value is not SocketMessage valueMessage)
+                {
+                    await ReplyEmbedAsync(EmbedStyle.Warning, "Неверное значение параметра");
+
+                    break;
+                }
+
+                if (parameters[index].PropertyType == typeof(bool?) || parameters[index].PropertyType == typeof(bool))
+                {
+                    var result = await new BooleanTypeReader().ReadAsync(Context, valueMessage.Content);
+
+                    if (result.IsSuccess)
+                        parameters[index].SetValue(settings, result.Values is not null ? result.BestMatch : null);
+                    else
+                    {
+                        await ReplyEmbedAsync(EmbedStyle.Error, $"Не удалось установить значение параметра **{parameterNames[index]}**");
+
+                        break;
+                    }
+                }
+                else
+                {
+                    var converter = TypeDescriptor.GetConverter(parameters[index].PropertyType);
+
+                    if (converter.IsValid(valueMessage.Content))
+                    {
+                        var value = converter.ConvertFrom(valueMessage.Content);
+
+                        parameters[index].SetValue(settings, value);
+                    }
+                    else
+                    {
+                        await ReplyEmbedAsync(EmbedStyle.Error, $"Не удалось установить значение параметра **{parameterNames[index]}**");
+
+                        break;
+                    }
+                }
+
+                wasSetSettings = true;
+
+                await ReplyEmbedAndDeleteAsync(EmbedStyle.Successfull, $"Значение параметра **{parameterNames[index]}** успешно установлено");
+
+
+                var isContinue = await ConfirmActionAsync("Продолжить настройку?");
+
+                if (isContinue is not true)
+                    break;
+            }
+
+
+            if (wasSetSettings)
+                await ReplyEmbedAndDeleteAsync(EmbedStyle.Successfull, "Настройки успешно установлены");
+            else
+                await ReplyEmbedAndDeleteAsync(EmbedStyle.Warning, "Настройки не были установлены");
+
+            return wasSetSettings;
+        }
+
+
+        private void SetParameters<TData, TViewModel>(TData data, TViewModel viewModel)
+            where TData : notnull
+            where TViewModel : notnull
+        {
+            var dataParameters = data.GetType().GetProperties().Where(p => p.CanWrite).ToDictionary(p => p.Name);
+            var vmParameters = viewModel.GetType().GetProperties().Where(p => p.CanWrite);
+
+            foreach (var vmParam in vmParameters)
+            {
+                if (!dataParameters.TryGetValue(vmParam.Name, out var dataParam))
+                {
+                    GuildLogger.Warning(LogTemplate, nameof(SetParameters),
+                        $"View Model parameter {vmParam.Name} was not found in Data parameters");
+
+                    continue;
+                }
+
+                if (vmParam.PropertyType != dataParam.PropertyType && Nullable.GetUnderlyingType(vmParam.PropertyType) != dataParam.PropertyType)
+                {
+                    var msg = $"Param {dataParam.Name}: Data param type ({dataParam.PropertyType}) is not equals to ViewModel param type ({vmParam.PropertyType})";
+
+                    GuildLogger.Warning(LogTemplate, nameof(SetParameters), msg);
+
+                    Log.Warning(LogTemplate, nameof(SetParameters), $"[{Context.Guild.Name} {Context.Guild.Id}] {msg}");
+
+                    continue;
+                }
+
+
+                if (vmParam.PropertyType == typeof(bool?) || vmParam.PropertyType == typeof(bool))
+                {
+                    var vmValue = vmParam.GetValue(viewModel);
+
+                    if (vmValue is not null)
+                        dataParam.SetValue(data, vmValue);
+                }
+                else if (vmParam.PropertyType == typeof(int?) || vmParam.PropertyType == typeof(int))
+                {
+                    var vmValue = vmParam.GetValue(viewModel);
+
+                    if (vmValue is not null)
+                    {
+                        if (vmValue.Equals(-1))
+                            dataParam.SetValue(data, default);
+                        else
+                            dataParam.SetValue(data, vmValue);
+                    }
+                }
+                else if (vmParam.PropertyType == typeof(ulong?) || vmParam.PropertyType == typeof(ulong))
+                {
+                    var vmValue = vmParam.GetValue(viewModel);
+
+                    if (vmValue is not null)
+                    {
+                        if (vmValue.Equals(0ul))
+                            dataParam.SetValue(data, default);
+                        else
+                            dataParam.SetValue(data, vmValue);
+                    }
+                }
+                else
+                {
+                    var vmValue = vmParam.GetValue(viewModel);
+
+                    dataParam.SetValue(data, vmValue);
+                }
+            }
+        }
+
+        private static IEnumerable<string> GetPropertiesName(IEnumerable<PropertyInfo> props)
+            => props.Select(p => GetPropertyName(p));
+
+        private static string GetPropertyName(PropertyInfo prop)
+        {
+            var displayNameAttribute = prop.GetCustomAttribute<DisplayNameAttribute>();
+
+            return displayNameAttribute is not null
+            ? $"{displayNameAttribute.DisplayName} {prop.GetPropertyShortType()}"
+            : prop.GetPropertyFullName();
+        }
     }
+
+
+    public class MafiaHelpModule : HelpModule
+    {
+        public MafiaHelpModule(InteractiveService interactiveService, IConfiguration config) : base(interactiveService, config)
+        {
+        }
+
+
+        [Command("Роли")]
+        public virtual async Task ShowGameRolesAsync(bool sendToServer = false)
+        {
+            var gameRulesSection = GetGameSection("Roles");
+
+            if (gameRulesSection is null)
+            {
+                await ReplyEmbedAsync(EmbedStyle.Error, "Список ролей не найден");
+
+                return;
+            }
+
+
+            var title = gameRulesSection.GetTitle() ?? "Роли";
+
+            var builder = new EmbedBuilder()
+                .WithTitle(title)
+                .WithInformationMessage();
+
+            foreach (var section in gameRulesSection.GetChildren())
+            {
+                var roleField = section.GetEmbedFieldInfo();
+
+                if (roleField is not null)
+                    builder.AddField(roleField?.Item1, roleField?.Item2);
+            }
+
+            if (!sendToServer)
+                await Context.User.SendMessageAsync(embed: builder.Build());
+            else
+                await ReplyAsync(embed: builder.Build());
+        }
+    }
+
+
+
 
 
     private class MafiaData
@@ -2664,6 +2950,8 @@ public class MafiaModule : GameModule
         public Dictionary<IGuildUser, Murder> Murders { get; }
 
         public Dictionary<IGuildUser, Don> Dons { get; }
+
+        public Dictionary<IGuildUser, Neutral> Neutrals { get; }
 
         public Dictionary<IGuildUser, Maniac> Maniacs { get; }
 
@@ -2698,6 +2986,8 @@ public class MafiaModule : GameModule
 
         public bool IsFirstNight { get; set; }
 
+        public int VoteTime { get; }
+
 
         public MafiaData(ITextChannel generalTextChannel,
                          ITextChannel murderTextChannel,
@@ -2706,14 +2996,21 @@ public class MafiaModule : GameModule
                          IVoiceChannel? murderVoiceChannel,
                          IVoiceChannel? watcherVoiceChannel,
                          IRole mafiaRole,
-                         IRole? watcherRole)
+                         IRole? watcherRole,
+                         int voteTime)
         {
+            VoteTime = voteTime;
+
             AllRoles = new();
+
             Innocents = new();
             Doctors = new();
             Sheriffs = new();
+
             Murders = new();
             Dons = new();
+
+            Neutrals = new();
             Maniacs = new();
             Hookers = new();
 
@@ -2742,148 +3039,15 @@ public class MafiaModule : GameModule
         }
     }
 
-    /*
-    private class MafiaStatsHelper
+
+    private class MafiaChronology : Chronology<StringChronology>
     {
-        private readonly MafiaData _mafiaData;
-
-        private readonly Dictionary<ulong, MafiaStats> _mafiaStats;
+        private int _currentDay;
 
 
-        public MafiaStatsHelper(MafiaData mafiaData)
+        public MafiaChronology()
         {
-            _mafiaStats = new();
-
-            _mafiaData = mafiaData;
-        }
-
-
-        public MafiaStats this[ulong key] => _mafiaStats[key];
-
-
-        public void AddPlayer(ulong playerId)
-            => _mafiaStats[playerId] = new()
-            {
-                UserId = playerId
-            };
-
-
-
-        public void UpdateWinsStat(bool isMafiaWon, IGuildUser player)
-        {
-            if (_mafiaData.AllMurders.Contains(player))
-            {
-                if (isMafiaWon)
-                {
-                    _mafiaStats[player.Id].BlacksWinsCount++;
-                    _mafiaStats[player.Id].ExtraScores += 0.5f;
-                }
-            }
-            else if (!isMafiaWon)
-                _mafiaStats[player.Id].WinsCount++;
-        }
-
-        public void UpdateDoctorStat(bool savedFromMurder, bool savedFromCommissioner)
-        {
-            if (_mafiaData.Doctor is null)
-                return;
-
-            var doctorStats = _mafiaStats[_mafiaData.Doctor.Id];
-
-            switch (savedFromMurder, savedFromCommissioner)
-            {
-                case (true, true):
-                    doctorStats.DoctorSuccessfullMovesCount++;
-                    doctorStats.ExtraScores++;
-                    break;
-
-                case (true, false):
-                    doctorStats.DoctorSuccessfullMovesCount++;
-                    if (_mafiaData.MurdersMove == _mafiaData.Commissioner)
-                        doctorStats.ExtraScores += 0.5f;
-                    break;
-
-                case (false, true):
-                    if (!_mafiaData.AliveMurders.Contains(_mafiaData.DoctorMove!))
-                        doctorStats.DoctorSuccessfullMovesCount++;
-                    break;
-
-                default:
-                    break;
-            }
-        }
-
-        public void UpdateCommissionerStat(bool wasCommissionerKill)
-        {
-            if (_mafiaData.Has3MurdersInGame && _mafiaData.Commissioner is not null && wasCommissionerKill)
-            {
-                var commissionerStats = _mafiaStats[_mafiaData.Commissioner.Id];
-
-                if (_mafiaData.AliveMurders.Contains(_mafiaData.CommissionerMove!))
-                {
-                    commissionerStats.CommissionerSuccessfullShotsCount++;
-                    commissionerStats.ExtraScores++;
-                }
-                else if (_mafiaData.Doctor == _mafiaData.CommissionerMove)
-                    commissionerStats.PenaltyScores += 1.5f;
-                else
-                    commissionerStats.PenaltyScores++;
-            }
-        }
-        public void UpdateCommissionerStat(bool hasSkipped, bool hasFoundMurder)
-        {
-            if (_mafiaData.Commissioner is null)
-                return;
-
-            var commissionerStats = _mafiaStats[_mafiaData.Commissioner.Id];
-
-            if (!hasSkipped)
-            {
-                commissionerStats.CommissionerMovesCount++;
-
-                if (hasFoundMurder)
-                    commissionerStats.CommissionerSuccessfullFoundsCount++;
-            }
-        }
-
-
-        public void UpdateDonStat(bool hasSkipped, bool hasFoundCommissioner)
-        {
-            if (_mafiaData.Don is null)
-                return;
-
-            var donStats = _mafiaStats[_mafiaData.Don.Id];
-
-            if (!hasSkipped)
-            {
-                donStats.CommissionerMovesCount++;
-
-                if (hasFoundCommissioner)
-                {
-
-                    donStats.DonSuccessfullMovesCount++;
-                    donStats.ExtraScores++;
-                }
-            }
-        }
-
-        public void AddDoctorMovesCount()
-        {
-            if (_mafiaData.Doctor is not null)
-                _mafiaStats[_mafiaData.Doctor.Id].DoctorMovesCount++;
-        }
-    }*/
-
-
-
-
-    private class GameChronology
-    {
-        private readonly Queue<string> _actions;
-
-        public GameChronology()
-        {
-            _actions = new();
+            _currentDay = -1;
         }
 
 
@@ -2893,20 +3057,15 @@ public class MafiaModule : GameModule
                 ? $"[{role.Name}] {role.Player.GetFullMention()}: **{action}**"
                 : $"{role.Name}: **{action}**";
 
-            _actions.Enqueue(str);
+            Actions[_currentDay].AddAction(str);
 
             return str;
         }
 
-
-        public string FlattenActionHistory()
+        public void NextDay()
         {
-            var str = "";
-
-            while (_actions.Count > 0)
-                str += $"{_actions.Dequeue()}\n";
-
-            return str;
+            AddAction(new());
+            _currentDay++;
         }
     }
 }

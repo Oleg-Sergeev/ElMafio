@@ -7,6 +7,7 @@ using Core.Common;
 using Core.Extensions;
 using Discord;
 using Discord.Commands;
+using Fergun.Interactive;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Services;
@@ -18,6 +19,11 @@ namespace Modules;
 [RequireContext(ContextType.Guild)]
 public class AdminModule : GuildModuleBase
 {
+    public AdminModule(InteractiveService interactiveService) : base(interactiveService)
+    {
+    }
+
+
     [Command("Ник")]
     [RequireUserPermission(GuildPermission.ChangeNickname)]
     [RequireBotPermission(GuildPermission.ManageNicknames)]
@@ -374,6 +380,11 @@ public class AdminModule : GuildModuleBase
     [Group("Смайл")]
     public class SmileModule : GuildModuleBase
     {
+        public SmileModule(InteractiveService interactiveService) : base(interactiveService)
+        {
+        }
+
+
         [Priority(-1)]
         [Command("Добавить")]
         [RequireUserPermission(GuildPermission.Administrator)]
@@ -486,6 +497,11 @@ public class AdminModule : GuildModuleBase
     [Group]
     public class OwnerModule : GuildModuleBase
     {
+        public OwnerModule(InteractiveService interactiveService) : base(interactiveService)
+        {
+        }
+
+
         [RequireOwner]
         [Command("лог")]
         public async Task GetFileLogTodayAsync()

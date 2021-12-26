@@ -16,7 +16,7 @@ public abstract class RolesGroup : GameRole
     public override bool BlockedByHooker => Roles.All(r => r.BlockedByHooker);
 
 
-    public RolesGroup(IReadOnlyList<GameRole> roles, IOptionsSnapshot<GameRoleData> options, int voteTime) : base(roles[0].Player, options, voteTime)
+    public RolesGroup(IReadOnlyList<GameRole> roles, IOptionsSnapshot<GameRoleData> options) : base(roles[0].Player, options)
     {
         Roles = roles;
     }

@@ -33,6 +33,9 @@ public class MafiaSettings : GameSettings
     public ulong? WatcherRoleId { get; set; }
 
 
+    public bool ClearChannelsOnStart { get; set; }
+
+
 
     public List<SettingsTemplate> SettingsTemplates { get; private set; } = null!;
 

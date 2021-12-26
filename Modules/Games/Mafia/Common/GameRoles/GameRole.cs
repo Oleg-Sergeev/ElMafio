@@ -24,9 +24,6 @@ public abstract class GameRole
 
     public virtual string Name { get; }
 
-    public virtual int VoteTime { get; }
-
-
     public virtual bool IsAlive { get; protected set; }
 
     public virtual bool BlockedByHooker { get; protected set; }
@@ -34,20 +31,18 @@ public abstract class GameRole
     public virtual bool IsNight { get; protected set; }
 
 
-    protected bool IsSkip { get; set; }
+    public bool IsSkip { get; protected set; }
 
     protected GameRoleData Data { get; }
 
 
 
-    public GameRole(IGuildUser player, IOptionsSnapshot<GameRoleData> options, int voteTime)
+    public GameRole(IGuildUser player, IOptionsSnapshot<GameRoleData> options)
     {
         var name = GetType().Name;
         Data = options.Get(name);
 
         Name = Data.Name;
-
-        VoteTime = voteTime;
 
         Player = player;
 
@@ -111,7 +106,7 @@ public abstract class GameRole
         }
     }
 
-    public virtual void Unblock()
+    public virtual void UnblockAll()
     {
         BlockedByHooker = false;
     }
@@ -119,9 +114,6 @@ public abstract class GameRole
     public virtual void SetPhase(bool isNight)
     {
         IsNight = isNight;
-
-        if (isNight)
-            BlockedByHooker = false;
     }
 
 

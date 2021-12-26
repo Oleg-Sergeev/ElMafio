@@ -2,6 +2,7 @@
 using Core.Common;
 using Discord;
 using Discord.Commands;
+using Fergun.Interactive;
 
 namespace Modules;
 
@@ -11,6 +12,11 @@ namespace Modules;
 [RequireUserPermission(GuildPermission.Administrator)]
 public class SettingsModule : GuildModuleBase
 {
+    public SettingsModule(InteractiveService interactiveService) : base(interactiveService)
+    {
+    }
+
+
     [Command("Префикс")]
     [Alias("преф", "п")]
     [Summary("Изменить префикс бота")]

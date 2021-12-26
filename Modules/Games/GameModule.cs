@@ -8,6 +8,7 @@ using Core.Extensions;
 using Core.Interfaces;
 using Discord;
 using Discord.Commands;
+using Fergun.Interactive;
 using Infrastructure.Data.Models;
 using Infrastructure.Data.Models.Games.Stats;
 using Microsoft.EntityFrameworkCore;
@@ -27,7 +28,7 @@ public abstract class GameModule : GuildModuleBase
 
     protected GameModuleData? GameData { get; set; }
 
-    public GameModule(IConfiguration config, IRandomService random)
+    public GameModule(InteractiveService interactiveService, IConfiguration config, IRandomService random) : base(interactiveService)
     {
         Config = config;
         Random = random;
@@ -566,7 +567,7 @@ public abstract class GameModule : GuildModuleBase
         protected IConfiguration Config { get; }
 
 
-        protected HelpModule(IConfiguration config)
+        protected HelpModule(InteractiveService interactiveService, IConfiguration config) : base(interactiveService)
         {
             Config = config;
         }

@@ -4,31 +4,40 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Core.Common;
-using Core.EnsureCriterias;
 using Core.Extensions;
 using Discord;
-using Discord.Addons.Interactive;
+using Discord.Commands;
 using Discord.Net;
 using Discord.WebSocket;
+using Fergun.Interactive;
 using Serilog;
 using Services;
 
 namespace Modules;
 
-public abstract class GuildModuleBase : InteractiveBase<DbSocketCommandContext>
+public abstract class GuildModuleBase : ModuleBase<DbSocketCommandContext>
 {
     protected const string LogTemplate = "({Context:l}): {Message}";
 
     protected const int VotingOptionsMaxCount = 19;
 
+
     protected static readonly IEmote ConfirmEmote = new Emoji("✅");
     protected static readonly IEmote DenyEmote = new Emoji("❌");
     protected static readonly IEmote CancelEmote = new Emoji("⏹️");
+
 
     private ILogger? _guildLogger;
     protected ILogger GuildLogger => _guildLogger ??= GetGuildLogger(Context.Guild.Id);
 
 
+    protected InteractiveService Interactive { get; }
+
+
+    protected GuildModuleBase(InteractiveService interactiveService)
+    {
+        Interactive = interactiveService;
+    }
 
 
     protected static ILogger GetGuildLogger(ulong guildId)
@@ -221,7 +230,9 @@ public abstract class GuildModuleBase : InteractiveBase<DbSocketCommandContext>
         return msg;
     }
 
-    public async Task<IEmote?> NextReactionAsync(IUserMessage message, TimeSpan? timeout = null, IList<IEmote>? emotes = null, bool hasCancellationSmile = false)
+
+    public async Task<InteractiveResult<SocketReaction?>> NextReactionAsync(IUserMessage message, TimeSpan? timeout = null, IList<IEmote>? emotes = null,
+        bool hasCancellationSmile = false, RequestOptions? options = null, CancellationToken cancellationToken = default)
     {
         emotes ??= message.Reactions.Keys.ToList();
 
@@ -234,28 +245,21 @@ public abstract class GuildModuleBase : InteractiveBase<DbSocketCommandContext>
         if (hasCancellationSmile)
             emotes.Add(CancelEmote);
 
-        timeout ??= TimeSpan.FromSeconds(15);
-
-        var criterion = new Criteria<SocketReaction>()
-              .AddCriterion(new EnsureReactionFromSourceUserCriterion())
-              .AddCriterion(new EnsureReactionFromMessageCriterion(message));
-
-        var eventTrigger = new TaskCompletionSource<SocketReaction>();
-
         var cts = new CancellationTokenSource();
 
+        options ??= new RequestOptions()
+        {
+            CancelToken = cts.Token
+        };
 
-        Context.Client.ReactionAdded += HandlerAsync;
+        if (options.CancelToken == default)
+            options.CancelToken = cts.Token;
 
-        var addReactionsTask = message.AddReactionsAsync(emotes.ToArray(), new() { CancelToken = cts.Token });
+        timeout ??= TimeSpan.FromSeconds(15);
 
-        var trigger = eventTrigger.Task;
-        var delay = Task.Delay(timeout.Value);
+        var addReactionsTask = message.AddReactionsAsync(emotes.ToArray(), options);
 
-        var task = await Task.WhenAny(trigger, delay);
-
-        Context.Client.ReactionAdded -= HandlerAsync;
-
+        var result = await Interactive.NextReactionAsync(x => x.UserId == Context.User.Id && x.MessageId == message.Id, null, timeout, cancellationToken);
 
         cts.Cancel();
 
@@ -263,52 +267,34 @@ public abstract class GuildModuleBase : InteractiveBase<DbSocketCommandContext>
         {
             await addReactionsTask;
         }
-        catch (OperationCanceledException) {}
+        catch (OperationCanceledException) { }
 
 
-        await message.DeleteAsync();
-
-
-        if (task == trigger)
-        {
-            var reaction = await trigger;
-
-            return reaction.Emote;
-        }
-        else
-            return null;
-
-
-
-        async Task HandlerAsync(Cacheable<IUserMessage, ulong> message, ISocketMessageChannel channel, SocketReaction reaction)
-        {
-            if (await criterion.JudgeAsync(Context, reaction))
-                eventTrigger.SetResult(reaction);
-        }
+        return result;
     }
 
-    public async Task<SocketMessage> NextMessageAsync(string? message = null, bool isTTS = false, Embed? embed = null,
-        bool fromSourceUser = true, bool inSourceChannel = true, TimeSpan? timeout = null, IMessageChannel? messageChannel = null, CancellationToken token = default)
+    public async Task<InteractiveResult<SocketMessage?>> NextMessageAsync(string? message = null, bool isTTS = false, Embed? embed = null,
+        bool fromSourceUser = true, bool fromSourceChannel = true, TimeSpan? timeout = null, IMessageChannel? messageChannel = null, CancellationToken cancellationToken = default)
     {
         messageChannel ??= Context.Channel;
 
         await messageChannel.SendMessageAsync(message, isTTS, embed);
 
-        var msg = await NextMessageAsync(fromSourceUser, inSourceChannel, timeout, token);
+        var result = await Interactive.NextMessageAsync(Filter, null, timeout, cancellationToken);
 
-        return msg;
-    }
+        return result;
 
-    public async Task<SocketMessage> NextMessageAsync(ICriterion<SocketMessage> criterion, string? message = null, bool isTTS = false,
-        Embed? embed = null, TimeSpan? timeout = null, IMessageChannel? messageChannel = null, CancellationToken token = default)
-    {
-        messageChannel ??= Context.Channel;
 
-        await messageChannel.SendMessageAsync(message, isTTS, embed);
+        bool Filter(SocketMessage msg)
+        {
+            if (fromSourceUser && msg.Author != Context.User)
+                return false;
 
-        var msg = await NextMessageAsync(criterion, timeout, token);
+            if (fromSourceChannel && msg.Channel != messageChannel)
+                return false;
 
-        return msg;
+            return true;
+        }
     }
 
 
@@ -324,10 +310,12 @@ public abstract class GuildModuleBase : InteractiveBase<DbSocketCommandContext>
 
     public async Task<bool?> ConfirmActionAsync(IUserMessage message, TimeSpan? timeout = null)
     {
-        var selectedEmote = await NextReactionAsync(message, timeout);
+        var result = await NextReactionAsync(message, timeout);
 
-        if (selectedEmote is null)
+        if (!result.IsSuccess)
             return null;
+
+        var selectedEmote = result.Value!.Emote;
 
         if (selectedEmote.Name == ConfirmEmote.Name)
             return true;

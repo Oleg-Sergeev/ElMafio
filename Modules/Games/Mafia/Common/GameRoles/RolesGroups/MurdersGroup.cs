@@ -6,7 +6,7 @@ namespace Modules.Games.Mafia.Common.GameRoles.RolesGroups;
 
 public class MurdersGroup : RolesGroup
 {
-    public MurdersGroup(IReadOnlyList<Murder> roles, IOptionsSnapshot<GameRoleData> options, int voteTime) : base(roles, options, voteTime)
+    public MurdersGroup(IReadOnlyList<Murder> roles, IOptionsSnapshot<GameRoleData> options) : base(roles, options)
     {
 
     }

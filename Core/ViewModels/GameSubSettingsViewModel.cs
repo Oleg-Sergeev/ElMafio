@@ -16,6 +16,10 @@ public class GameSubSettingsViewModel
 
     public bool? ConditionAliveAtLeast1Innocent { get; init; }
 
+    public bool? ConditionContinueGameWithNeutrals { get; init; }
+
     [DisplayName("Поочередное голосование")]
     public bool? IsTurnByTurnVote { get; init; }
+
+    public int? VoteTime { get; init; }
 }

@@ -8,22 +8,11 @@ public static class GuildExtensions
         this IGuild guild,
         ulong? channelId,
         string channelName,
-        int messagesCountToDelete = 500,
-        Action<TextChannelProperties>? textProps = null)
+        Action<TextChannelProperties>? textProps = null,
+        CacheMode mode = CacheMode.AllowDownload,
+        RequestOptions? options = null)
     {
-        var textChannel = await guild.GetTextChannelAsync(channelId ?? 0);
-
-
-        if (textChannel is not null && messagesCountToDelete > 0)
-        {
-            var messages = await textChannel.GetMessagesAsync(messagesCountToDelete).FlattenAsync();
-
-            if (messages.Any())
-                await textChannel.DeleteMessagesAsync(messages);
-        }
-        else
-            textChannel = await guild.CreateTextChannelAsync(channelName, textProps);
-
+        var textChannel = await guild.GetTextChannelAsync(channelId ?? 0, mode, options) ?? await guild.CreateTextChannelAsync(channelName, textProps, options);
 
         return textChannel;
     }
@@ -32,9 +21,11 @@ public static class GuildExtensions
        this IGuild guild,
        ulong? channelId,
        string channelName,
-       Action<VoiceChannelProperties>? voiceProps = null)
+       Action<VoiceChannelProperties>? voiceProps = null,
+       CacheMode mode = CacheMode.AllowDownload,
+       RequestOptions? options = null)
     {
-        var channel = await guild.GetVoiceChannelAsync(channelId ?? 0) ?? await guild.CreateVoiceChannelAsync(channelName, voiceProps);
+        var channel = await guild.GetVoiceChannelAsync(channelId ?? 0, mode, options) ?? await guild.CreateVoiceChannelAsync(channelName, voiceProps, options);
 
         return channel;
     }
@@ -47,34 +38,28 @@ public static class GuildExtensions
         GuildPermissions? guildPermissions = null,
         Color? color = null,
         bool isHoisted = false,
-        bool isMentionable = false)
+        bool isMentionable = false,
+        RequestOptions? options = null)
     {
-        var role = guild.GetRole(roleId ?? 0);
-
-        if (role is null)
-            role = await guild.CreateRoleAsync(roleName, guildPermissions, color, isHoisted, isMentionable);
+        var role = guild.GetRole(roleId ?? 0) ?? await guild.CreateRoleAsync(roleName, guildPermissions, color, isHoisted, isMentionable, options);
 
         return role;
     }
 
 
-    public static async Task<ICategoryChannel> CreateCategoryChannelOrCreateAsync(
+    public static async Task<ICategoryChannel> GetCategoryChannelOrCreateAsync(
         this IGuild guild,
         ulong? categoryId,
         string categoryName,
-        Action<GuildChannelProperties>? props = null)
+        Action<GuildChannelProperties>? props = null,
+        CacheMode mode = CacheMode.AllowDownload,
+        RequestOptions? options = null)
     {
-        var categories = await guild.GetCategoriesAsync();
+        var channel = await guild.GetChannelAsync(categoryId ?? 0, mode, options);
 
-        ICategoryChannel? categoryChannel = null;
-
-        if (categoryId is not null)
-            categoryChannel = categories.FirstOrDefault(c => c.Id == categoryId);
-
-        if (categoryChannel is null)
-            categoryChannel = await guild.CreateCategoryAsync(categoryName, props);
-
-
-        return categoryChannel;
+        if (channel is ICategoryChannel categoryChannel)
+            return categoryChannel;
+        else
+            return await guild.CreateCategoryAsync(categoryName, props, options);
     }
 }

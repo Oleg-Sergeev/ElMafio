@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Core.Extensions;
 using Core.TypeReaders;
 using Discord;
 using Discord.Addons.Hosting;
@@ -85,9 +86,9 @@ public class CommandHandlerService : DiscordClientService
         _db.SavedChanges += OnDbUpdated;
     }
 
-    private async Task OnUserLeft(SocketGuildUser user)
+    private async Task OnUserLeft(SocketGuild guild, SocketUser user)
     {
-        var guildSettings = await _db.GuildSettings.FindAsync(user.Guild.Id);
+        var guildSettings = await _db.GuildSettings.FindAsync(guild.Id);
 
         if (guildSettings is null)
             throw new InvalidOperationException();
@@ -96,14 +97,12 @@ public class CommandHandlerService : DiscordClientService
 
         if (logChannelId is not null)
         {
-            var guild = user.Guild;
-
             var logChannel = guild.GetTextChannel(logChannelId.Value);
 
             if (logChannel is not null)
             {
                 await logChannel.SendMessageAsync(
-                        $"{guild.EveryoneRole.Mention} Пользователь **{user.Nickname ?? user.Username}** покинул сервер");
+                        $"{guild.EveryoneRole.Mention} Пользователь **{user.GetFullName()}** покинул сервер");
             }
         }
     }

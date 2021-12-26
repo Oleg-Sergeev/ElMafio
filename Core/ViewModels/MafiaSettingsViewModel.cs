@@ -22,4 +22,7 @@ public class MafiaSettingsViewModel
     public ulong? MafiaRoleId { get; init; }
 
     public ulong? WatcherRoleId { get; init; }
+
+
+    public bool? ClearChannelsOnStart { get; init; }
 }

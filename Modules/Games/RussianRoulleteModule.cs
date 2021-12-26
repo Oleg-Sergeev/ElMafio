@@ -8,6 +8,7 @@ using Core.Extensions;
 using Core.Interfaces;
 using Discord;
 using Discord.Commands;
+using Fergun.Interactive;
 using Infrastructure.Data.Models.Games.Settings;
 using Infrastructure.Data.Models.Games.Stats;
 using Microsoft.EntityFrameworkCore;
@@ -20,7 +21,7 @@ namespace Modules.Games;
 [Alias("р")]
 public class RussianRouletteModule : GameModule
 {
-    public RussianRouletteModule(IConfiguration config, IRandomService random) : base(config, random)
+    public RussianRouletteModule(InteractiveService interactiveService, IConfiguration config, IRandomService random) : base(interactiveService, config, random)
     {
     }
 
@@ -30,6 +31,10 @@ public class RussianRouletteModule : GameModule
     [RequireUserPermission(GuildPermission.Administrator)]
     public class SetSmileModule : GuildModuleBase
     {
+        public SetSmileModule(InteractiveService interactiveService) : base(interactiveService)
+        {
+        }
+
         [Command("удалить")]
         public async Task RemoveCustomSmilesAsync()
         {
@@ -130,8 +135,8 @@ public class RussianRouletteModule : GameModule
 
 
     public class RussianRouletteHelpModule : HelpModule
-    {
-        public RussianRouletteHelpModule(IConfiguration config) : base(config)
+{
+        public RussianRouletteHelpModule(InteractiveService interactiveService, IConfiguration config) : base(interactiveService, config)
         {
         }
     }
