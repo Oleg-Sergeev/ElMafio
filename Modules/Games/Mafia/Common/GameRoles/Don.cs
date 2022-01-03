@@ -37,14 +37,12 @@ public class Don : Murder, IChecker
     {
         var sequence = base.GetMoveResultPhasesSequence();
 
-        var donData = (CheckerData)Data;
-
         if (LastMove is not null)
         {
             if (CheckedRole is not null)
-                sequence.Add((EmbedStyle.Successfull, ParsePattern(GetRandomPhrase(donData.SuccessfullCheckPhrases), $"**{LastMove.GetFullName()}**", $"**{CheckedRole.Name}**")));
+                sequence.Add((EmbedStyle.Successfull, ParsePattern(GetRandomPhrase(Data.Phrases[IChecker.SuccessfullCheckPhrases]), $"**{LastMove.GetFullName()}**", $"**{CheckedRole.Name}**")));
             else
-                sequence.Add((EmbedStyle.Error, ParsePattern(GetRandomPhrase(donData.FailedCheckPhrases), $"**{LastMove.GetFullName()}**")));
+                sequence.Add((EmbedStyle.Error, ParsePattern(GetRandomPhrase(Data.Phrases[IChecker.FailedCheckPhrases]), $"**{LastMove.GetFullName()}**")));
         }
 
 

@@ -21,185 +21,16 @@ namespace Modules.Games;
 [Alias("р")]
 public class RussianRouletteModule : GameModule
 {
-    public RussianRouletteModule(InteractiveService interactiveService, IConfiguration config, IRandomService random) : base(interactiveService, config, random)
+    public RussianRouletteModule(InteractiveService interactiveService, IConfiguration config) : base(interactiveService, config)
     {
     }
 
-
-    // Maybe add complex adding
-    [Group("Смайлы")]
-    [RequireUserPermission(GuildPermission.Administrator)]
-    public class SetSmileModule : GuildModuleBase
-    {
-        public SetSmileModule(InteractiveService interactiveService) : base(interactiveService)
-        {
-        }
-
-        [Command("удалить")]
-        public async Task RemoveCustomSmilesAsync()
-        {
-            await RemoveCustomSmileKilled();
-
-            await RemoveCustomSmileSurvived();
-        }
-
-        [Command("удалитьубил")]
-        public async Task RemoveCustomSmileKilled()
-        {
-            var settings = await Context.GetGameSettingsAsync<RussianRouletteSettings>();
-
-            settings.CustomSmileKilled = null;
-
-            await Context.Db.SaveChangesAsync();
-        }
-
-        [Command("удалитьвыжил")]
-        public async Task RemoveCustomSmileSurvived()
-        {
-            var settings = await Context.GetGameSettingsAsync<RussianRouletteSettings>();
-
-            settings.CustomSmileSurvived = null;
-
-            await Context.Db.SaveChangesAsync();
-        }
-
-
-
-        [Priority(0)]
-        [Command("убил")]
-        public async Task SetSmileKilledAsync(Emoji emoji)
-        {
-            var settings = await Context.GetGameSettingsAsync<RussianRouletteSettings>();
-
-            settings.UnicodeSmileKilled = emoji.ToString();
-
-            await Context.Db.SaveChangesAsync();
-
-
-            var msg = await ReplyEmbedAsync(EmbedStyle.Successfull, $"Смайл {emoji} успешно настроен");
-
-            await msg.AddReactionAsync(emoji);
-        }
-
-        [Priority(1)]
-        [Command("убил")]
-        public async Task SetSmileKilledAsync(Emote emote)
-        {
-            var settings = await Context.GetGameSettingsAsync<RussianRouletteSettings>();
-
-            settings.CustomSmileKilled = emote.ToString();
-
-            await Context.Db.SaveChangesAsync();
-
-
-            var msg = await ReplyEmbedAsync(EmbedStyle.Successfull, $"Смайл {emote} успешно настроен");
-
-            await msg.AddReactionAsync(emote);
-        }
-
-
-
-        [Priority(0)]
-        [Command("выжил")]
-        public async Task SetSmileSuvivedAsync(Emoji emoji)
-        {
-            var settings = await Context.GetGameSettingsAsync<RussianRouletteSettings>();
-
-            settings.UnicodeSmileSurvived = emoji.ToString();
-
-            await Context.Db.SaveChangesAsync();
-
-
-            var msg = await ReplyEmbedAsync(EmbedStyle.Successfull, $"Смайл {emoji} успешно настроен");
-
-            await msg.AddReactionAsync(emoji);
-        }
-
-        [Priority(1)]
-        [Command("выжил")]
-        public async Task SetSmileSuvivedAsync(Emote emote)
-        {
-            var settings = await Context.GetGameSettingsAsync<RussianRouletteSettings>();
-
-            settings.CustomSmileSurvived = emote.ToString();
-
-            await Context.Db.SaveChangesAsync();
-
-
-            var msg = await ReplyEmbedAsync(EmbedStyle.Successfull, $"Смайл {emote} успешно настроен");
-
-            await msg.AddReactionAsync(emote);
-        }
-    }
-
-
-
-    public class RussianRouletteHelpModule : HelpModule
-{
-        public RussianRouletteHelpModule(InteractiveService interactiveService, IConfiguration config) : base(interactiveService, config)
-        {
-        }
-    }
 
     protected override GameModuleData CreateGameData(IGuildUser creator)
         => new("Русская рулетка", 2, creator);
 
 
-    public override async Task ResetStatAsync(IGuildUser guildUser)
-        => await ResetStatAsync<RussianRouletteStats>(guildUser);
-
-    public override async Task ShowStatsAsync()
-        => await ShowStatsAsync(Context.User);
-    public override async Task ShowStatsAsync(IUser user)
-    {
-        var userStat = await Context.Db.RussianRouletteStats
-            .AsNoTracking()
-            .Include(stat => stat.User)
-            .FirstOrDefaultAsync(stat => stat.UserId == user.Id);
-
-        if (userStat is null)
-        {
-            await ReplyEmbedAsync(EmbedStyle.Error, "Статистика отсутствует");
-
-            return;
-        }
-
-
-        await ReplyEmbedAsync(EmbedStyle.Information, $"Процент побед: {userStat.WinRate.ToPercent()}");
-    }
-
-
-    public override async Task ShowRating()
-    {
-        var allStats = await Context.Db.RussianRouletteStats
-            .AsNoTracking()
-            .Where(s => s.GuildSettingsId == Context.Guild.Id)
-            .OrderByDescending(stat => stat.WinRate)
-            .ThenByDescending(stat => stat.WinsCount)
-            .Include(stat => stat.User)
-            .ToListAsync();
-
-        var message = "";
-
-
-        for (int i = 0; i < allStats.Count; i++)
-        {
-            // maybe user left guild
-            var bugDebugShit = Context.Guild.Users.FirstOrDefault(u => u.Id == allStats[i].User.Id);
-
-
-
-            message += $"{i + 1} - {bugDebugShit!.GetFullName()}  **({allStats[i].WinRate.ToPercent()})**\n";
-        }
-
-
-        await ReplyEmbedAsync(EmbedStyle.Information, message, "Рейтинг русской рулетки");
-    }
-
-    public override Task ResetRatingAsync()
-        => ResetRatingAsync<RussianRouletteStats>();
-
-
+   
     [RequireBotPermission(GuildPermission.AddReactions)]
     public override async Task StartAsync()
     {
@@ -425,6 +256,124 @@ public class RussianRouletteModule : GameModule
         {
             UnicodeEmojiKilled = unicodeEmojiKilled;
             UnicodeEmojiSurvived = unicodeEmojiSurvived;
+        }
+    }
+
+
+
+
+    // Maybe add complex adding
+    [Group("Смайлы")]
+    [RequireUserPermission(GuildPermission.Administrator)]
+    public class SetSmileModule : GuildModuleBase
+    {
+        public SetSmileModule(InteractiveService interactiveService) : base(interactiveService)
+        {
+        }
+
+        [Command("удалить")]
+        public async Task RemoveCustomSmilesAsync()
+        {
+            await RemoveCustomSmileKilled();
+
+            await RemoveCustomSmileSurvived();
+        }
+
+        [Command("удалитьубил")]
+        public async Task RemoveCustomSmileKilled()
+        {
+            var settings = await Context.GetGameSettingsAsync<RussianRouletteSettings>();
+
+            settings.CustomSmileKilled = null;
+
+            await Context.Db.SaveChangesAsync();
+        }
+
+        [Command("удалитьвыжил")]
+        public async Task RemoveCustomSmileSurvived()
+        {
+            var settings = await Context.GetGameSettingsAsync<RussianRouletteSettings>();
+
+            settings.CustomSmileSurvived = null;
+
+            await Context.Db.SaveChangesAsync();
+        }
+
+
+
+        [Priority(0)]
+        [Command("убил")]
+        public async Task SetSmileKilledAsync(Emoji emoji)
+        {
+            var settings = await Context.GetGameSettingsAsync<RussianRouletteSettings>();
+
+            settings.UnicodeSmileKilled = emoji.ToString();
+
+            await Context.Db.SaveChangesAsync();
+
+
+            var msg = await ReplyEmbedAsync(EmbedStyle.Successfull, $"Смайл {emoji} успешно настроен");
+
+            await msg.AddReactionAsync(emoji);
+        }
+
+        [Priority(1)]
+        [Command("убил")]
+        public async Task SetSmileKilledAsync(Emote emote)
+        {
+            var settings = await Context.GetGameSettingsAsync<RussianRouletteSettings>();
+
+            settings.CustomSmileKilled = emote.ToString();
+
+            await Context.Db.SaveChangesAsync();
+
+
+            var msg = await ReplyEmbedAsync(EmbedStyle.Successfull, $"Смайл {emote} успешно настроен");
+
+            await msg.AddReactionAsync(emote);
+        }
+
+
+
+        [Priority(0)]
+        [Command("выжил")]
+        public async Task SetSmileSuvivedAsync(Emoji emoji)
+        {
+            var settings = await Context.GetGameSettingsAsync<RussianRouletteSettings>();
+
+            settings.UnicodeSmileSurvived = emoji.ToString();
+
+            await Context.Db.SaveChangesAsync();
+
+
+            var msg = await ReplyEmbedAsync(EmbedStyle.Successfull, $"Смайл {emoji} успешно настроен");
+
+            await msg.AddReactionAsync(emoji);
+        }
+
+        [Priority(1)]
+        [Command("выжил")]
+        public async Task SetSmileSuvivedAsync(Emote emote)
+        {
+            var settings = await Context.GetGameSettingsAsync<RussianRouletteSettings>();
+
+            settings.CustomSmileSurvived = emote.ToString();
+
+            await Context.Db.SaveChangesAsync();
+
+
+            var msg = await ReplyEmbedAsync(EmbedStyle.Successfull, $"Смайл {emote} успешно настроен");
+
+            await msg.AddReactionAsync(emote);
+        }
+    }
+
+
+
+    public class RussianRouletteHelpModule : HelpModule
+    {
+        public RussianRouletteHelpModule(InteractiveService interactiveService, IConfiguration config) : base(interactiveService, config)
+        {
         }
     }
 }

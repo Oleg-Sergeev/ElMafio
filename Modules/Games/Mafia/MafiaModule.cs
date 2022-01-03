@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -37,13 +38,10 @@ namespace Modules.Games.Mafia;
 public class MafiaModule : GameModule
 {
     protected IOptionsSnapshot<GameRoleData> GameRoleOptions { get; }
-    protected IOptionsSnapshot<CheckerData> CheckerOptions { get; }
-    protected IOptionsSnapshot<SheriffData> SheriffOptions { get; }
-
 
     private MafiaData? _mafiaData;
 
-    private MafiaSettings? _settings;
+    private MafiaSettings _settings;
 
     private readonly MafiaChronology _chronology;
 
@@ -57,142 +55,15 @@ public class MafiaModule : GameModule
 
     public MafiaModule(InteractiveService interactiveService,
                        IConfiguration config,
-                       IRandomService random,
-                       IOptionsSnapshot<GameRoleData> gameRoleOptions,
-                       IOptionsSnapshot<CheckerData> checkerOptions,
-                       IOptionsSnapshot<SheriffData> sheriffOptions) : base(interactiveService, config, random)
+                       IOptionsSnapshot<GameRoleData> gameRoleOptions) : base(interactiveService, config)
     {
         GameRoleOptions = gameRoleOptions;
-        CheckerOptions = checkerOptions;
-        SheriffOptions = sheriffOptions;
 
         _chronology = new();
+        _settings = MafiaSettings.Empty;
     }
 
 
-
-
-    #region Rate
-    public override async Task ResetStatAsync(IGuildUser guildUser)
-        => await ResetStatAsync<MafiaStats>(guildUser);
-
-    public override async Task ShowStatsAsync()
-        => await ShowStatsAsync(Context.User);
-    public override async Task ShowStatsAsync(IUser user)
-    {
-        var userStat = await Context.Db.MafiaStats
-            .AsNoTracking()
-            .Include(stat => stat.User)
-            .FirstOrDefaultAsync(stat => stat.UserId == user.Id);
-
-        if (userStat is null)
-        {
-            await ReplyEmbedAsync(EmbedStyle.Warning, "Статистика отсутствует");
-
-            return;
-        }
-
-        var embedBuilder = new EmbedBuilder()
-        {
-            Author = new EmbedAuthorBuilder()
-            {
-                Name = user.GetFullName(),
-                IconUrl = user.GetAvatarUrl() ?? user.GetDefaultAvatarUrl()
-            },
-            Title = "Статистика",
-            Color = Color.Gold
-        }
-        .AddField("Победы за красные роли", $"{userStat.WinRate:P}", true)
-        .AddField("Победы за черные роли", $"{userStat.BlacksWinRate:P}", true)
-        .AddField("Суммарные победы", $"{userStat.WinRate / 2 + userStat.BlacksWinRate / 2:P}", true)
-        .AddField("Эффективность доктора", $"{userStat.DoctorEfficiency:P}", true)
-        .AddField("Эффективность шерифа", $"{userStat.CommissionerEfficiency:P}", true)
-        .AddField("Эффективность дона", $"{userStat.DonEfficiency:P}", true)
-        .AddField("Кол-во основных очков", $"{userStat.Scores:0.##}", true)
-        .AddField("Кол-во доп. очков", $"{userStat.ExtraScores:0.##}", true)
-        .AddField("Кол-во штрафных очков", $"{userStat.PenaltyScores:0.##}", true)
-        .AddEmptyField(true)
-        .AddField("Рейтинг", $"{userStat.Rating:0.##}")
-        .WithCurrentTimestamp();
-
-        await ReplyAsync(embed: embedBuilder.Build());
-    }
-
-    public override async Task ShowRating()
-    {
-        await Task.Delay(1);
-    }
-
-    public override Task ResetRatingAsync()
-        => ResetRatingAsync<MafiaStats>();
-
-
-    [RequireUserPermission(GuildPermission.Administrator)]
-    [Command("ОчкиДополнительные")]
-    [Alias("ОчкиДоп", "Очки+")]
-    public async Task AddExtraScores(IGuildUser guildUser, float scores)
-    {
-        var playerStat = await Context.Db.MafiaStats
-            .AsTracking()
-            .Include(m => m.User)
-            .Where(m => m.UserId == guildUser.Id)
-            .FirstOrDefaultAsync();
-
-        if (playerStat is null)
-        {
-            await ReplyEmbedAsync(EmbedStyle.Error, "Игрок не найден");
-
-            return;
-        }
-
-        var guildSettings = await Context.GetGuildSettingsAsync();
-
-        var confirm = await ConfirmActionWithHandlingAsync($"Добавить доп. очки игроку **{guildUser.GetFullName()}**", guildSettings.LogChannelId);
-
-
-        if (confirm)
-        {
-            playerStat.ExtraScores += scores;
-
-            await ReplyEmbedAsync(EmbedStyle.Successfull, $"Доп. очки успешно начислены игроку **{guildUser.GetFullName()}**");
-
-            await Context.Db.SaveChangesAsync();
-        }
-    }
-
-    [RequireUserPermission(GuildPermission.Administrator)]
-    [Command("ОчкиШтрафные")]
-    [Alias("ОчкиШтраф", "Очки-")]
-    public async Task AddPenaltyScores(IGuildUser guildUser, float scores)
-    {
-        var playerStat = await Context.Db.MafiaStats
-            .AsTracking()
-            .Include(m => m.User)
-            .Where(m => m.UserId == guildUser.Id)
-            .FirstOrDefaultAsync();
-
-        if (playerStat is null)
-        {
-            await ReplyEmbedAsync(EmbedStyle.Error, "Игрок не найден");
-
-            return;
-        }
-
-        var guildSettings = await Context.GetGuildSettingsAsync();
-
-        var confirm = await ConfirmActionWithHandlingAsync($"Добавить штрафные очки игроку **{guildUser.GetFullName()}**", guildSettings.LogChannelId);
-
-
-        if (confirm)
-        {
-            playerStat.PenaltyScores += scores;
-
-            await ReplyEmbedAsync(EmbedStyle.Successfull, $"Штрафные очки успешно начислены игроку **{guildUser.GetFullName()}**");
-
-            await Context.Db.SaveChangesAsync();
-        }
-    }
-    #endregion
 
 
 
@@ -205,7 +76,7 @@ public class MafiaModule : GameModule
         if (!base.CanStart(out failMessage))
             return false;
 
-        ArgumentNullException.ThrowIfNull(_settings);
+        
         ArgumentNullException.ThrowIfNull(GameData);
 
 
@@ -394,7 +265,7 @@ public class MafiaModule : GameModule
     private async Task FinishAsync(bool isAbort = false)
     {
         ArgumentNullException.ThrowIfNull(_mafiaData);
-        ArgumentNullException.ThrowIfNull(_settings);
+        
         ArgumentNullException.ThrowIfNull(GameData);
 
         GuildLogger.Debug(LogTemplate, nameof(StartAsync), "Game finishing...");
@@ -519,9 +390,6 @@ public class MafiaModule : GameModule
 
     private async Task<MafiaData> PreSetupGuildAsync()
     {
-        ArgumentNullException.ThrowIfNull(_settings);
-
-
         GuildLogger.Debug(LogTemplate, nameof(PreSetupGuildAsync), "Begin presetup guild...");
 
 
@@ -677,7 +545,7 @@ public class MafiaModule : GameModule
 
         async Task HandlePlayerAsync(IGuildUser player)
         {
-            ArgumentNullException.ThrowIfNull(_settings);
+            
             ArgumentNullException.ThrowIfNull(_mafiaData);
 
             var serverSettings = _settings.Current.ServerSubSettings;
@@ -761,8 +629,6 @@ public class MafiaModule : GameModule
 
     private async Task SendWelcomeMessagesAsync()
     {
-        ArgumentNullException.ThrowIfNull(_settings);
-
         var serverSettings = _settings.Current.ServerSubSettings;
 
         if (!serverSettings.SendWelcomeMessage)
@@ -791,7 +657,7 @@ public class MafiaModule : GameModule
     private async Task SetupRolesAsync()
     {
         ArgumentNullException.ThrowIfNull(_mafiaData);
-        ArgumentNullException.ThrowIfNull(_settings);
+        
         ArgumentNullException.ThrowIfNull(GameData);
 
         GuildLogger.Debug(LogTemplate, nameof(SetupRolesAsync), "Begin setup roles");
@@ -865,7 +731,7 @@ public class MafiaModule : GameModule
 
         for (int i = 0; i < donsCount; i++, offset++)
         {
-            var don = new Don(GameData.Players[offset], CheckerOptions, _mafiaData.Sheriffs.Values);
+            var don = new Don(GameData.Players[offset], GameRoleOptions, _mafiaData.Sheriffs.Values);
 
             _mafiaData.Murders.Add(don.Player, don);
 
@@ -922,7 +788,7 @@ public class MafiaModule : GameModule
 
         for (int i = 0; i < sheriffsCount; i++, offset++)
         {
-            var sheriff = new Sheriff(GameData.Players[offset], SheriffOptions, rolesInfo.SheriffShotsCount ?? 0, _mafiaData.Murders.Values);
+            var sheriff = new Sheriff(GameData.Players[offset], GameRoleOptions, rolesInfo.SheriffShotsCount ?? 0, _mafiaData.Murders.Values);
 
 
             _mafiaData.Sheriffs.Add(sheriff.Player, sheriff);
@@ -1049,7 +915,7 @@ public class MafiaModule : GameModule
     private async Task PlayAsync()
     {
         ArgumentNullException.ThrowIfNull(_mafiaData);
-        ArgumentNullException.ThrowIfNull(_settings);
+        
         ArgumentNullException.ThrowIfNull(GameData);
 
         GuildLogger.Debug(LogTemplate, nameof(PlayAsync), "Begin playing game...");
@@ -1310,7 +1176,7 @@ public class MafiaModule : GameModule
     private async Task IntroduceMurdersAsync()
     {
         ArgumentNullException.ThrowIfNull(_mafiaData);
-        ArgumentNullException.ThrowIfNull(_settings);
+        
 
         var meetTime = _mafiaData.Murders.Count * 10;
 
@@ -1338,7 +1204,7 @@ public class MafiaModule : GameModule
     private async Task<IGuildUser?> DoDayVotingAsync(int dayVoteTime)
     {
         ArgumentNullException.ThrowIfNull(_mafiaData);
-        ArgumentNullException.ThrowIfNull(_settings);
+        
 
 
         await _mafiaData.GeneralTextChannel.SendMessageAsync(
@@ -1442,7 +1308,7 @@ public class MafiaModule : GameModule
     private async Task DoNightMovesAsync()
     {
         ArgumentNullException.ThrowIfNull(_mafiaData);
-        ArgumentNullException.ThrowIfNull(_settings);
+        
 
 
         var tasks = new List<Task>();
@@ -1646,7 +1512,7 @@ public class MafiaModule : GameModule
     private IReadOnlyList<IGuildUser> GetCorpses(out IList<IGuildUser> revealedManiacs)
     {
         ArgumentNullException.ThrowIfNull(_mafiaData);
-        ArgumentNullException.ThrowIfNull(_settings);
+        
 
         if (!_settings.Current.RolesInfoSubSettings.MurdersVoteTogether)
         {
@@ -1749,7 +1615,7 @@ public class MafiaModule : GameModule
 
     private bool CanContinueGame()
     {
-        ArgumentNullException.ThrowIfNull(_settings);
+        
         ArgumentNullException.ThrowIfNull(_mafiaData);
 
 
@@ -1795,7 +1661,7 @@ public class MafiaModule : GameModule
 
     private bool? IsMurdersWon()
     {
-        ArgumentNullException.ThrowIfNull(_settings);
+        
         ArgumentNullException.ThrowIfNull(_mafiaData);
 
 
@@ -1996,7 +1862,7 @@ public class MafiaModule : GameModule
 
     private async Task HandleHttpExceptionAsync(string message, HttpException e)
     {
-        ArgumentNullException.ThrowIfNull(_settings);
+        
 
         if (_settings.Current.ServerSubSettings.ReplyMessagesOnSetupError)
             await ReplyEmbedAsync(EmbedStyle.Error, message);

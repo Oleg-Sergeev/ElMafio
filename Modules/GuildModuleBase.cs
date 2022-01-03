@@ -22,6 +22,9 @@ public abstract class GuildModuleBase : ModuleBase<DbSocketCommandContext>
     protected const int VotingOptionsMaxCount = 19;
 
 
+    protected static readonly Random Random = new();
+
+
     protected static readonly IEmote ConfirmEmote = new Emoji("✅");
     protected static readonly IEmote DenyEmote = new Emoji("❌");
     protected static readonly IEmote CancelEmote = new Emoji("⏹️");

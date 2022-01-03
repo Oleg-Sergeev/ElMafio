@@ -5,12 +5,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using Core.Common;
 using Core.Extensions;
-using Core.Interfaces;
 using Discord;
 using Discord.Commands;
 using Fergun.Interactive;
 using Infrastructure.Data.Models;
-using Infrastructure.Data.Models.Games.Stats;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 
@@ -22,16 +20,14 @@ public abstract class GameModule : GuildModuleBase
     protected static Dictionary<ulong, Dictionary<Type, GameModuleData>> GamesData { get; } = new();
 
 
-    protected IRandomService Random { get; }
     protected IConfiguration Config { get; }
 
 
     protected GameModuleData? GameData { get; set; }
 
-    public GameModule(InteractiveService interactiveService, IConfiguration config, IRandomService random) : base(interactiveService)
+    public GameModule(InteractiveService interactiveService, IConfiguration config) : base(interactiveService)
     {
         Config = config;
-        Random = random;
     }
 
 
@@ -279,112 +275,6 @@ public abstract class GameModule : GuildModuleBase
     [Summary("Запустить игру")]
     public abstract Task StartAsync();
 
-
-    // ??????????????????????????
-    #region Rating
-
-    [Command("Рейтинг")]
-    [Alias("топ", "рейт")]
-    public abstract Task ShowRating();
-
-    [Command("рейтингсброс")]
-    [Alias("топсброс", "рейтсброс")]
-    [RequireUserPermission(GuildPermission.Administrator)]
-    public abstract Task ResetRatingAsync();
-
-    protected async Task ResetRatingAsync<T>() where T : GameStats
-    {
-        var confirmed = await ConfirmActionAsync("Сброс рейтинга");
-
-        if (confirmed is null)
-        {
-            await ReplyEmbedAndDeleteAsync(EmbedStyle.Warning, "Вы не подтвердили действие", "Сброс рейтинга");
-
-            return;
-        }
-        else if (confirmed is false)
-        {
-            await ReplyEmbedAndDeleteAsync(EmbedStyle.Error, "Вы отклонили действие", "Сброс рейтинга");
-
-            return;
-        }
-
-        var msg = await ReplyEmbedAndDeleteAsync(EmbedStyle.Successfull, "Вы подтвердили действие", "Сброс рейтинга");
-
-        var guildSettings = await Context.GetGuildSettingsAsync();
-
-        if (guildSettings.LogChannelId is not null)
-        {
-            var logChannel = Context.Guild.GetTextChannel(guildSettings.LogChannelId.Value);
-
-            if (logChannel is not null)
-            {
-                var embed = (Embed)msg.Embeds.First();
-
-                await logChannel.SendMessageAsync(
-                        $"{Context.Guild.EveryoneRole.Mention} Пользователь **{Context.User.GetFullName()}** выполнил команду **{embed.Title}**", embed: embed);
-            }
-        }
-
-        var userStats = await Context.Db.Set<T>()
-            .AsTracking()
-            .Where(s => s.GuildSettingsId == Context.Guild.Id && s.GamesCount > 0)
-            .ToListAsync();
-
-        if (userStats is null || userStats.Count == 0)
-        {
-            await ReplyEmbedAsync(EmbedStyle.Warning, "Рейтинг отсутствует");
-
-            return;
-        }
-
-        foreach (var userStat in userStats)
-            userStat.Reset();
-
-        await Context.Db.SaveChangesAsync();
-
-        await ReplyEmbedAsync(EmbedStyle.Successfull, "Рейтинг успешно сброшен");
-    }
-
-
-    [Command("Статистика")]
-    [Alias("стат", "стата")]
-    public abstract Task ShowStatsAsync();
-
-    [Command("Статистика")]
-    [Alias("стат")]
-    [Priority(1)]
-    public abstract Task ShowStatsAsync(IUser user);
-
-
-    [Command("статасброс")]
-    public Task ResetStatAsync()
-        => ResetStatAsync((IGuildUser)Context.User);
-
-    [Command("статасброс")]
-    [RequireOwner()]
-    public abstract Task ResetStatAsync(IGuildUser guildUser);
-
-    protected async Task ResetStatAsync<T>(IGuildUser guildUser) where T : GameStats
-    {
-        var userStat = await Context.Db.Set<T>().FindAsync(guildUser.Id, Context.Guild.Id);
-
-        if (userStat is null)
-        {
-            await ReplyEmbedAsync(EmbedStyle.Error, $"Статистика игрока {guildUser.GetFullName()} не найдена");
-
-            return;
-        }
-
-        userStat.Reset();
-
-
-        await Context.Db.SaveChangesAsync();
-
-        await ReplyEmbedAsync(EmbedStyle.Successfull, $"Статистика игрока {guildUser.GetFullName()} успешно сброшена");
-    }
-
-    #endregion
 
     protected virtual async void AutoStop(TimeSpan? timeout = null, CancellationToken token = default)
     {
@@ -666,6 +556,22 @@ public abstract class GameModule : GuildModuleBase
                 else
                     await ReplyAsync(embed: builder.Build());
             }
+        }
+    }
+
+
+    public abstract class RatingModule : GuildModuleBase
+    {
+        protected RatingModule(InteractiveService interactiveService) : base(interactiveService)
+        {
+        }
+
+
+        [Command("Рейтинг")]
+        [Alias("Рейт")]
+        public virtual async Task ShowRatingAsync()
+        {
+            await ReplyAsync("Rating");
         }
     }
 }

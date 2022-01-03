@@ -7,6 +7,10 @@ public class MafiaSettings : GameSettings
 {
     public const string DefaultTemplateName = "_Current";
 
+
+    public static readonly MafiaSettings Empty = new();
+
+
     public string CurrentTemplateName { get; set; }
 
 

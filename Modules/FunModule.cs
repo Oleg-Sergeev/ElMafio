@@ -5,7 +5,6 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using Core.Common;
 using Core.Extensions;
-using Core.Interfaces;
 using Discord;
 using Discord.Commands;
 using Fergun.Interactive;
@@ -15,19 +14,13 @@ namespace Modules;
 [Name("Фан")]
 public class FunModule : GuildModuleBase
 {
-    private readonly IRandomService _random;
-
-
-    public FunModule(InteractiveService interactiveService, IRandomService random) : base(interactiveService)
-    {
-        _random = random;
-    }
+    public FunModule(InteractiveService interactiveService) : base(interactiveService) { }
 
 
     [Command("Шанс")]
     public async Task CalculateChanceAsync([Remainder] string text)
     {
-        int num = _random.Next(101);
+        int num = Random.Next(101);
 
         await ReplyAsync(embed: CreateEmbed(EmbedStyle.Information, $"Шанс того, что {text} - **{num}%**"),
             messageReference: new(Context.Message.Id));
@@ -46,7 +39,7 @@ public class FunModule : GuildModuleBase
     [Command("Данет")]
     public async Task SayYesOrNo()
     {
-        bool answer = _random.Next(2) > 0;
+        bool answer = Random.Next(2) > 0;
 
         if (answer)
             await ReplyAsync("**Да**");
@@ -58,7 +51,7 @@ public class FunModule : GuildModuleBase
     [Command("Кто")]
     public async Task SayWhoIs([Remainder] string? message = null)
     {
-        int num = _random.Next(0, Context.Guild.Users.Count);
+        int num = Random.Next(0, Context.Guild.Users.Count);
 
         var user = Context.Guild.Users.ToList()[num];
         var nickname = user.Nickname ?? user.Username;

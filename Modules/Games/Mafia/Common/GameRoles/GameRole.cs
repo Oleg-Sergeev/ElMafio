@@ -14,6 +14,10 @@ namespace Modules.Games.Mafia.Common.GameRoles;
 
 public abstract class GameRole
 {
+    protected const string YourMovePhrases = "YourMove";
+    protected const string SuccessPhrases = "Success";
+    protected const string FailurePhrases = "Failure";
+
     protected static readonly Random _random = new();
 
 
@@ -70,7 +74,7 @@ public abstract class GameRole
         if (LastMove is not null)
         {
             sequence.Add((EmbedStyle.Successfull, "Выбор сделан"));
-            sequence.Add((EmbedStyle.Successfull, ParsePattern(GetRandomPhrase(Data.SuccessPhrases), $"**{LastMove?.GetFullName()}**")));
+            sequence.Add((EmbedStyle.Successfull, ParsePattern(GetRandomPhrase(Data.Phrases[SuccessPhrases]), $"**{LastMove?.GetFullName()}**")));
         }
         else
         {
@@ -79,14 +83,14 @@ public abstract class GameRole
             else
             {
                 sequence.Add((EmbedStyle.Error, "Вы не смогли сделать выбор"));
-                sequence.Add((EmbedStyle.Error, ParsePattern(GetRandomPhrase(Data.FailurePhrases))));
+                sequence.Add((EmbedStyle.Error, ParsePattern(GetRandomPhrase(Data.Phrases[FailurePhrases]))));
             }
         }
 
         return sequence;
     }
 
-    public string GetRandomYourMovePhrase() => Data.YourMovePhrases[_random.Next(Data.YourMovePhrases.Length)];
+    public string GetRandomYourMovePhrase() => GetRandomPhrase(Data.Phrases[YourMovePhrases]);
 
     protected static string GetRandomPhrase(string[] phrases) => phrases[_random.Next(phrases.Length)];
 

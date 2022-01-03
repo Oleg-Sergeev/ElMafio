@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using Core.Common;
 using Core.Extensions;
 using Core.Interfaces;
@@ -100,13 +101,11 @@ public static class Application
             })
             .AddHostedService<CommandHandlerService>()
             .AddSingleton<InteractiveService>()
-            .AddSingleton<LoggingService>()
-            .AddSingleton<IRandomService, BotRandomService>();
+            .AddSingleton<LoggingService>();
 
-            foreach (var section in GameRoleData.Sections)
+            var sections = typeof(GameRole).GetAllDerivedTypes().Select(t => t.Name);
+
+            foreach (var section in sections)
                 services.Configure<GameRoleData>(section, context.Configuration.GetSection($"{GameRoleData.RootSection}:{section}"));
-
-            services.Configure<CheckerData>(nameof(Don), context.Configuration.GetSection($"{GameRoleData.RootSection}:{nameof(Don)}"));
-            services.Configure<SheriffData>(nameof(Sheriff), context.Configuration.GetSection($"{GameRoleData.RootSection}:{nameof(Sheriff)}"));
         });
 }

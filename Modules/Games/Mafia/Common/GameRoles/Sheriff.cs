@@ -62,21 +62,19 @@ public class Sheriff : Innocent, IKiller, IChecker
 
         if (LastMove is not null)
         {
-            var sheriffData = (SheriffData)Data;
-
             if (ShotSelected)
             {
                 if (KilledPlayer is not null)
-                    sequence.Add((EmbedStyle.Successfull, ParsePattern(GetRandomPhrase(sheriffData.SuccessfullKillPhrases), $"**{LastMove.GetFullName()}**")));
+                    sequence.Add((EmbedStyle.Successfull, ParsePattern(GetRandomPhrase(Data.Phrases[IKiller.SuccessfullKillPhrases]), $"**{LastMove.GetFullName()}**")));
                 else
-                    sequence.Add((EmbedStyle.Error, ParsePattern(GetRandomPhrase(sheriffData.FailedKillPhrases))));
+                    sequence.Add((EmbedStyle.Error, ParsePattern(GetRandomPhrase(Data.Phrases[IKiller.FailedKillPhrases]))));
             }
             else
             {
                 if (CheckedRole is not null)
-                    sequence.Add((EmbedStyle.Successfull, ParsePattern(GetRandomPhrase(sheriffData.SuccessfullCheckPhrases), $"**{LastMove.GetFullName()}**", $"**{CheckedRole.Name}**")));
+                    sequence.Add((EmbedStyle.Successfull, ParsePattern(GetRandomPhrase(Data.Phrases[IChecker.SuccessfullCheckPhrases]), $"**{LastMove.GetFullName()}**", $"**{CheckedRole.Name}**")));
                 else
-                    sequence.Add((EmbedStyle.Error, ParsePattern(GetRandomPhrase(sheriffData.FailedCheckPhrases), $"**{LastMove.GetFullName()}**")));
+                    sequence.Add((EmbedStyle.Error, ParsePattern(GetRandomPhrase(Data.Phrases[IChecker.FailedCheckPhrases]), $"**{LastMove.GetFullName()}**")));
             }
         }
 
