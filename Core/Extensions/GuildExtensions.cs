@@ -1,4 +1,5 @@
 ﻿using Discord;
+using Discord.WebSocket;
 
 namespace Core.Extensions;
 
@@ -61,5 +62,36 @@ public static class GuildExtensions
             return categoryChannel;
         else
             return await guild.CreateCategoryAsync(categoryName, props, options);
+    }
+
+
+
+    public static async Task<string> GetMentionFromIdAsync(this IGuild guild, ulong id)
+    {
+        if (guild.GetRole(id) is IMentionable role)
+            return role.Mention;
+
+        if ((await guild.GetChannelAsync(id)) is IChannel channel)
+            return $"<#{channel.Id}>";
+
+        if (await guild.GetUserAsync(id) is IMentionable user)
+            return user.Mention;
+
+        return id.ToString();
+    }
+
+    public static string GetMentionFromId(this SocketGuild guild, ulong id)
+    {
+        if (guild.GetChannel(id) is IChannel channel)
+            return $"<#{channel.Id}>";
+        
+        if (guild.GetRole(id) is IMentionable role)
+            return role.Mention;
+
+        if (guild.GetUser(id) is IMentionable user)
+            return user.Mention;
+
+
+        return id.ToString();
     }
 }

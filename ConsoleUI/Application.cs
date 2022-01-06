@@ -16,6 +16,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Modules.Games.Mafia.Common.GameRoles;
 using Modules.Games.Mafia.Common.GameRoles.Data;
+using Modules.Games.Mafia.Common.Services;
 using Serilog;
 using Serilog.Events;
 using Serilog.Filters;
@@ -101,7 +102,8 @@ public static class Application
             })
             .AddHostedService<CommandHandlerService>()
             .AddSingleton<InteractiveService>()
-            .AddSingleton<LoggingService>();
+            .AddSingleton<LoggingService>()
+            .AddTransient<IMafiaSetupService, MafiaSetupService>();
 
             var sections = typeof(GameRole).GetAllDerivedTypes().Select(t => t.Name);
 

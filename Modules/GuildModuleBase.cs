@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -7,6 +8,7 @@ using Core.Common;
 using Core.Extensions;
 using Discord;
 using Discord.Commands;
+using Discord.Commands.Builders;
 using Discord.Net;
 using Discord.WebSocket;
 using Fergun.Interactive;
@@ -105,7 +107,7 @@ public abstract class GuildModuleBase : ModuleBase<DbSocketCommandContext>
     {
         if (options.Count == 0)
         {
-            await channel.SendMessageAsync(embed: CreateEmbed(EmbedStyle.Error, "Получен пустой список вариантов"));
+            await channel.SendEmbedAsync("Получен пустой список вариантов", EmbedStyle.Error);
 
             return default;
         }
@@ -116,7 +118,7 @@ public abstract class GuildModuleBase : ModuleBase<DbSocketCommandContext>
                 $"\nПолучено – **{options.Count}** вариантов; лимит – **{VotingOptionsMaxCount}** вариантов" +
                 $"\nНа голосовании будут показаны только первые {VotingOptionsMaxCount} вариантов";
 
-            await channel.SendMessageAsync(embed: CreateEmbed(EmbedStyle.Warning, msg));
+            await channel.SendEmbedAsync(msg, EmbedStyle.Warning);
         }
 
 
@@ -171,13 +173,15 @@ public abstract class GuildModuleBase : ModuleBase<DbSocketCommandContext>
     }
 
 
-    public async Task<IEnumerable<IUserMessage>> BroadcastMessagesAsync(IEnumerable<IMessageChannel> channels, string? text = null, bool isTTS = false,
-        Embed? embed = null, RequestOptions? options = null, AllowedMentions? mentions = null, MessageReference? reference = null)
+    public async Task<IEnumerable<IUserMessage>> BroadcastMessagesAsync(IEnumerable<IMessageChannel> channels, string? text = null, Embed? embed = null)
+        => await BroadcastMessagesAsync(channels, new MessageData() { Message = text, Embed = embed });
+
+    public async Task<IEnumerable<IUserMessage>> BroadcastMessagesAsync(IEnumerable<IMessageChannel> channels, MessageData data)
     {
         var tasks = new List<Task<IUserMessage>>();
 
         foreach (var channel in channels)
-            tasks.Add(channel.SendMessageAsync(text, isTTS, embed, options, mentions, reference));
+            tasks.Add(channel.SendMessageAsync(data.Message, data.IsTTS, data.Embed, data.RequestOptions, data.AllowedMentions, data.MessageReference, data.MessageComponent, data.Stickers, data.Embeds));
 
         var messages = new List<IUserMessage>();
 
@@ -195,7 +199,7 @@ public abstract class GuildModuleBase : ModuleBase<DbSocketCommandContext>
             }
             catch (HttpException e)
             {
-                await ReplyEmbedAsync(EmbedStyle.Error, $"Не удалось отправить сообщение в канал. Причина: {e.Reason}");
+                await ReplyEmbedAsync($"Не удалось отправить сообщение в канал. Причина: {e.Reason}", EmbedStyle.Error);
             }
         }
 
@@ -204,24 +208,33 @@ public abstract class GuildModuleBase : ModuleBase<DbSocketCommandContext>
     }
 
 
-    public async Task<IUserMessage> ReplyEmbedAsync(EmbedStyle embedStyle, string description, string? title = null, EmbedBuilder? embedBuilder = null)
-    {
-        var embed = CreateEmbed(embedStyle, description, title, embedBuilder);
+    public Task<IUserMessage> ReplyAsync(MessageData data)
+        => Context.Channel.SendMessageAsync(data);
 
-        return await ReplyAsync(embed: embed);
-    }
 
-    public async Task<IUserMessage> ReplyEmbedStampAsync(EmbedStyle embedStyle, string description, string? title = null, EmbedBuilder? embedBuilder = null)
+    public Task<IUserMessage> ReplyEmbedAsync(string description, string title, EmbedBuilder? embedBuilder = null)
+        => ReplyEmbedAsync(description, EmbedStyle.Information, title, embedBuilder);
+
+    public Task<IUserMessage> ReplyEmbedAsync(string description, EmbedStyle embedStyle = EmbedStyle.Information, string? title = null, EmbedBuilder? embedBuilder = null)
+        => Context.Channel.SendEmbedAsync(description, embedStyle, title, embedBuilder);
+
+
+
+    public Task<IUserMessage> ReplyEmbedStampAsync(string description, string? title = null, EmbedBuilder? embedBuilder = null)
+        => ReplyEmbedStampAsync(description, EmbedStyle.Information, title, embedBuilder);
+
+    public async Task<IUserMessage> ReplyEmbedStampAsync(string description, EmbedStyle embedStyle = EmbedStyle.Information, string? title = null, EmbedBuilder? embedBuilder = null)
     {
         var embed = CreateEmbedStamp(embedStyle, description, title, embedBuilder);
 
         return await ReplyAsync(embed: embed);
     }
 
-    public async Task<IUserMessage> ReplyEmbedAndDeleteAsync(EmbedStyle embedType, string description, string? title = null,
+
+    public async Task<IUserMessage> ReplyEmbedAndDeleteAsync(string description, EmbedStyle embedType = EmbedStyle.Information, string? title = null,
         EmbedBuilder? embedBuilder = null, TimeSpan? timeout = null)
     {
-        var msg = await ReplyEmbedAsync(embedType, description, title, embedBuilder);
+        var msg = await ReplyEmbedAsync(description, embedType, title, embedBuilder);
 
         _ = Task.Run(async () =>
         {
@@ -304,7 +317,7 @@ public abstract class GuildModuleBase : ModuleBase<DbSocketCommandContext>
 
     public async Task<bool?> ConfirmActionAsync(string title, TimeSpan? timeout = null)
     {
-        var msg = await ReplyEmbedAsync(EmbedStyle.Information, "Подтвердите действие", title);
+        var msg = await ReplyEmbedAsync( "Подтвердите действие", EmbedStyle.Information, title);
 
         var res = await ConfirmActionAsync(msg, timeout);
 
@@ -332,26 +345,6 @@ public abstract class GuildModuleBase : ModuleBase<DbSocketCommandContext>
 
 
 
-    protected static Embed CreateEmbed(EmbedStyle embedStyle, string description, string? title = null, EmbedBuilder? innerEmbedBuilder = null)
-    {
-        innerEmbedBuilder ??= new EmbedBuilder();
-
-        innerEmbedBuilder.WithDescription(description);
-
-        innerEmbedBuilder = embedStyle switch
-        {
-            EmbedStyle.Error => innerEmbedBuilder.WithErrorMessage(),
-            EmbedStyle.Warning => innerEmbedBuilder.WithWarningMessage(),
-            EmbedStyle.Successfull => innerEmbedBuilder.WithSuccessfullyMessage(),
-            _ => innerEmbedBuilder.WithInformationMessage()
-        };
-
-        if (title is not null)
-            innerEmbedBuilder.WithTitle(title);
-
-        return innerEmbedBuilder.Build();
-    }
-
     protected Embed CreateEmbedStamp(EmbedStyle embedStyle, string description, string? title = null, EmbedBuilder? innerEmbedBuilder = null)
     {
         innerEmbedBuilder ??= new EmbedBuilder()
@@ -359,7 +352,7 @@ public abstract class GuildModuleBase : ModuleBase<DbSocketCommandContext>
             .WithUserFooter(Context.Client.CurrentUser)
             .WithCurrentTimestamp();
 
-        var embed = CreateEmbed(embedStyle, description, title, innerEmbedBuilder);
+        var embed = EmbedHelper.CreateEmbed(description, embedStyle, title, innerEmbedBuilder);
 
         return embed;
     }
@@ -377,7 +370,7 @@ public abstract class GuildModuleBase : ModuleBase<DbSocketCommandContext>
 
     public async Task<bool> ConfirmActionWithHandlingAsync(string title, ulong? logChannelId = null, TimeSpan? timeout = null)
     {
-        var msg = await ReplyEmbedAsync(EmbedStyle.Information, "Подтвердите действие", title);
+        var msg = await ReplyEmbedAsync( "Подтвердите действие", EmbedStyle.Information, title);
 
         return await ConfirmActionWithHandlingAsync(msg, logChannelId, timeout);
     }
@@ -387,20 +380,20 @@ public abstract class GuildModuleBase : ModuleBase<DbSocketCommandContext>
 
         if (confirmed is null)
         {
-            await ReplyEmbedAndDeleteAsync(EmbedStyle.Warning, "Вы не подтвердили действие", "Сброс рейтинга");
+            await ReplyEmbedAndDeleteAsync( "Вы не подтвердили действие", EmbedStyle.Warning, "Сброс рейтинга");
 
             return false;
         }
         else if (confirmed is false)
         {
-            await ReplyEmbedAndDeleteAsync(EmbedStyle.Error, "Вы отклонили действие", "Сброс рейтинга");
+            await ReplyEmbedAndDeleteAsync( "Вы отклонили действие", EmbedStyle.Error, "Сброс рейтинга");
 
             return false;
         }
 
         var embed = (Embed)message.Embeds.First();
 
-        message = await ReplyEmbedAndDeleteAsync(EmbedStyle.Successfull, "Вы подтвердили действие", embed.Title);
+        message = await ReplyEmbedAndDeleteAsync( "Вы подтвердили действие", EmbedStyle.Successfull, embed.Title);
 
         embed = (Embed)message.Embeds.First();
 

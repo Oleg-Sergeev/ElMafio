@@ -1,16 +1,15 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using Core.Common;
 using Core.Common.Chronology;
 using Core.Exceptions;
 using Core.Extensions;
-using Core.Interfaces;
 using Core.TypeReaders;
 using Core.ViewModels;
 using Discord;
@@ -19,9 +18,10 @@ using Discord.Net;
 using Discord.WebSocket;
 using Fergun.Interactive;
 using Fergun.Interactive.Pagination;
+using Fergun.Interactive.Selection;
 using Infrastructure.Data.Models.Games.Settings.Mafia;
-using Infrastructure.Data.Models.Games.Stats;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Modules.Games.Mafia.Common.GameRoles;
@@ -29,7 +29,6 @@ using Modules.Games.Mafia.Common.GameRoles.Data;
 using Modules.Games.Mafia.Common.GameRoles.RolesGroups;
 using Modules.Games.Mafia.Common.Interfaces;
 using Serilog;
-using static System.Collections.Specialized.BitVector32;
 
 namespace Modules.Games.Mafia;
 
@@ -76,7 +75,7 @@ public class MafiaModule : GameModule
         if (!base.CanStart(out failMessage))
             return false;
 
-        
+
         ArgumentNullException.ThrowIfNull(GameData);
 
 
@@ -265,7 +264,7 @@ public class MafiaModule : GameModule
     private async Task FinishAsync(bool isAbort = false)
     {
         ArgumentNullException.ThrowIfNull(_mafiaData);
-        
+
         ArgumentNullException.ThrowIfNull(GameData);
 
         GuildLogger.Debug(LogTemplate, nameof(StartAsync), "Game finishing...");
@@ -545,7 +544,7 @@ public class MafiaModule : GameModule
 
         async Task HandlePlayerAsync(IGuildUser player)
         {
-            
+
             ArgumentNullException.ThrowIfNull(_mafiaData);
 
             var serverSettings = _settings.Current.ServerSubSettings;
@@ -657,7 +656,7 @@ public class MafiaModule : GameModule
     private async Task SetupRolesAsync()
     {
         ArgumentNullException.ThrowIfNull(_mafiaData);
-        
+
         ArgumentNullException.ThrowIfNull(GameData);
 
         GuildLogger.Debug(LogTemplate, nameof(SetupRolesAsync), "Begin setup roles");
@@ -683,7 +682,7 @@ public class MafiaModule : GameModule
         var doctorsCount = 0;
         var sheriffsCount = 0;
         var murdersCount = 0;
-        var donsCount = 0;
+        int donsCount;
 
 
         if (isCustomGame)
@@ -915,7 +914,7 @@ public class MafiaModule : GameModule
     private async Task PlayAsync()
     {
         ArgumentNullException.ThrowIfNull(_mafiaData);
-        
+
         ArgumentNullException.ThrowIfNull(GameData);
 
         GuildLogger.Debug(LogTemplate, nameof(PlayAsync), "Begin playing game...");
@@ -1176,7 +1175,7 @@ public class MafiaModule : GameModule
     private async Task IntroduceMurdersAsync()
     {
         ArgumentNullException.ThrowIfNull(_mafiaData);
-        
+
 
         var meetTime = _mafiaData.Murders.Count * 10;
 
@@ -1204,7 +1203,7 @@ public class MafiaModule : GameModule
     private async Task<IGuildUser?> DoDayVotingAsync(int dayVoteTime)
     {
         ArgumentNullException.ThrowIfNull(_mafiaData);
-        
+
 
 
         await _mafiaData.GeneralTextChannel.SendMessageAsync(
@@ -1308,7 +1307,7 @@ public class MafiaModule : GameModule
     private async Task DoNightMovesAsync()
     {
         ArgumentNullException.ThrowIfNull(_mafiaData);
-        
+
 
 
         var tasks = new List<Task>();
@@ -1512,7 +1511,7 @@ public class MafiaModule : GameModule
     private IReadOnlyList<IGuildUser> GetCorpses(out IList<IGuildUser> revealedManiacs)
     {
         ArgumentNullException.ThrowIfNull(_mafiaData);
-        
+
 
         if (!_settings.Current.RolesInfoSubSettings.MurdersVoteTogether)
         {
@@ -1615,7 +1614,7 @@ public class MafiaModule : GameModule
 
     private bool CanContinueGame()
     {
-        
+
         ArgumentNullException.ThrowIfNull(_mafiaData);
 
 
@@ -1661,7 +1660,7 @@ public class MafiaModule : GameModule
 
     private bool? IsMurdersWon()
     {
-        
+
         ArgumentNullException.ThrowIfNull(_mafiaData);
 
 
@@ -1862,7 +1861,7 @@ public class MafiaModule : GameModule
 
     private async Task HandleHttpExceptionAsync(string message, HttpException e)
     {
-        
+
 
         if (_settings.Current.ServerSubSettings.ReplyMessagesOnSetupError)
             await ReplyEmbedAsync(EmbedStyle.Error, message);
@@ -2171,13 +2170,200 @@ public class MafiaModule : GameModule
         }
 
 
+        [Command]
+        [Priority(-2)]
+        public async Task SetSettingsAsync()
+        {
+            var builder = new ComponentBuilder();
+
+            builder.WithButton(customId: $"stop", style: ButtonStyle.Danger, emote: new Emoji("❌"));
+            var msg = await ReplyAsync("Press this button!");
+
+            InteractiveMessageResult<PropertyInfo?>? result = null;
+
+            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
+
+            var settingsVM = new MafiaSettingsViewModel();
+
+            var message = "Выберите параметр из списка ниже, чтобы изменить значение";
+
+            var wasSettingsUpdated = false;
+
+            do
+            {
+                // var cancelTask = Interactive.NextMessageComponentAsync(x => x.Message.Id == msg.Id, timeout: TimeSpan.FromSeconds(300));
+
+                var parametersVM = settingsVM.GetType().GetProperties().Where(p => p.CanWrite).ToList();
+                var parameters = settings.GetType().GetProperties().Where(p => p.CanWrite).IntersectBy(parametersVM.Select(p => p.Name), p => p.Name);
+
+                var parameterNames = GetPropertiesName(parametersVM).ToList();
+
+                var page = new PageBuilder()
+                    .WithTitle("Настройки")
+                    .WithDescription(message)
+                    .AddField("Параметр", string.Join('\n', parameterNames), true)
+                    .AddField("Значение", string.Join('\n', parameters.Select(p =>
+                    {
+                        var value = p.GetValue(settings);
+
+                        if (ulong.TryParse(value?.ToString(), out var id))
+                            return Context.Guild.GetMentionFromId(id);
+
+                        return value ?? "[Null]";
+
+                    })), true);
+
+
+                var selection = new SelectionBuilder<PropertyInfo>()
+                    .AddUser(Context.User)
+                    .WithOptions(parametersVM)
+                    .WithSelectionPage(page)
+                    .WithInputType(InputType.SelectMenus)
+                    .WithStringConverter(p => GetPropertyName(p))
+                    .WithAllowCancel(true)
+                    .Build();
+
+                //builder.
+
+                var selectTask = Interactive.SendSelectionAsync(selection, msg, TimeSpan.FromMinutes(2));
+
+                //await msg.ModifyAsync(x => x.Components = selection.BuildComponents(false));
+
+                //var task = await Task.WhenAny(cancelTask, selectTask);
+
+                //if (task == cancelTask)
+                //    break;
+
+
+                result = await selectTask;
+
+
+                if (result.IsSuccess && result.Value is not null)
+                {
+                    if (await TrySetParameterAsync(result.Value, settingsVM))
+                    {
+                        message = $"Параметр успешно настроен: {result.Value.Name}: {result.Value.GetValue(settingsVM)}";
+
+                        SetParameters(settings, settingsVM);
+
+                        wasSettingsUpdated = true;
+                    }
+                }
+            }
+            while (result?.IsSuccess ?? false);
+
+
+            if (!wasSettingsUpdated)
+            {
+                await ReplyEmbedAsync(EmbedStyle.Warning, "Общие настройки мафии не были сохранены");
+
+                return;
+            }
+
+            await Context.Db.SaveChangesAsync();
+
+            await ReplyEmbedAsync(EmbedStyle.Successfull, "Общие настройки мафии успешно сохранены");
+        }
+
+        [Command("menu", RunMode = RunMode.Async)]
+        public async Task MenuAsync()
+        {
+            // Create CancellationTokenSource that will be canceled after 10 minutes.
+            var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+
+            var options = new[]
+            {
+                "Cache messages",
+                "Cache users",
+                "Allow using mentions as prefix",
+                "Ignore command errors",
+                "Cache messages",
+                "Cache users",
+                "Allow using mentions as prefix",
+                "Ignore command errors",
+                "Allow using mentions as prefix",
+                "Cache users"
+            };
+
+            var values = new[]
+            {
+                true,
+                false,
+                true,
+                false,
+                true,
+                false,
+                true,
+                false,
+                true,
+                false
+            };
+
+            // Dynamically create the number emotes
+            var emotes = Enumerable.Range(1, options.Length)
+                .ToDictionary(x => new Emoji($"{x}\ufe0f\u20e3") as IEmote, y => y);
+
+            // Add the cancel emote at the end of the dictionary
+            emotes.Add(new Emoji("❌"), -1);
+
+            var color = Color.Green;
+
+            // Prefer disabling the input (buttons, select menus) instead of removing them from the message.
+            var actionOnStop = ActionOnStop.DisableInput;
+
+            InteractiveMessageResult<KeyValuePair<IEmote, int>> result = null!;
+            IUserMessage message = null!;
+
+            while (result is null || result.Status == InteractiveStatus.Success)
+            {
+                var pageBuilder = new PageBuilder()
+                    .WithTitle("Bot Control Panel")
+                    .WithDescription("Use the reactions/buttons to enable or disable an option.")
+                    .AddField("Option", string.Join('\n', options.Select((x, i) => $"**{i + 1}**. {x}")), true)
+                    .AddField("Value", string.Join('\n', values), true)
+                    .WithColor(color);
+
+                var selection = new EmoteSelectionBuilder<int>()
+                    .AddUser(Context.User)
+                    .WithSelectionPage(pageBuilder)
+                    .WithOptions(emotes)
+                    .WithAllowCancel(true)
+                    .WithActionOnCancellation(actionOnStop)
+                    .WithActionOnTimeout(actionOnStop)
+                    .Build();
+
+                // if message is null, SendSelectionAsync() will send a message, otherwise it will modify the message.
+                // The cancellation token persists here, so it will be canceled after 10 minutes no matter how many times the selection is used.
+                result = message is null
+                    ? await Interactive.SendSelectionAsync(selection, Context.Channel, TimeSpan.FromMinutes(10), cancellationToken: cts.Token)
+                    : await Interactive.SendSelectionAsync(selection, message, TimeSpan.FromMinutes(10), cancellationToken: cts.Token);
+
+
+
+                // Store the used message.
+                message = result.Message;
+
+                // Break the loop if the result isn't successful
+                if (!result.IsSuccess)
+                    break;
+
+                int selected = result.Value.Value;
+
+                // Invert the value of the selected option
+                values[selected - 1] = !values[selected - 1];
+
+                // Do stuff with the selected option
+            }
+        }
+
+
         [Command("Общие")]
         [Alias("о")]
         public async Task SetGeneralSettingsAsync()
         {
             var settingsVM = new MafiaSettingsViewModel();
 
-            var success = await TrySetParameters(settingsVM);
+            var success = await TrySetParametersAsync(settingsVM);
 
 
             if (!success)
@@ -2303,7 +2489,7 @@ public class MafiaModule : GameModule
         {
             var settingsVM = new RoleAmountSubSettingsViewModel();
 
-            var success = await TrySetParameters(settingsVM);
+            var success = await TrySetParametersAsync(settingsVM);
 
             if (!success)
             {
@@ -2340,7 +2526,7 @@ public class MafiaModule : GameModule
         {
             var settingsVM = new RolesInfoSubSettingsViewModel();
 
-            var success = await TrySetParameters(settingsVM);
+            var success = await TrySetParametersAsync(settingsVM);
 
             if (!success)
             {
@@ -2384,7 +2570,7 @@ public class MafiaModule : GameModule
         {
             var serverSettingsVM = new ServerSubSettingsViewModel();
 
-            var success = await TrySetParameters(serverSettingsVM);
+            var success = await TrySetParametersAsync(serverSettingsVM);
 
 
             if (!success)
@@ -2415,7 +2601,7 @@ public class MafiaModule : GameModule
         {
             var settingsVM = new GameSubSettingsViewModel();
 
-            var success = await TrySetParameters(settingsVM);
+            var success = await TrySetParametersAsync(settingsVM);
 
 
             if (!success)
@@ -2554,7 +2740,7 @@ public class MafiaModule : GameModule
         }
 
 
-        private async Task<bool> TrySetParameters<T>(T settings) where T : notnull
+        private async Task<bool> TrySetParametersAsync<T>(T settings) where T : notnull
         {
             var wasSetSettings = false;
 
@@ -2605,54 +2791,8 @@ public class MafiaModule : GameModule
                     break;
                 }
 
-
-                var embed = CreateEmbed(EmbedStyle.Information, $"Напишите значение выбранного параметра **{parameterNames[index]}**");
-                var valueMessageResult = await NextMessageAsync(embed: embed);
-
-                if (!valueMessageResult.IsSuccess)
-                {
-                    await ReplyEmbedAndDeleteAsync(EmbedStyle.Warning, $"Вы не указали значение параметра **{parameterNames[index]}**");
-
+                if (!await TrySetParameterAsync(parameters[index], settings, parameterNames[index]))
                     break;
-                }
-
-                if (valueMessageResult?.Value is not SocketMessage valueMessage)
-                {
-                    await ReplyEmbedAsync(EmbedStyle.Warning, "Неверное значение параметра");
-
-                    break;
-                }
-
-                if (parameters[index].PropertyType == typeof(bool?) || parameters[index].PropertyType == typeof(bool))
-                {
-                    var result = await new BooleanTypeReader().ReadAsync(Context, valueMessage.Content);
-
-                    if (result.IsSuccess)
-                        parameters[index].SetValue(settings, result.Values is not null ? result.BestMatch : null);
-                    else
-                    {
-                        await ReplyEmbedAsync(EmbedStyle.Error, $"Не удалось установить значение параметра **{parameterNames[index]}**");
-
-                        break;
-                    }
-                }
-                else
-                {
-                    var converter = TypeDescriptor.GetConverter(parameters[index].PropertyType);
-
-                    if (converter.IsValid(valueMessage.Content))
-                    {
-                        var value = converter.ConvertFrom(valueMessage.Content);
-
-                        parameters[index].SetValue(settings, value);
-                    }
-                    else
-                    {
-                        await ReplyEmbedAsync(EmbedStyle.Error, $"Не удалось установить значение параметра **{parameterNames[index]}**");
-
-                        break;
-                    }
-                }
 
                 wasSetSettings = true;
 
@@ -2674,6 +2814,58 @@ public class MafiaModule : GameModule
             return wasSetSettings;
         }
 
+        private async Task<bool> TrySetParameterAsync(PropertyInfo parameter, object obj, string? displayName = null)
+        {
+            displayName ??= parameter.GetPropertyFullName();
+
+            var embed = CreateEmbed(EmbedStyle.Information, $"Укажите значение выбранного параметра **{displayName}**");
+            var valueMessageResult = await NextMessageAsync(embed: embed);
+
+            if (!valueMessageResult.IsSuccess)
+            {
+                await ReplyEmbedAndDeleteAsync(EmbedStyle.Warning, $"Вы не указали значение параметра **{displayName}**");
+
+                return false;
+            }
+
+            if (valueMessageResult?.Value is not SocketMessage valueMessage)
+            {
+                await ReplyEmbedAsync(EmbedStyle.Warning, "Неверное значение параметра");
+
+                return false;
+            }
+            if (parameter.PropertyType == typeof(bool?) || parameter.PropertyType == typeof(bool))
+            {
+                var result = await new BooleanTypeReader().ReadAsync(Context, valueMessage.Content);
+
+                if (result.IsSuccess)
+                    parameter.SetValue(obj, result.Values is not null ? result.BestMatch : null);
+                else
+                {
+                    await ReplyEmbedAsync(EmbedStyle.Error, $"Не удалось установить значение параметра **{displayName}**");
+
+                    return false;
+                }
+            }
+            else
+            {
+                var converter = TypeDescriptor.GetConverter(parameter.PropertyType);
+                if (converter.IsValid(valueMessage.Content))
+                {
+                    var value = converter.ConvertFrom(valueMessage.Content);
+
+                    parameter.SetValue(obj, value);
+                }
+                else
+                {
+                    await ReplyEmbedAsync(EmbedStyle.Error, $"Не удалось установить значение параметра **{displayName}**");
+
+                    return false;
+                }
+            }
+
+            return true;
+        }
 
         private void SetParameters<TData, TViewModel>(TData data, TViewModel viewModel)
             where TData : notnull
@@ -2934,4 +3126,179 @@ public class MafiaModule : GameModule
             _currentDay++;
         }
     }
+
+
+
+
+
+
+
+
+
+    [Command("select", RunMode = RunMode.Async)]
+    public async Task MultiSelectionAsync(int n)
+    {
+        // Create CancellationTokenSource that will be canceled after 10 minutes.
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+
+        var modules = Context.Guild.Users.Take(n).ToArray();
+        var color = Color.Red;
+
+        // Used to track the selected module
+        string selectedModule = null!;
+
+        IUserMessage message = null!;
+        InteractiveMessageResult<MultiSelectionOption<string>?>? result = null;
+
+        // This timeout page is used for both cancellation (from the cancellation token) and timeout (specified in the SendSelectionAsync method).
+        var timeoutPage = new PageBuilder()
+            .WithDescription("Timeout!")
+            .WithColor(color);
+
+        // Here we will use a "menu" message, that is, it can be reused multiple times until a timeout is received.
+        // In this case, we will reuse the message with the multi selection until we get a result (multi selection option) with a row value of 1.
+        // This can only happen if the result is successful and an option in the second select menu (the one that contains the commands) in selected.
+        while (result is null || result.IsSuccess && result.Value?.Row != 1)
+        {
+            // A multi selection uses the Row property of MultiSelectionOption to determine the position (the select menu) the options will appear.
+            // The modules will appear in the first select menu.
+            // There's also an IsDefault property used to determine whether an option is the default for a specific row.
+            var options = modules.Select(x => new MultiSelectionOption<string>(option: x.Username, row: 0, isDefault: x.Username == selectedModule));
+
+            string description = "Select a user";
+
+
+            if (result != null)
+            {
+                description = "Select a command\nNote: You can also update your selected module.";
+                var commands = modules
+                    .First(x => x.Username == result.Value!.Option)
+                    .GuildPermissions.ToList()
+                    .Select(x => new MultiSelectionOption<string>(x.ToString(), 1));
+
+                options = options.Concat(commands);
+            }
+
+
+            var pageBuilder = new PageBuilder()
+                .WithDescription(description)
+                .WithColor(color);
+
+            var multiSelection = new MultiSelectionBuilder<string>()
+                .WithSelectionPage(pageBuilder)
+                .WithTimeoutPage(timeoutPage)
+                .WithCanceledPage(timeoutPage)
+                .WithActionOnTimeout(ActionOnStop.ModifyMessage | ActionOnStop.DeleteInput)
+                .WithActionOnCancellation(ActionOnStop.ModifyMessage | ActionOnStop.DeleteInput)
+                .WithOptions(options.ToArray())
+                .WithStringConverter(x => x.Option)
+                .AddUser(Context.User)
+                .Build();
+
+            result = message is null
+                ? await Interactive.SendSelectionAsync(multiSelection, Context.Channel, TimeSpan.FromMinutes(2), null, cts.Token)
+                : await Interactive.SendSelectionAsync(multiSelection, message, TimeSpan.FromMinutes(2), null, cts.Token);
+
+            message = result.Message;
+
+            if (result.IsSuccess && result.Value!.Row == 0)
+            {
+                // We need to track the selected module so we can set it as the default option.
+                selectedModule = result.Value!.Option;
+            }
+        }
+
+        if (!result.IsSuccess)
+            return;
+
+        var embed = new EmbedBuilder()
+            .WithDescription($"You selected:\n**Module**: {selectedModule}\n**Command**: {result.Value!.Option}")
+            .WithColor(color)
+            .Build();
+
+        await message.ModifyAsync(x =>
+        {
+            x.Embed = embed;
+            x.Components = new ComponentBuilder().Build(); // Remove components
+        });
+    }
+
+
+    public class MultiSelectionBuilder<T> : BaseSelectionBuilder<MultiSelection<T>, MultiSelectionOption<T>, MultiSelectionBuilder<T>>
+    {
+        public override InputType InputType => InputType.SelectMenus;
+
+        public override MultiSelection<T> Build() => new(EmoteConverter, StringConverter, EqualityComparer, AllowCancel, SelectionPage.Build(), Users.ToList(), Options.ToList(), CanceledPage?.Build(), TimeoutPage?.Build(), SuccessPage?.Build(), Deletion, InputType, ActionOnCancellation, ActionOnTimeout, ActionOnSuccess);
+    }
+
+    public class MultiSelection<T> : BaseSelection<MultiSelectionOption<T>>
+    {
+        public MultiSelection(Func<MultiSelectionOption<T>, IEmote>? emoteConverter, Func<MultiSelectionOption<T>, string>? stringConverter, IEqualityComparer<MultiSelectionOption<T>> equalityComparer, bool allowCancel, Page selectionPage, IReadOnlyCollection<IUser> users, IReadOnlyCollection<MultiSelectionOption<T>> options, Page? canceledPage, Page? timeoutPage, Page? successPage, DeletionOptions deletion, InputType inputType, ActionOnStop actionOnCancellation, ActionOnStop actionOnTimeout, ActionOnStop actionOnSuccess) : base(emoteConverter, stringConverter, equalityComparer, allowCancel, selectionPage, users, options, canceledPage, timeoutPage, successPage, deletion, inputType, actionOnCancellation, actionOnTimeout, actionOnSuccess)
+        {
+
+        }
+
+        public override MessageComponent BuildComponents(bool disableAll)
+        {
+            var builder = new ComponentBuilder();
+            var selectMenus = new Dictionary<int, SelectMenuBuilder>();
+
+            foreach (var option in Options)
+            {
+                if (!selectMenus.ContainsKey(option.Row))
+                {
+                    selectMenus[option.Row] = new SelectMenuBuilder()
+                        .WithCustomId($"selectmenu{option.Row}")
+                        .WithDisabled(disableAll);
+                }
+
+                var emote = EmoteConverter?.Invoke(option);
+                var label = StringConverter?.Invoke(option);
+                if (emote is null && label is null)
+                {
+                    throw new InvalidOperationException($"Neither {nameof(EmoteConverter)} nor {nameof(StringConverter)} returned a valid emote or string.");
+                }
+
+                var optionValue = emote?.ToString() ?? label;
+
+                var optionBuilder = new SelectMenuOptionBuilder()
+                    .WithLabel(label)
+                    .WithEmote(emote)
+                    .WithValue(optionValue)
+                    .WithDefault(option.IsDefault);
+
+                selectMenus[option.Row].AddOption(optionBuilder);
+            }
+
+            foreach ((int row, var selectMenu) in selectMenus)
+            {
+                builder.WithSelectMenu(selectMenu, row);
+            }
+
+            return builder.Build();
+        }
+    }
+
+    public class MultiSelectionOption<T>
+    {
+        public MultiSelectionOption(T option, int row, bool isDefault = false)
+        {
+            Option = option;
+            Row = row;
+            IsDefault = isDefault;
+        }
+
+        public T Option { get; }
+
+        public int Row { get; }
+
+        public bool IsDefault { get; set; }
+
+        public override string? ToString() => Option?.ToString();
+
+        public override int GetHashCode() => Option?.GetHashCode() ?? 0;
+
+        public override bool Equals(object? obj) => Equals(Option, obj);
+    }
 }
+

@@ -4,18 +4,19 @@ namespace Core.Extensions;
 
 public static class EmbedBuilderExtensions
 {
-    private const char EmptySpace = '⠀';
+    private const string EmptySpace = "⠀";
 
     private static readonly Color ColorInformation = new(52, 104, 194);
+    private static readonly Color ColorWaiting = new(178, 185, 189);
     private static readonly Color ColorSuccessfully = new(35, 115, 13);
     private static readonly Color ColorWarning = new(232, 120, 0);
     private static readonly Color ColorError = new(214, 15, 15);
 
     public static EmbedBuilder AddEmptyField(this EmbedBuilder builder, bool inline = false)
-        => builder.AddField(EmptySpace.ToString(), EmptySpace, inline);
+        => builder.AddField(EmptySpace, EmptySpace, inline);
 
     public static EmbedBuilder AddFieldWithEmptyName(this EmbedBuilder builder, string description, bool inline = false)
-        => builder.AddField(EmptySpace.ToString(), description, inline);
+        => builder.AddField(EmptySpace, description, inline);
 
 
     public static EmbedBuilder WithErrorMessage(this EmbedBuilder builder)
@@ -32,6 +33,12 @@ public static class EmbedBuilderExtensions
         => builder
         .WithDescription($"{builder.Description} ✅")
         .WithColor(ColorSuccessfully);
+
+    public static EmbedBuilder WithWaitingMessage(this EmbedBuilder builder)
+        => builder
+        .WithDescription($"{builder.Description} 🕓")
+        .WithColor(ColorWaiting);
+
 
     public static EmbedBuilder WithInformationMessage(this EmbedBuilder builder, bool addSmile = false)
         => builder
