@@ -18,7 +18,7 @@ public class MurdersGroup : RolesGroup
     }
 
 
-    public async override Task<VotingResult> VoteManyAsync(MafiaContext context, CancellationToken token, IUserMessage? message = null)
+    public async override Task<VoteGroup> VoteManyAsync(MafiaContext context, CancellationToken token, IUserMessage? message = null)
     {
         message ??= await context.GuildData.MurderTextChannel.SendEmbedAsync("Голосование начинается...", EmbedStyle.Waiting);
 

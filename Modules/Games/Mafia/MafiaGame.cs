@@ -1,18 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime;
+using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
 using Core.Common;
-using Core.Common.Chronology;
-using Core.Common.Data;
 using Core.Extensions;
 using Discord;
 using Fergun.Interactive;
-using Fergun.Interactive.Selection;
 using Infrastructure.Data.Models.Games.Settings.Mafia;
-using Microsoft.VisualBasic;
 using Modules.Games.Mafia.Common;
 using Modules.Games.Mafia.Common.Data;
 using Modules.Games.Mafia.Common.GameRoles;
@@ -99,7 +95,11 @@ public class MafiaGame
         }
         catch (OperationCanceledException)
         {
-            await _guildData.GeneralTextChannel.SendEmbedAsync("Game stopped", EmbedStyle.Warning);
+            await _guildData.GeneralTextChannel.SendEmbedAsync("Михалыч дернул ручник", EmbedStyle.Warning);
+        }
+        finally
+        {
+            await ReturnPlayersDataAsync();
         }
     }
 
@@ -176,9 +176,9 @@ public class MafiaGame
 
             var citizenVotingResult = await DoCitizenVotingAsync(votingMessage);
 
-            if (citizenVotingResult.Result.Option is not null)
+            if (citizenVotingResult.Choice.Option is not null)
             {
-                var role = _rolesData.AliveRoles[citizenVotingResult.Result.Option];
+                var role = _rolesData.AliveRoles[citizenVotingResult.Choice.Option];
 
                 if (!role.BlockedByHooker)
                 {
@@ -193,7 +193,7 @@ public class MafiaGame
             }
             else
             {
-                if (citizenVotingResult.Result.IsSkip)
+                if (citizenVotingResult.Choice.IsSkip)
                     await _guildData.GeneralTextChannel.SendEmbedAsync("Пропуск", EmbedStyle.Successfull);
                 else
                     await _guildData.GeneralTextChannel.SendEmbedAsync("Не удалось выбрать", EmbedStyle.Error);
@@ -208,7 +208,7 @@ public class MafiaGame
     }
 
 
-    private async Task<VotingResult> DoCitizenVotingAsync(IUserMessage voteMessage)
+    private async Task<VoteGroup> DoCitizenVotingAsync(IUserMessage voteMessage)
     {
         var citizen = new CitizenGroup(_rolesData.AliveRoles.Values.ToList(), _context.GameRoleOptions);
 
@@ -249,7 +249,7 @@ public class MafiaGame
         foreach (var rolesGrouping in priorityGroups)
         {
             var tasksSingle = new List<Task<Vote>>();
-            var tasksGroup = new List<Task<VotingResult>>();
+            var tasksGroup = new List<Task<VoteGroup>>();
 
             foreach (var role in rolesGrouping)
             {
@@ -273,6 +273,8 @@ public class MafiaGame
                     if (_guildData.SpectatorTextChannel is not null)
                         await _guildData.SpectatorTextChannel.SendEmbedAsync(
                             $"{vote.VotedRole.Name} [{vote.VotedRole.Player.GetFullName()}] - {(vote.IsSkip ? "Skip" : vote.Option?.GetFullName() ?? "None")}", "Голосование");
+
+                    await vote.VotedRole.SendVotingResults();
                 }
             });
 
@@ -292,7 +294,7 @@ public class MafiaGame
                             .WithTitle("Голосование")
                             .AddField("Игрок", string.Join('\n', votingResult.PlayersVote.Values.Select(vote => $"{vote.VotedRole.Name} [{vote.VotedRole.Player.GetFullName()}]")), true)
                             .AddField("Голос", string.Join('\n', votingResult.PlayersVote.Values.Select(vote => $"{(vote.IsSkip ? "Skip" : vote.Option?.GetFullName() ?? "None")}")), true)
-                            .AddField("Результат", votingResult.Result.IsSkip ? "Skip" : votingResult.Result.Option?.GetFullName() ?? "None")
+                            .AddField("Результат", votingResult.Choice.IsSkip ? "Skip" : votingResult.Choice.Option?.GetFullName() ?? "None")
                             .Build();
 
                         await _guildData.SpectatorTextChannel.SendMessageAsync(embed: embed);
@@ -342,9 +344,9 @@ public class MafiaGame
         await player.RemoveRoleAsync(_guildData.MafiaRole);
 
 
-        if (_guildData.PlayerRoleIds.ContainsKey(player.Id))
+        if (_guildData.PlayerRoleIds.TryGetValue(player.Id, out var rolesIds) && rolesIds.Count > 0)
         {
-            await player.AddRolesAsync(_guildData.PlayerRoleIds[player.Id]);
+            await player.AddRolesAsync(rolesIds);
         }
 
         if (_guildData.OverwrittenNicknames.Contains(player.Id))
@@ -357,9 +359,10 @@ public class MafiaGame
 
         if (isKill)
         {
-            await player.AddRoleAsync(_guildData.SpectatorRole);
-
             _guildData.KilledPlayers.Add(player);
+
+            if (_guildData.SpectatorTextChannel is not null && _guildData.SpectatorRole is not null)
+                await player.AddRoleAsync(_guildData.SpectatorRole);
         }
     }
 
@@ -426,6 +429,24 @@ public class MafiaGame
             }
     }
 
+
+
+    private async Task ReturnPlayersDataAsync()
+    {
+        foreach (var role in _rolesData.AllRoles.Values)
+        {
+            var player = role.Player;
+
+
+            await EjectPlayerAsync(player, false);
+        }
+
+        if (_guildData.SpectatorTextChannel is not null && _guildData.SpectatorRole is not null)
+            foreach (var player in _guildData.KilledPlayers)
+            {
+                await player.RemoveRoleAsync(_guildData.SpectatorRole);
+            }
+    }
 
 
 

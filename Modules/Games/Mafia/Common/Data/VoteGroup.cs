@@ -5,9 +5,9 @@ using Modules.Games.Mafia.Common.GameRoles;
 
 namespace Modules.Games.Mafia.Common.Data;
 
-public class VotingResult
+public class VoteGroup
 {
-    public Vote Result { get; }
+    public Vote Choice { get; }
 
     public IReadOnlyDictionary<IGuildUser, Vote> PlayersVote { get; }
 
@@ -15,17 +15,17 @@ public class VotingResult
     private readonly GameRole _votedRole;
 
 
-    public VotingResult(GameRole votedRole, IReadOnlyDictionary<IGuildUser, Vote> playersVote)
+    public VoteGroup(GameRole votedRole, IReadOnlyDictionary<IGuildUser, Vote> playersVote)
     {
         PlayersVote = playersVote;
 
         _votedRole = votedRole;
 
-        Result = CalculateResult();
+        Choice = CalculateChoice();
     }
 
 
-    private Vote CalculateResult()
+    private Vote CalculateChoice()
     {
         var skipCount = 0;
 

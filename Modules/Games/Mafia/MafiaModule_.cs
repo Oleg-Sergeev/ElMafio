@@ -56,7 +56,7 @@ public sealed partial class MafiaModule_ : GameModule<MafiaData>
         var data = GetGameData();
         data.Players.Shuffle(3);
 
-        await ReplyEmbedAsync($"{data.Name} запущена", EmbedStyle.Successfull);
+        await ReplyEmbedStampAsync($"{data.Name} успешно запущена", EmbedStyle.Successfull);
 
 
         var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
@@ -87,7 +87,17 @@ public sealed partial class MafiaModule_ : GameModule<MafiaData>
 
         var game = new MafiaGame(context);
 
-        await game.RunAsync();
+        try
+        {
+            await game.RunAsync();
+
+
+            await ReplyEmbedStampAsync($"{data.Name} успешно завершена", EmbedStyle.Successfull);
+        }
+        finally
+        {
+            DeleteGameData();
+        }
     }
 
     [Command("хуяк")]
@@ -160,9 +170,10 @@ public sealed partial class MafiaModule_ : GameModule<MafiaData>
     [RequireUserPermission(GuildPermission.Administrator)]
     public class TemplatesModule : GuildModuleBase
     {
-        public TemplatesModule(Fergun.Interactive.InteractiveService interactiveService) : base(interactiveService)
+        public TemplatesModule(InteractiveService interactiveService) : base(interactiveService)
         {
         }
+
 
         [Command("Клонировать")]
         [Alias("клон", "к")]

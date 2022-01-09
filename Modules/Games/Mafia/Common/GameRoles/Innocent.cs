@@ -13,8 +13,11 @@ public class Innocent : GameRole
     }
 
 
-    public override IEnumerable<IGuildUser> GetExceptList()
+    protected override IEnumerable<IGuildUser> GetExceptList()
     {
+        if (!IsNight)
+            return base.GetExceptList();
+
         var except = new List<IGuildUser>();
 
         if (LastMove is not null)

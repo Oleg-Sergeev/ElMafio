@@ -19,8 +19,11 @@ public class Doctor : Innocent, IHealer
     }
 
 
-    public override IEnumerable<IGuildUser> GetExceptList()
+    protected override IEnumerable<IGuildUser> GetExceptList()
     {
+        if (!IsNight)
+            return base.GetExceptList();
+
         var except = new List<IGuildUser>();
 
         if (HealedPlayer is not null)
@@ -32,22 +35,14 @@ public class Doctor : Innocent, IHealer
         return except;
     }
 
-    public override void SetPhase(bool isNight)
+
+    protected override void HandleChoice(IGuildUser? choice)
     {
-        base.SetPhase(isNight);
-
-        if (isNight)
-            HealedPlayer = null;
-    }
-
-    public override void ProcessMove(IGuildUser? selectedPlayer, bool isSkip)
-    {
-        base.ProcessMove(selectedPlayer, isSkip);
-
+        base.HandleChoice(choice);
 
         if (IsNight)
         {
-            HealedPlayer = !isSkip ? selectedPlayer : null;
+            HealedPlayer = choice;
 
             if (HealedPlayer == Player)
                 SelfHealsCount--;

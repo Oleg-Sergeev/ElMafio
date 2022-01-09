@@ -14,18 +14,12 @@ public class Maniac : Neutral, IKiller
     {
     }
 
-    public override void SetPhase(bool isNight)
-    {
-        base.SetPhase(isNight);
 
-        if (isNight)
-            KilledPlayer = null;
-    }
-    public override void ProcessMove(IGuildUser? selectedPlayer, bool isSkip)
+    protected override void HandleChoice(IGuildUser? choice)
     {
-        base.ProcessMove(selectedPlayer, isSkip);
+        base.HandleChoice(choice);
 
         if (IsNight)
-            KilledPlayer = !isSkip ? selectedPlayer : null;
+            KilledPlayer = choice;
     }
 }

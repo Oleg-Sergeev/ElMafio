@@ -9,6 +9,7 @@ using Core.Common;
 using Core.Extensions;
 using Discord;
 using Fergun.Interactive;
+using Fergun.Interactive.Selection;
 using Microsoft.Extensions.Options;
 using Modules.Games.Mafia.Common.Data;
 using Modules.Games.Mafia.Common.GameRoles.Data;
@@ -54,7 +55,6 @@ public abstract class GameRole
     public int Priority { get; }
 
 
-
     public GameRole(IGuildUser player, IOptionsSnapshot<GameRoleData> options)
     {
         var name = GetType().Name;
@@ -71,15 +71,8 @@ public abstract class GameRole
 
 
 
-    public virtual IEnumerable<IGuildUser> GetExceptList()
+    protected virtual IEnumerable<IGuildUser> GetExceptList()
         => Enumerable.Empty<IGuildUser>();
-
-    public virtual void ProcessMove(IGuildUser? selectedPlayer, bool isSkip)
-    {
-        LastMove = !isSkip ? selectedPlayer : null;
-
-        IsSkip = isSkip;
-    }
 
 
 
@@ -147,12 +140,19 @@ public abstract class GameRole
 
 
 
-    protected static async Task<Vote> VoteBaseAsync(GameRole role, MafiaContext context, CancellationToken token, IUserMessage? message = null)
+    protected static void HandleChoiceInternal(GameRole role, IGuildUser? choice)
+        => role.HandleChoice(choice);
+
+    protected virtual void HandleChoice(IGuildUser? choice)
+    {
+        LastMove = choice;
+    }
+
+    public virtual async Task<Vote> VoteAsync(MafiaContext context, CancellationToken token, IUserMessage? message = null)
     {
         // Preconditions
 
-        // Call virtual - BAD
-        var except = role.GetExceptList();
+        var except = GetExceptList();
 
         var playersToVote = context.RolesData.AliveRoles.Keys.Except(except);
 
@@ -170,10 +170,14 @@ public abstract class GameRole
 
         do
         {
+            var options = playersToVote
+                .Select(p => new SelectMenuOptionBuilder(p.GetFullName(), p.Id.ToString(), isDefault: selectedPlayer?.Id == p.Id))
+                .ToList();
+
             var select = new SelectMenuBuilder()
                 .WithCustomId("select")
                 .WithPlaceholder("Выберите игрока")
-                .WithOptions(playersToVote.Select(p => new SelectMenuOptionBuilder(p.GetFullName(), p.Id.ToString(), isDefault: selectedPlayer?.Id == p.Id)).ToList());
+                .WithOptions(options);
 
             var component = new ComponentBuilder()
                    .WithButton("Проголосовать", "vote", ButtonStyle.Primary, disabled: selectedPlayer is null)
@@ -186,7 +190,7 @@ public abstract class GameRole
                 : $"Вы выбрали - {selectedPlayer.GetFullMention()}";
 
             var embed = new EmbedBuilder()
-               .WithTitle($"Голосование (Выбирает {role.Player.GetFullName()})")
+               .WithTitle($"Голосование (Выбирает {Player.GetFullName()})")
                .WithColor(Color.Gold)
                .WithDescription(description)
                .AddField("Игрок", string.Join('\n', playersToVote.Select(p => p.GetFullName())), true)
@@ -194,7 +198,7 @@ public abstract class GameRole
 
             if (message is null)
             {
-                message = await role.Player.SendMessageAsync(embed: embed, components: component);
+                message = await Player.SendMessageAsync(embed: embed, components: component);
             }
             else
             {
@@ -233,7 +237,7 @@ public abstract class GameRole
 
 
             var result = await context.Interactive.NextMessageComponentAsync(
-                x => x.Message.Id == message.Id && (x.User.Id == role.Player.Id || x.User.Id == context.CommandContext.Guild.OwnerId),
+                x => x.Message.Id == message.Id && (x.User.Id == Player.Id || x.User.Id == context.CommandContext.Guild.OwnerId),
                 timeout: timeout, cancellationToken: token);
 
 
@@ -248,13 +252,13 @@ public abstract class GameRole
                 {
                     if (data.CustomId == "skip")
                     {
-                        vote = new Vote(role, null, true);
+                        vote = new Vote(this, null, true);
 
                         break;
                     }
                     else if (data.CustomId == "vote")
                     {
-                        vote = new Vote(role, selectedPlayer, false);
+                        vote = new Vote(this, selectedPlayer, false);
 
                         break;
                     }
@@ -279,7 +283,7 @@ public abstract class GameRole
             }
             else
             {
-                vote = new Vote(role, null, false);
+                vote = new Vote(this, null, false);
 
                 break;
             }
@@ -293,17 +297,23 @@ public abstract class GameRole
         await timeoutMessage.DeleteAsync();
 
 
-        //await message.ModifyAsync(x =>
-        //{
-        //    x.Content = "huuuuuuuuuuuuui";
-        //    x.Components = new ComponentBuilder().Build();
-        //    x.Embeds = Array.Empty<Embed>();
-        //});
+        vote ??= new Vote(this, null, false);
 
 
-        return vote ?? new Vote(role, null, false);
+        HandleChoice(vote.Option);
+
+
+        return vote;
     }
 
-    public virtual Task<Vote> VoteAsync(MafiaContext context, CancellationToken token, IUserMessage? message = null)
-        => VoteBaseAsync(this, context, token, message);
+
+    public virtual async Task SendVotingResults()
+    {
+        var seq = GetMoveResultPhasesSequence();
+
+        foreach (var phrase in seq)
+        {
+            await Player.SendMessageAsync(embed: EmbedHelper.CreateEmbed(phrase.Item2, phrase.Item1));
+        }
+    }
 }

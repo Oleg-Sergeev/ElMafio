@@ -17,8 +17,13 @@ public class Hooker : Neutral, IHooker
     {
     }
 
-    public override IEnumerable<IGuildUser> GetExceptList()
+
+    protected override IEnumerable<IGuildUser> GetExceptList()
     {
+        if (!IsNight)
+            return base.GetExceptList();
+
+
         var except = new List<IGuildUser>()
         {
             Player
@@ -30,35 +35,26 @@ public class Hooker : Neutral, IHooker
         return except;
     }
 
-    public override void SetPhase(bool isNight)
-    {
-        base.SetPhase(isNight);
 
-        if (isNight)
-        {
-            HealedPlayer = null;
-            BlockedPlayer = null;
-        }
-    }
-
-    public override void ProcessMove(IGuildUser? selectedPlayer, bool isSkip)
+    protected override void HandleChoice(IGuildUser? choice)
     {
-        base.ProcessMove(selectedPlayer, isSkip);
+        base.HandleChoice(choice);
+
 
         if (IsNight)
         {
-            HealedPlayer = !isSkip ? selectedPlayer : null;
+            HealedPlayer = choice;
 
             BlockedPlayer = HealedPlayer;
         }
     }
 
-
+    // ***************
     public override void Block(IBlocker byRole)
     {
         if (byRole is Hooker hooker)
         {
-            hooker.ProcessMove(null, false);
+            hooker.HandleChoice(null);
         }
         else
         {

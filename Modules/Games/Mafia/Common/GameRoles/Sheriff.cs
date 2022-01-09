@@ -1,9 +1,14 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Core.Common;
 using Core.Extensions;
 using Discord;
+using Fergun.Interactive;
+using Fergun.Interactive.Selection;
 using Microsoft.Extensions.Options;
+using Modules.Games.Mafia.Common.Data;
 using Modules.Games.Mafia.Common.GameRoles.Data;
 using Modules.Games.Mafia.Common.Interfaces;
 
@@ -12,17 +17,12 @@ namespace Modules.Games.Mafia.Common.GameRoles;
 
 public class Sheriff : Innocent, IKiller, IChecker
 {
-    public bool IsAvailableToShot => ShotsCount > 0;
-
-
     public IGuildUser? KilledPlayer { get; protected set; }
 
     public GameRole? CheckedRole { get; protected set; }
 
 
     protected int ShotsCount { get; set; }
-
-    protected bool WasShot { get; set; }
 
     protected bool ShotSelected { get; set; }
 
@@ -37,25 +37,16 @@ public class Sheriff : Innocent, IKiller, IChecker
         CheckableRoles = murders;
     }
 
-    public override void SetPhase(bool isNight)
-    {
-        base.SetPhase(isNight);
 
-        if (isNight)
-        {
-            CheckedRole = null;
-            KilledPlayer = null;
-        }
-    }
-
-
-    public override IEnumerable<IGuildUser> GetExceptList()
-        => new List<IGuildUser>()
+    protected override IEnumerable<IGuildUser> GetExceptList()
+        => !IsNight ? base.GetExceptList()
+        : new List<IGuildUser>()
         {
             Player
         };
 
 
+    // ******************
     public override ICollection<(EmbedStyle, string)> GetMoveResultPhasesSequence()
     {
         var sequence = base.GetMoveResultPhasesSequence();
@@ -82,11 +73,9 @@ public class Sheriff : Innocent, IKiller, IChecker
     }
 
 
-    public void ConfigureMove(bool shotSelected) => ShotSelected = shotSelected;
-
-    public override void ProcessMove(IGuildUser? selectedPlayer, bool isSkip)
+    protected override void HandleChoice(IGuildUser? choice)
     {
-        base.ProcessMove(selectedPlayer, isSkip);
+        base.HandleChoice(choice);
 
         if (!IsNight)
             return;
@@ -95,7 +84,7 @@ public class Sheriff : Innocent, IKiller, IChecker
         {
             CheckedRole = null;
 
-            KilledPlayer = selectedPlayer;
+            KilledPlayer = choice;
 
             ShotsCount--;
         }
@@ -103,7 +92,48 @@ public class Sheriff : Innocent, IKiller, IChecker
         {
             KilledPlayer = null;
 
-            CheckedRole = CheckableRoles.FirstOrDefault(r => r.Player == selectedPlayer);
+            CheckedRole = choice is null ? null : CheckableRoles.FirstOrDefault(r => r.Player == choice);
         }
+    }
+
+
+    public async override Task<Vote> VoteAsync(MafiaContext context, CancellationToken token, IUserMessage? message = null)
+    {
+        if (!IsNight)
+            return await base.VoteAsync(context, token, message);
+
+
+        ShotSelected = false;
+
+        if (ShotsCount > 0)
+        {
+            var pageBuilder = new PageBuilder()
+                .WithTitle("");
+
+
+            var selection = new SelectionBuilder<bool>()
+                .WithOptions(new List<bool> { true, false });
+
+
+            //ShotSelected = true;
+        }
+
+        var vote = await base.VoteAsync(context, token, message);
+
+
+        // TODO: Remove from here
+
+        if (!ShotSelected)
+        {
+            var seq = GetMoveResultPhasesSequence();
+
+            foreach (var phrase in seq)
+            {
+                await Player.SendMessageAsync(embed: EmbedHelper.CreateEmbed(phrase.Item2, phrase.Item1));
+            }
+        }
+
+
+        return vote;
     }
 }

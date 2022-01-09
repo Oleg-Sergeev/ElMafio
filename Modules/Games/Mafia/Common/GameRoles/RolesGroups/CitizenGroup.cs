@@ -15,20 +15,19 @@ public class CitizenGroup : RolesGroup
     }
 
 
-
-    public override async Task<VotingResult> VoteManyAsync(MafiaContext context, CancellationToken token, IUserMessage? voteMessage = null)
+    public override async Task<VoteGroup> VoteManyAsync(MafiaContext context, CancellationToken token, IUserMessage? voteMessage = null)
     {
         var votes = new Dictionary<IGuildUser, Vote>();
 
         foreach (var role in Roles)
         {
-            var vote = await VoteBaseAsync(role, context, token, voteMessage);
+            var vote = await role.VoteAsync(context, token, voteMessage);
 
             votes[vote.VotedRole.Player] = vote;
         }
 
-        var votingResult = new VotingResult(this, votes);
+        var voteGroup = new VoteGroup(this, votes);
 
-        return votingResult;
+        return voteGroup;
     }
 }
