@@ -41,7 +41,7 @@ public static class MafiaHelper
         var embedBuilder = new EmbedBuilder()
             .WithTitle($"Ваша роль - {role.Name}")
             .WithDescription(pair?.Item2 ?? "*Описание отсутствует*");
-            //.WithImageUrl($"url/{type}.png");
+        //.WithImageUrl($"url/{type}.png");
 
         return role switch
         {

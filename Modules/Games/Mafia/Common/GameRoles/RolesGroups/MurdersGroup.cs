@@ -10,7 +10,7 @@ using Modules.Games.Mafia.Common.GameRoles.Data;
 
 namespace Modules.Games.Mafia.Common.GameRoles.RolesGroups;
 
-public class MurdersGroup : RolesGroup
+public class MurdersGroup : GroupRole
 {
     public MurdersGroup(IReadOnlyList<Murder> roles, IOptionsSnapshot<GameRoleData> options) : base(roles, options)
     {
@@ -18,12 +18,12 @@ public class MurdersGroup : RolesGroup
     }
 
 
-    public async override Task<VoteGroup> VoteManyAsync(MafiaContext context, CancellationToken token, IUserMessage? message = null)
+    public override async Task<VoteGroup> VoteManyAsync(MafiaContext context, CancellationToken token, IMessageChannel? voteChannel = null, IMessageChannel? voteResultchannel = null)
     {
-        message ??= await context.GuildData.MurderTextChannel.SendEmbedAsync("Голосование начинается...", EmbedStyle.Waiting);
+        await context.GuildData.MurderTextChannel.SendEmbedAsync("Голосование начинается...", EmbedStyle.Waiting);
 
         await Task.Delay(3000);
 
-        return await base.VoteManyAsync(context, token, message);
+        return await base.VoteManyAsync(context, token, context.GuildData.MurderTextChannel, context.GuildData.MurderTextChannel);
     }
 }

@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -97,10 +98,10 @@ public class Sheriff : Innocent, IKiller, IChecker
     }
 
 
-    public async override Task<Vote> VoteAsync(MafiaContext context, CancellationToken token, IUserMessage? message = null)
+    public override async Task<Vote> VoteAsync(MafiaContext context, CancellationToken token, IMessageChannel? voteChannel = null, IMessageChannel? voteResultChannel = null)
     {
         if (!IsNight)
-            return await base.VoteAsync(context, token, message);
+            return await base.VoteAsync(context, token, voteChannel, voteResultChannel);
 
 
         ShotSelected = false;
@@ -108,30 +109,25 @@ public class Sheriff : Innocent, IKiller, IChecker
         if (ShotsCount > 0)
         {
             var pageBuilder = new PageBuilder()
-                .WithTitle("");
+                .WithTitle("Выберите ваше действие");
 
 
             var selection = new SelectionBuilder<bool>()
-                .WithOptions(new List<bool> { true, false });
+                .WithOptions(new List<bool> { true, false })
+                .WithStringConverter(o => o ? "Выстрел" : "Проверка")
+                .Build();
 
 
-            //ShotSelected = true;
+            var result = await context.Interactive.SendSelectionAsync(selection, await Player.CreateDMChannelAsync(),
+                TimeSpan.FromSeconds(context.VoteTime), cancellationToken: token);
+
+            if (result.IsSuccess)
+                ShotSelected = result.Value;
+            else
+                ShotSelected = false;
         }
 
-        var vote = await base.VoteAsync(context, token, message);
-
-
-        // TODO: Remove from here
-
-        if (!ShotSelected)
-        {
-            var seq = GetMoveResultPhasesSequence();
-
-            foreach (var phrase in seq)
-            {
-                await Player.SendMessageAsync(embed: EmbedHelper.CreateEmbed(phrase.Item2, phrase.Item1));
-            }
-        }
+        var vote = await base.VoteAsync(context, token, voteChannel, voteResultChannel);
 
 
         return vote;

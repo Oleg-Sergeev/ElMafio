@@ -76,23 +76,15 @@ public class Don : Murder, IChecker
 
 
     // ***************************
-    public override async Task<Vote> VoteAsync(MafiaContext context, CancellationToken token, IUserMessage? message = null)
+    public override async Task<Vote> VoteAsync(MafiaContext context, CancellationToken token, IMessageChannel? voteChannel = null, IMessageChannel? voteResultChannel = null)
     {
-        if (!IsNight || !IsChecking)
-        {
-            if (IsNight)
-                IsChecking = true;
+        var vote = await base.VoteAsync(context, token, voteChannel, voteResultChannel);
 
-            return await base.VoteAsync(context, token, message);
+        if (IsNight && !IsChecking)
+        {
+            IsChecking = true;
         }
 
-
-        // Select checked role
-
-
-
-
-
-        return null!;
+        return vote;
     }
 }

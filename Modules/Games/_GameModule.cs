@@ -8,7 +8,6 @@ using Core.Extensions;
 using Discord;
 using Discord.Commands;
 using Fergun.Interactive;
-using Microsoft.Extensions.Configuration;
 
 namespace Modules.Games;
 

@@ -1,6 +1,8 @@
 ﻿using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Core.Common;
+using Core.Extensions;
 using Discord;
 using Microsoft.Extensions.Options;
 using Modules.Games.Mafia.Common.Data;
@@ -8,26 +10,18 @@ using Modules.Games.Mafia.Common.GameRoles.Data;
 
 namespace Modules.Games.Mafia.Common.GameRoles.RolesGroups;
 
-public class CitizenGroup : RolesGroup
+public class CitizenGroup : GroupRole
 {
     public CitizenGroup(IReadOnlyList<GameRole> roles, IOptionsSnapshot<GameRoleData> options) : base(roles, options)
     {
     }
 
-
-    public override async Task<VoteGroup> VoteManyAsync(MafiaContext context, CancellationToken token, IUserMessage? voteMessage = null)
+    public override async Task<VoteGroup> VoteManyAsync(MafiaContext context, CancellationToken token, IMessageChannel? voteChannel = null, IMessageChannel? voteResultchannel = null)
     {
-        var votes = new Dictionary<IGuildUser, Vote>();
+        await context.GuildData.GeneralTextChannel.SendEmbedAsync("Голосование начинается...", EmbedStyle.Waiting);
 
-        foreach (var role in Roles)
-        {
-            var vote = await role.VoteAsync(context, token, voteMessage);
+        await Task.Delay(3000);
 
-            votes[vote.VotedRole.Player] = vote;
-        }
-
-        var voteGroup = new VoteGroup(this, votes);
-
-        return voteGroup;
+        return await base.VoteManyAsync(context, token, context.GuildData.GeneralTextChannel, context.GuildData.GeneralTextChannel);
     }
 }

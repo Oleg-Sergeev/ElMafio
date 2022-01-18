@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Data;
 using System.Linq;
 using System.Threading;
@@ -8,13 +7,11 @@ using System.Threading.Tasks;
 using Core.Common;
 using Core.Extensions;
 using Discord;
-using Fergun.Interactive;
-using Fergun.Interactive.Selection;
+using Fergun.Interactive.Pagination;
 using Microsoft.Extensions.Options;
 using Modules.Games.Mafia.Common.Data;
 using Modules.Games.Mafia.Common.GameRoles.Data;
 using Modules.Games.Mafia.Common.Interfaces;
-using Newtonsoft.Json.Linq;
 
 namespace Modules.Games.Mafia.Common.GameRoles;
 
@@ -61,6 +58,9 @@ public abstract class GameRole
         Data = options.Get(name);
 
         Name = Data.Name;
+
+        Priority = Data.Priority;
+
 
         Player = player;
 
@@ -148,7 +148,16 @@ public abstract class GameRole
         LastMove = choice;
     }
 
-    public virtual async Task<Vote> VoteAsync(MafiaContext context, CancellationToken token, IUserMessage? message = null)
+    protected virtual async Task SendVotingResultsAsync(IMessageChannel channel)
+    {
+        var seq = GetMoveResultPhasesSequence();
+
+        foreach (var phrase in seq)
+            await channel.SendEmbedAsync(phrase.Item2, phrase.Item1);
+    }
+
+
+    public virtual async Task<Vote> VoteAsync(MafiaContext context, CancellationToken token, IMessageChannel? voteChannel = null, IMessageChannel? voteResultChannel = null)
     {
         // Preconditions
 
@@ -156,17 +165,24 @@ public abstract class GameRole
 
         var playersToVote = context.RolesData.AliveRoles.Keys.Except(except);
 
-
-        IGuildUser? selectedPlayer = null;
-
-        Vote? vote = null;
-
         var timeout = TimeSpan.FromSeconds(context.VoteTime);
 
 
+        IGuildUser? selectedPlayer = null;
+
         IUserMessage? timeoutMessage = null;
 
+        IUserMessage? message = null;
+
         Task? timeoutTask = null;
+
+        Vote? vote = null;
+
+        if (voteChannel is null)
+        {
+            voteChannel = await Player.CreateDMChannelAsync();
+            voteResultChannel = voteChannel;
+        }
 
         do
         {
@@ -186,11 +202,11 @@ public abstract class GameRole
                    .Build();
 
             var description = selectedPlayer is null
-                ? "Выберите из списка человека, которого вы бы хотели выгнать"
+                ? "Выберите человека из списка"
                 : $"Вы выбрали - {selectedPlayer.GetFullMention()}";
 
             var embed = new EmbedBuilder()
-               .WithTitle($"Голосование (Выбирает {Player.GetFullName()})")
+               .WithTitle($"Голосование: {Player.GetFullName()}")
                .WithColor(Color.Gold)
                .WithDescription(description)
                .AddField("Игрок", string.Join('\n', playersToVote.Select(p => p.GetFullName())), true)
@@ -198,7 +214,7 @@ public abstract class GameRole
 
             if (message is null)
             {
-                message = await Player.SendMessageAsync(embed: embed, components: component);
+                message = await voteChannel.SendMessageAsync(embed: embed, components: component);
             }
             else
             {
@@ -296,24 +312,17 @@ public abstract class GameRole
 
         await timeoutMessage.DeleteAsync();
 
-
         vote ??= new Vote(this, null, false);
-
 
         HandleChoice(vote.Option);
 
 
+        if (voteResultChannel is not null)
+            await SendVotingResultsAsync(voteResultChannel);
+
+
+        Votes.Add(vote);
+
         return vote;
-    }
-
-
-    public virtual async Task SendVotingResults()
-    {
-        var seq = GetMoveResultPhasesSequence();
-
-        foreach (var phrase in seq)
-        {
-            await Player.SendMessageAsync(embed: EmbedHelper.CreateEmbed(phrase.Item2, phrase.Item1));
-        }
     }
 }

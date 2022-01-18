@@ -2,15 +2,20 @@
 using System.Linq;
 using Discord;
 using Modules.Games.Mafia.Common.GameRoles;
+using Modules.Games.Mafia.Common.GameRoles.RolesGroups;
 
 namespace Modules.Games.Mafia.Common.Data;
 
 public class MafiaRolesData
 {
-    public Dictionary<IGuildUser, GameRole> AllRoles { get; }
-
     public Dictionary<IGuildUser, GameRole> AliveRoles { get; }
 
+
+    public IReadOnlyDictionary<IGuildUser, GameRole> AllRoles => _allRoles;
+    private readonly Dictionary<IGuildUser, GameRole> _allRoles;
+
+    public IReadOnlyDictionary<string, GroupRole> GroupRoles => _groupRoles;
+    private readonly Dictionary<string, GroupRole> _groupRoles;
 
     public IReadOnlyDictionary<IGuildUser, Innocent> Innocents => _innocents;
     private Dictionary<IGuildUser, Innocent> _innocents;
@@ -39,7 +44,7 @@ public class MafiaRolesData
 
     public MafiaRolesData()
     {
-        AllRoles = new();
+        _allRoles = new();
 
         AliveRoles = new();
 
@@ -51,6 +56,20 @@ public class MafiaRolesData
         _neutrals = new();
         _maniacs = new();
         _hookers = new();
+
+        _groupRoles = new();
+    }
+
+
+
+    public void AddSingleRole(GameRole role)
+    {
+        _allRoles.Add(role.Player, role);
+    }
+
+    public void AddGroupRole(GroupRole role)
+    {
+        _groupRoles.Add(role.GetType().Name, role);
     }
 
 

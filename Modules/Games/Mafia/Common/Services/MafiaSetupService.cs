@@ -5,19 +5,24 @@ using System.Threading.Tasks;
 using Discord;
 using Discord.WebSocket;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using Modules.Games.Mafia.Common.Data;
 using Modules.Games.Mafia.Common.GameRoles;
+using Modules.Games.Mafia.Common.GameRoles.Data;
+using Modules.Games.Mafia.Common.GameRoles.RolesGroups;
 
 namespace Modules.Games.Mafia.Common.Services;
 
 public class MafiaSetupService : IMafiaSetupService
 {
     private readonly IConfiguration _config;
+    private readonly IOptionsSnapshot<GameRoleData> _gameRoleData;
 
 
-    public MafiaSetupService(IConfiguration config)
+    public MafiaSetupService(IConfiguration config, IOptionsSnapshot<GameRoleData> gameRoleData)
     {
         _config = config;
+        _gameRoleData = gameRoleData;
     }
 
 
@@ -147,7 +152,7 @@ public class MafiaSetupService : IMafiaSetupService
 
         var settings = context.Settings;
         var mafiaData = context.MafiaData;
-        var roleData = context.RolesData;
+        var rolesData = context.RolesData;
 
 
         var rolesInfo = settings.Current.RolesInfoSubSettings;
@@ -200,16 +205,16 @@ public class MafiaSetupService : IMafiaSetupService
 
         for (int i = 0; i < murdersCount; i++, offset++)
         {
-            var murder = new Murder(mafiaData.Players[offset], context.GameRoleOptions);
+            var murder = new Murder(mafiaData.Players[offset], _gameRoleData);
 
-            roleData.AllRoles.Add(murder.Player, murder);
+            rolesData.AddSingleRole(murder);
         }
 
         for (int i = 0; i < donsCount; i++, offset++)
         {
-            var don = new Don(mafiaData.Players[offset], context.GameRoleOptions, roleData.Sheriffs.Values);
+            var don = new Don(mafiaData.Players[offset], _gameRoleData, rolesData.Sheriffs.Values);
 
-            roleData.AllRoles.Add(don.Player, don);
+            rolesData.AddSingleRole(don);
         }
 
 
@@ -217,17 +222,17 @@ public class MafiaSetupService : IMafiaSetupService
         {
             for (int i = 0; i < roleAmount.ManiacsCount; i++, offset++)
             {
-                var maniac = new Maniac(mafiaData.Players[offset], context.GameRoleOptions);
+                var maniac = new Maniac(mafiaData.Players[offset], _gameRoleData);
 
-                roleData.AllRoles.Add(maniac.Player, maniac);
+                rolesData.AddSingleRole(maniac);
             }
 
 
             for (int i = 0; i < roleAmount.HookersCount; i++, offset++)
             {
-                var hooker = new Hooker(mafiaData.Players[offset], context.GameRoleOptions);
+                var hooker = new Hooker(mafiaData.Players[offset], _gameRoleData);
 
-                roleData.AllRoles.Add(hooker.Player, hooker);
+                rolesData.AddSingleRole(hooker);
             }
         }
 
@@ -235,28 +240,35 @@ public class MafiaSetupService : IMafiaSetupService
 
         for (int i = 0; i < doctorsCount; i++, offset++)
         {
-            var doctor = new Doctor(mafiaData.Players[offset], context.GameRoleOptions, rolesInfo.DoctorSelfHealsCount ?? 1);
+            var doctor = new Doctor(mafiaData.Players[offset], _gameRoleData, rolesInfo.DoctorSelfHealsCount ?? 1);
 
-            roleData.AllRoles.Add(doctor.Player, doctor);
+            rolesData.AddSingleRole(doctor);
         }
 
 
         for (int i = 0; i < sheriffsCount; i++, offset++)
         {
-            var sheriff = new Sheriff(mafiaData.Players[offset], context.GameRoleOptions, rolesInfo.SheriffShotsCount ?? 0, roleData.Murders.Values);
+            var sheriff = new Sheriff(mafiaData.Players[offset], _gameRoleData, rolesInfo.SheriffShotsCount ?? 0, rolesData.Murders.Values);
 
 
-            roleData.AllRoles.Add(sheriff.Player, sheriff);
+            rolesData.AddSingleRole(sheriff);
         }
 
 
 
         for (int i = offset; i < mafiaData.Players.Count; i++)
         {
-            var innocent = new Innocent(mafiaData.Players[i], context.GameRoleOptions);
-
-            roleData.AllRoles.Add(innocent.Player, innocent);
+            var innocent = new Innocent(mafiaData.Players[i], _gameRoleData);
+            rolesData.AddSingleRole(innocent);
         }
+
+        rolesData.AssignRoles();
+
+        var citizen = new CitizenGroup(rolesData.AllRoles.Values.ToList(), _gameRoleData);
+        var murdersGroup = new MurdersGroup(rolesData.Murders.Values.ToList(), _gameRoleData);
+
+        rolesData.AddGroupRole(citizen);
+        rolesData.AddGroupRole(murdersGroup);
     }
 
     public async Task SendRolesInfoAsync(MafiaContext context)

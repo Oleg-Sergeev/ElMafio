@@ -8,7 +8,6 @@ using Core.Common;
 using Core.Extensions;
 using Discord;
 using Discord.Commands;
-using Discord.Commands.Builders;
 using Discord.Net;
 using Discord.WebSocket;
 using Fergun.Interactive;
@@ -317,7 +316,7 @@ public abstract class GuildModuleBase : ModuleBase<DbSocketCommandContext>
 
     public async Task<bool?> ConfirmActionAsync(string title, TimeSpan? timeout = null)
     {
-        var msg = await ReplyEmbedAsync( "Подтвердите действие", EmbedStyle.Information, title);
+        var msg = await ReplyEmbedAsync("Подтвердите действие", EmbedStyle.Information, title);
 
         var res = await ConfirmActionAsync(msg, timeout);
 
@@ -370,7 +369,7 @@ public abstract class GuildModuleBase : ModuleBase<DbSocketCommandContext>
 
     public async Task<bool> ConfirmActionWithHandlingAsync(string title, ulong? logChannelId = null, TimeSpan? timeout = null)
     {
-        var msg = await ReplyEmbedAsync( "Подтвердите действие", EmbedStyle.Information, title);
+        var msg = await ReplyEmbedAsync("Подтвердите действие", EmbedStyle.Information, title);
 
         return await ConfirmActionWithHandlingAsync(msg, logChannelId, timeout);
     }
@@ -380,20 +379,20 @@ public abstract class GuildModuleBase : ModuleBase<DbSocketCommandContext>
 
         if (confirmed is null)
         {
-            await ReplyEmbedAndDeleteAsync( "Вы не подтвердили действие", EmbedStyle.Warning, "Сброс рейтинга");
+            await ReplyEmbedAndDeleteAsync("Вы не подтвердили действие", EmbedStyle.Warning, "Сброс рейтинга");
 
             return false;
         }
         else if (confirmed is false)
         {
-            await ReplyEmbedAndDeleteAsync( "Вы отклонили действие", EmbedStyle.Error, "Сброс рейтинга");
+            await ReplyEmbedAndDeleteAsync("Вы отклонили действие", EmbedStyle.Error, "Сброс рейтинга");
 
             return false;
         }
 
         var embed = (Embed)message.Embeds.First();
 
-        message = await ReplyEmbedAndDeleteAsync( "Вы подтвердили действие", EmbedStyle.Successfull, embed.Title);
+        message = await ReplyEmbedAndDeleteAsync("Вы подтвердили действие", EmbedStyle.Successfull, embed.Title);
 
         embed = (Embed)message.Embeds.First();
 

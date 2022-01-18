@@ -17,9 +17,7 @@ using Fergun.Interactive;
 using Fergun.Interactive.Selection;
 using Infrastructure.Data.Models.Games.Settings.Mafia;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using Modules.Games.Mafia.Common.Data;
-using Modules.Games.Mafia.Common.GameRoles.Data;
 using Modules.Games.Mafia.Common.Services;
 using Serilog;
 
@@ -30,12 +28,10 @@ namespace Modules.Games.Mafia;
 public sealed partial class MafiaModule_ : GameModule<MafiaData>
 {
     private readonly IMafiaSetupService _mafiaService;
-    private readonly IOptionsSnapshot<GameRoleData> _gameRoleOptions;
 
-    public MafiaModule_(InteractiveService interactiveService, IMafiaSetupService mafiaService, IOptionsSnapshot<GameRoleData> gameRoleOptions) : base(interactiveService)
+    public MafiaModule_(InteractiveService interactiveService, IMafiaSetupService mafiaService) : base(interactiveService)
     {
         _mafiaService = mafiaService;
-        _gameRoleOptions = gameRoleOptions;
     }
 
 
@@ -75,8 +71,6 @@ public sealed partial class MafiaModule_ : GameModule<MafiaData>
 
         _mafiaService.SetupRoles(context);
 
-        context.RolesData.AssignRoles();
-
         if (settings.Current.ServerSubSettings.SendWelcomeMessage)
         {
             await _mafiaService.SendRolesInfoAsync(context);
@@ -89,10 +83,25 @@ public sealed partial class MafiaModule_ : GameModule<MafiaData>
 
         try
         {
-            await game.RunAsync();
+            var winner = await game.RunAsync();
 
 
             await ReplyEmbedStampAsync($"{data.Name} успешно завершена", EmbedStyle.Successfull);
+
+            if (winner.Role is not null)
+                await ReplyEmbedAsync($"Победителем оказался: {winner.Role.Name}!");
+            else
+                await ReplyEmbedAsync("Город опустел... Никто не победил");
+
+            var str = "Голоса игроков:\n";
+            foreach (var role in context.RolesData.AllRoles.Values)
+            {
+                str += $"\n*********{role.Player.Mention}*********\n";
+                for (int i = 0; i < role.Votes.Count; i++)
+                    str += $"{(i+1)}: {role.Votes[i].Option} [{role.Votes[i].IsSkip}]\n";
+            }
+
+            await ReplyAsync(str);
         }
         finally
         {
@@ -135,7 +144,7 @@ public sealed partial class MafiaModule_ : GameModule<MafiaData>
                 await _guildData.SpectatorTextChannel.ClearAsync();
         }
 
-        var context = new MafiaContext(_guildData, data, settings, Context, Interactive, _gameRoleOptions);
+        var context = new MafiaContext(_guildData, data, settings, Context, Interactive);
 
 
         return context;
@@ -890,7 +899,7 @@ public sealed partial class MafiaModule_ : GameModule<MafiaData>
 
             if (settings.Current.GameSubSettings.MafiaCoefficient <= 1)
             {
-                await ReplyEmbedAndDeleteAsync( "Коэффиент мафии не может быть меньше 2. Установлено стандартное значение **3**", EmbedStyle.Warning);
+                await ReplyEmbedAndDeleteAsync("Коэффиент мафии не может быть меньше 2. Установлено стандартное значение **3**", EmbedStyle.Warning);
 
                 settings.Current.GameSubSettings = gameSettings with
                 {
@@ -900,7 +909,7 @@ public sealed partial class MafiaModule_ : GameModule<MafiaData>
 
             if (settings.Current.GameSubSettings.VoteTime <= 0)
             {
-                await ReplyEmbedAndDeleteAsync( "Установлено стандартное значение времени голосования: **40**", EmbedStyle.Warning);
+                await ReplyEmbedAndDeleteAsync("Установлено стандартное значение времени голосования: **40**", EmbedStyle.Warning);
 
                 settings.Current.GameSubSettings = gameSettings with
                 {

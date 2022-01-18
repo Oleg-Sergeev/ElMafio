@@ -1,8 +1,6 @@
 ﻿using Core.Common.Data;
 using Fergun.Interactive;
 using Infrastructure.Data.Models.Games.Settings.Mafia;
-using Microsoft.Extensions.Options;
-using Modules.Games.Mafia.Common.GameRoles.Data;
 using Services;
 
 namespace Modules.Games.Mafia.Common.Data;
@@ -21,14 +19,12 @@ public class MafiaContext
 
     public InteractiveService Interactive { get; }
 
-    public IOptionsSnapshot<GameRoleData> GameRoleOptions { get; }
-
 
     public int VoteTime { get; }
 
 
     public MafiaContext(MafiaGuildData guildData, MafiaData mafiaData, MafiaSettings settings,
-        DbSocketCommandContext commandContext, InteractiveService interactive, IOptionsSnapshot<GameRoleData> gameRoleOptions)
+        DbSocketCommandContext commandContext, InteractiveService interactive)
     {
         RolesData = new();
 
@@ -39,6 +35,5 @@ public class MafiaContext
         Settings = settings;
         CommandContext = commandContext;
         Interactive = interactive;
-        GameRoleOptions = gameRoleOptions;
     }
 }
