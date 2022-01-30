@@ -16,12 +16,12 @@ public class CitizenGroup : GroupRole
     {
     }
 
-    public override async Task<VoteGroup> VoteManyAsync(MafiaContext context, CancellationToken token, IMessageChannel? voteChannel = null, IMessageChannel? voteResultchannel = null)
+    public override async Task<VoteGroup> VoteManyAsync(MafiaContext context, IMessageChannel? voteChannel = null, IMessageChannel? voteResultchannel = null, bool waitAfterVote = true)
     {
         await context.GuildData.GeneralTextChannel.SendEmbedAsync("Голосование начинается...", EmbedStyle.Waiting);
 
         await Task.Delay(3000);
 
-        return await base.VoteManyAsync(context, token, context.GuildData.GeneralTextChannel, context.GuildData.GeneralTextChannel);
+        return await base.VoteManyAsync(context, context.GuildData.GeneralTextChannel, context.GuildData.GeneralTextChannel, waitAfterVote);
     }
 }

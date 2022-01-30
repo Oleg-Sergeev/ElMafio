@@ -18,12 +18,12 @@ public class MurdersGroup : GroupRole
     }
 
 
-    public override async Task<VoteGroup> VoteManyAsync(MafiaContext context, CancellationToken token, IMessageChannel? voteChannel = null, IMessageChannel? voteResultchannel = null)
+    public override async Task<VoteGroup> VoteManyAsync(MafiaContext context, IMessageChannel? voteChannel = null, IMessageChannel? voteResultchannel = null, bool waitAfterVote = true)
     {
         await context.GuildData.MurderTextChannel.SendEmbedAsync("Голосование начинается...", EmbedStyle.Waiting);
 
         await Task.Delay(3000);
 
-        return await base.VoteManyAsync(context, token, context.GuildData.MurderTextChannel, context.GuildData.MurderTextChannel);
+        return await base.VoteManyAsync(context, context.GuildData.MurderTextChannel, context.GuildData.MurderTextChannel, waitAfterVote);
     }
 }

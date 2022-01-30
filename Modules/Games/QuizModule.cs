@@ -6,6 +6,7 @@ using System.Reflection.PortableExecutable;
 using System.Threading;
 using System.Threading.Tasks;
 using Core.Common;
+using Core.Common.Data;
 using Core.Extensions;
 using Core.Interfaces;
 using Discord;
@@ -25,44 +26,43 @@ namespace Modules.Games;
 [RequireOwner]
 public class QuizModule : GameModule
 {
-    public QuizModule(InteractiveService interactiveService, IConfiguration config) : base(interactiveService, config)
+    public QuizModule(InteractiveService interactiveService) : base(interactiveService)
     {
     }
 
 
-    protected override GameModuleData CreateGameData(IGuildUser creator)
+    protected override GameData CreateGameData(IGuildUser creator)
         => new("Викторина", 1, creator);
 
 
     public override async Task StartAsync()
     {
-        GameData = GetGameData();
-
-        if (!CanStart(out var msg))
+        if (!CheckPreconditions(out var msg))
         {
-            await ReplyEmbedAsync(EmbedStyle.Error, msg ?? "Невозможно начать игру");
+            await ReplyEmbedAsync(msg, EmbedStyle.Error);
 
             return;
         }
+
 
         await PlayAsync();
     }
 
     private async Task PlayAsync()
     {
-        ArgumentNullException.ThrowIfNull(GameData);
+        var data = GetGameData();
 
         var questionsCountMessage = await NextMessageAsync("Введите кол-во вопросов (1-50)");
         var questionsCount = 20;
 
         if (!questionsCountMessage.IsSuccess)
-            await ReplyEmbedAsync(EmbedStyle.Warning, $"Кол-во вопросов: {questionsCount}");
+            await ReplyEmbedAsync($"Кол-во вопросов: {questionsCount}", EmbedStyle.Warning);
 
         if (int.TryParse(questionsCountMessage.Value?.Content, out var count))
         {
             questionsCount = Math.Clamp(count, 1, 50);
 
-            await ReplyEmbedAsync(EmbedStyle.Successfull, $"Кол-во вопросов: {questionsCount}");
+            await ReplyEmbedAsync($"Кол-во вопросов: {questionsCount}", EmbedStyle.Successfull);
         }
 
         var triviaService = new TriviaService();
@@ -84,7 +84,7 @@ public class QuizModule : GameModule
 
             var f = await Interactive.NextMessageComponentAsync(m =>
             {
-                return m.Message.Id == msg.Id && GameData.Players.Any(p => p.Id == m.User.Id);
+                return m.Message.Id == msg.Id && data.Players.Any(p => p.Id == m.User.Id);
             }, timeout: TimeSpan.FromSeconds(15));
 
             if (!f.IsSuccess)
@@ -99,7 +99,7 @@ public class QuizModule : GameModule
             if (res.IsSuccess)
             {
                 if (res.Value == question.Answer)
-                    await ReplyEmbedAsync(EmbedStyle.Successfull, $"{f.Value!.User.Mention} ответил верно");
+                    await ReplyEmbedAsync($"{f.Value!.User.Mention} ответил верно", EmbedStyle.Successfull);
             }
         }
     }
@@ -124,8 +124,6 @@ public class QuizModule : GameModule
 
     private Selection<string> GenerateSelection(Question question, int num, IUser user)
     {
-        ArgumentNullException.ThrowIfNull(GameData);
-
         var options = ConcatQuestions(question);
 
         var pageBuilder = GenerateQuestionPage(num, question);

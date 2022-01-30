@@ -12,10 +12,10 @@ public class Vote
     public bool IsSkip { get; }
 
 
-    public Vote(GameRole votedRole, IGuildUser? votedPlayer, bool isSkip)
+    public Vote(GameRole votedRole, IGuildUser? option, bool isSkip)
     {
         VotedRole = votedRole;
-        Option = votedPlayer;
+        Option = option;
         IsSkip = isSkip;
     }
 }

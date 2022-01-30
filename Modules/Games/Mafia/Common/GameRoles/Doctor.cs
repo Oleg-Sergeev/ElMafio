@@ -36,7 +36,7 @@ public class Doctor : Innocent, IHealer
     }
 
 
-    protected override void HandleChoice(IGuildUser? choice)
+    public override void HandleChoice(IGuildUser? choice)
     {
         base.HandleChoice(choice);
 

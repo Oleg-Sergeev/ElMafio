@@ -7,6 +7,7 @@ using Core.Interfaces;
 using Discord;
 using Discord.Addons.Hosting;
 using Discord.Commands;
+using Discord.Interactions;
 using Discord.WebSocket;
 using Fergun.Interactive;
 using Infrastructure.Data;
@@ -21,6 +22,9 @@ using Serilog;
 using Serilog.Events;
 using Serilog.Filters;
 using Services;
+
+using InrctRunMode = Discord.Interactions.RunMode;
+using CmdRunMode = Discord.Commands.RunMode;
 
 namespace ConsoleUI;
 
@@ -72,9 +76,9 @@ public static class Application
             .AddUserSecrets<Program>(false)
             .Build();
         })
-        .ConfigureDiscordHost((context, discrodConfig) =>
+        .ConfigureDiscordHost((context, discordConfig) =>
         {
-            discrodConfig.SocketConfig = new DiscordSocketConfig
+            discordConfig.SocketConfig = new DiscordSocketConfig
             {
                 LogLevel = LogSeverity.Verbose,
                 MessageCacheSize = 1000,
@@ -82,13 +86,13 @@ public static class Application
                 GatewayIntents = GatewayIntents.All
             };
 
-            discrodConfig.Token = context.Configuration["Tokens:DiscordBot"];
+            discordConfig.Token = context.Configuration["Tokens:DiscordBot"];
 
         })
         .UseCommandService((context, commandServicesConfig) =>
         {
             commandServicesConfig.CaseSensitiveCommands = false;
-            commandServicesConfig.DefaultRunMode = RunMode.Async;
+            commandServicesConfig.DefaultRunMode = CmdRunMode.Async;
             commandServicesConfig.IgnoreExtraArgs = true;
             commandServicesConfig.LogLevel = LogSeverity.Verbose;
             commandServicesConfig.SeparatorChar = '.';
@@ -102,6 +106,11 @@ public static class Application
             })
             .AddHostedService<CommandHandlerService>()
             .AddSingleton<InteractiveService>()
+            .AddSingleton(x => new InteractionService(x.GetRequiredService<DiscordSocketClient>(), new InteractionServiceConfig()
+            {
+                DefaultRunMode = InrctRunMode.Async,
+                LogLevel = LogSeverity.Verbose
+            }))
             .AddSingleton<LoggingService>()
             .AddTransient<IMafiaSetupService, MafiaSetupService>();
 

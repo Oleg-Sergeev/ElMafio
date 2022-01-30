@@ -30,7 +30,7 @@ public class SettingsModule : GuildModuleBase
         await Context.Db.SaveChangesAsync();
 
 
-        await ReplyEmbedAsync(EmbedStyle.Successfull, $"Префикс успешно изменен с **{oldPrefix}** на **{newPrefix}**");
+        await ReplyEmbedAsync($"Префикс успешно изменен с **{oldPrefix}** на **{newPrefix}**", EmbedStyle.Successfull);
     }
 
 
@@ -45,7 +45,7 @@ public class SettingsModule : GuildModuleBase
 
         if (muteRole is null)
         {
-            await ReplyEmbedAsync(EmbedStyle.Error, "Роль с указанным ID не найдена");
+            await ReplyEmbedAsync("Роль с указанным ID не найдена", EmbedStyle.Error);
 
             return;
         }
@@ -57,7 +57,7 @@ public class SettingsModule : GuildModuleBase
         await Context.Db.SaveChangesAsync();
 
 
-        await ReplyEmbedStampAsync(EmbedStyle.Successfull, $"Роль [{muteRole.Mention}] успешна установлена");
+        await ReplyEmbedStampAsync($"Роль [{muteRole.Mention}] успешна установлена", EmbedStyle.Successfull);
     }
 
 
@@ -72,7 +72,7 @@ public class SettingsModule : GuildModuleBase
 
         if (logChannel is null)
         {
-            await ReplyEmbedAsync(EmbedStyle.Error, "Канал с указанным ID не найден");
+            await ReplyEmbedAsync("Канал с указанным ID не найден", EmbedStyle.Error);
 
             return;
         }
@@ -84,6 +84,6 @@ public class SettingsModule : GuildModuleBase
         await Context.Db.SaveChangesAsync();
 
 
-        await ReplyEmbedStampAsync(EmbedStyle.Successfull, $"Канал для логов [{logChannel.Mention}] успешно установлен");
+        await ReplyEmbedStampAsync($"Канал для логов [{logChannel.Mention}] успешно установлен", EmbedStyle.Successfull);
     }
 }

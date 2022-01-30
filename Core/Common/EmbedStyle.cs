@@ -2,7 +2,8 @@
 
 public enum EmbedStyle
 {
-    Information = 0,
+    Debug = 0,
+    Information,
     Waiting,
     Successfull,
     Warning,

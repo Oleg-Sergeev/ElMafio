@@ -7,6 +7,7 @@ using Core.Extensions;
 using Discord;
 using Discord.Commands;
 using Discord.Net;
+using Discord.WebSocket;
 using Fergun.Interactive;
 using Microsoft.Extensions.Configuration;
 
@@ -75,7 +76,7 @@ public class HelpModule : GuildModuleBase
         }
         catch (HttpException)
         {
-            await ReplyEmbedAsync(EmbedStyle.Error, $"Не удалось отправить сообщение от пользователя {Context.User.GetFullMention()}");
+            await ReplyEmbedAsync($"Не удалось отправить сообщение от пользователя {Context.User.GetFullMention()}", EmbedStyle.Error);
         }
     }
 
@@ -91,7 +92,7 @@ public class HelpModule : GuildModuleBase
 
         if (!result.IsSuccess)
         {
-            await ReplyEmbedAsync(EmbedStyle.Error, $"Команда **{command}** не найдена");
+            await ReplyEmbedAsync($"Команда **{command}** не найдена", EmbedStyle.Error);
             return;
         }
 
@@ -128,10 +129,11 @@ public class HelpModule : GuildModuleBase
         }
 
         if (!hasAnyAvailableCommand)
-            await ReplyEmbedAsync(EmbedStyle.Error, $"У вас нет прав на использование команды {command}");
+            await ReplyEmbedAsync($"У вас нет прав на использование команды {command}", EmbedStyle.Error);
     }
 
 
+    [Discord.Interactions.SlashCommand("", "")]
     [Command("Помощьблок")]
     [Summary("Получить подробности указанного модуля")]
     [Remarks("Необходимый модуль необходимо указывать вместе со всеми родительскими блоками. Например: **помощьблок Мафия.Настройки**")]
@@ -146,7 +148,7 @@ public class HelpModule : GuildModuleBase
 
         if (module is null)
         {
-            await ReplyEmbedAsync(EmbedStyle.Error, $"Блок **{moduleName}** не найден");
+            await ReplyEmbedAsync($"Блок **{moduleName}** не найден", EmbedStyle.Error);
 
             return;
         }
@@ -205,7 +207,7 @@ public class HelpModule : GuildModuleBase
         foreach (var contact in contactsSection.GetChildren())
             msg += $"**{contact.Key}**: {contact.Value}\n";
 
-        await ReplyEmbedAsync(EmbedStyle.Information, msg);
+        await ReplyEmbedAsync(msg);
     }
 
 

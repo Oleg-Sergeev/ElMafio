@@ -219,7 +219,7 @@ public abstract class GuildModuleBase : ModuleBase<DbSocketCommandContext>
 
 
 
-    public Task<IUserMessage> ReplyEmbedStampAsync(string description, string? title = null, EmbedBuilder? embedBuilder = null)
+    public Task<IUserMessage> ReplyEmbedStampAsync(string description, string title, EmbedBuilder? embedBuilder = null)
         => ReplyEmbedStampAsync(description, EmbedStyle.Information, title, embedBuilder);
 
     public async Task<IUserMessage> ReplyEmbedStampAsync(string description, EmbedStyle embedStyle = EmbedStyle.Information, string? title = null, EmbedBuilder? embedBuilder = null)

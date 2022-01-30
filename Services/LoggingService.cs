@@ -24,15 +24,19 @@ public class LoggingService
 
     private readonly DiscordSocketClient _client;
     private readonly CommandService _commandService;
+    private readonly Discord.Interactions.InteractionService _interactionService;
 
 
-    public LoggingService(DiscordSocketClient client, CommandService commandService)
+    public LoggingService(DiscordSocketClient client, CommandService commandService, Discord.Interactions.InteractionService interactionService)
     {
         _client = client;
         _commandService = commandService;
+        _interactionService = interactionService;
 
 
         _commandService.CommandExecuted += OnCommandExecutedAsync;
+        _commandService.Log += OnLogAsync;
+        _interactionService.Log += OnLogAsync;
     }
 
 
@@ -121,6 +125,15 @@ public class LoggingService
                 break;
         }
     }
+
+    private Task OnLogAsync(LogMessage message)
+    {
+        Log.Write(ConvertSeverity(message.Severity), message.Exception, message.ToString());
+
+        return Task.CompletedTask;
+    }
+
+
 
     private static LogEventLevel ConvertSeverity(LogSeverity logSeverity)
         => logSeverity switch

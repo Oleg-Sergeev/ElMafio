@@ -15,7 +15,7 @@ public class Maniac : Neutral, IKiller
     }
 
 
-    protected override void HandleChoice(IGuildUser? choice)
+    public override void HandleChoice(IGuildUser? choice)
     {
         base.HandleChoice(choice);
 

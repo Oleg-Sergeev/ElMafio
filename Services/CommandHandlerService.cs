@@ -9,12 +9,15 @@ using Core.TypeReaders;
 using Discord;
 using Discord.Addons.Hosting;
 using Discord.Commands;
+using Discord.Interactions;
 using Discord.WebSocket;
 using Infrastructure.Data;
 using Infrastructure.Data.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.VisualBasic;
 
 namespace Services;
 
@@ -26,16 +29,19 @@ public class CommandHandlerService : DiscordClientService
 
     private readonly BotContext _db;
     private readonly CommandService _commandService;
+    private readonly InteractionService _interactionService;
     private readonly IServiceProvider _provider;
     private readonly IConfiguration _config;
 
 
-    public CommandHandlerService(DiscordSocketClient client, CommandService commandService, BotContext db, IServiceProvider provider, IConfiguration config, ILogger<DiscordClientService> logger) : base(client, logger)
+    public CommandHandlerService(DiscordSocketClient client, CommandService commandService, BotContext db,
+        IServiceProvider provider, IConfiguration config, ILogger<DiscordClientService> logger, InteractionService interactionService) : base(client, logger)
     {
         _db = db;
         _config = config;
         _provider = provider;
         _commandService = commandService;
+        _interactionService = interactionService;
     }
 
 
@@ -43,7 +49,6 @@ public class CommandHandlerService : DiscordClientService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         Client.Ready += OnReadyAsync;
-
 
         _commandService.AddTypeReader<bool>(new BooleanTypeReader(), true);
         _commandService.AddTypeReader<Emoji>(new EmojiTypeReader());
@@ -54,6 +59,8 @@ public class CommandHandlerService : DiscordClientService
         if (!_commandService.Modules.Any())
             throw new InvalidOperationException("Modules not loaded");
     }
+
+
 
     private async Task OnMessageReceivedAsync(SocketMessage socketMessage)
     {
@@ -73,17 +80,43 @@ public class CommandHandlerService : DiscordClientService
             await _commandService.ExecuteAsync(context, argPos, _provider, MultiMatchHandling.Best);
     }
 
+    private async Task HandleInteraction(SocketInteraction arg)
+    {
+        try
+        {
+            // Create an execution context that matches the generic type parameter of your InteractionModuleBase<T> modules
+
+            var ctx = new SocketInteractionContext<SocketSlashCommand>(Client, (SocketSlashCommand)arg);
+            await _interactionService.ExecuteCommandAsync(ctx, _provider);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex);
+
+            // If a Slash Command execution fails it is most likely that the original interaction acknowledgement will persist. It is a good idea to delete the original
+            // response, or at least let the user know that something went wrong during the command execution.
+            if (arg.Type == InteractionType.ApplicationCommand)
+                await arg.GetOriginalResponseAsync().ContinueWith(async (msg) => await msg.Result.DeleteAsync());
+        }
+    }
+
+
 
     private async Task OnReadyAsync()
     {
         var loadGuildSettingsTask = LoadGuildSettingsAsync();
 
         await loadGuildSettingsTask;
-        
+
         Client.MessageReceived += OnMessageReceivedAsync;
         Client.JoinedGuild += OnJoinedGuildAsync;
         Client.UserLeft += OnUserLeft;
         _db.SavedChanges += OnDbUpdated;
+
+        await _interactionService.AddModulesAsync(Assembly.LoadFrom("Modules"), _provider);
+        await _interactionService.RegisterCommandsToGuildAsync(776013268908113930);
+
+        Client.InteractionCreated += HandleInteraction;
     }
 
     private async Task OnUserLeft(SocketGuild guild, SocketUser user)

@@ -64,27 +64,20 @@ public class Don : Murder, IChecker
     }
 
 
-    protected override void HandleChoice(IGuildUser? choice)
+    public override void HandleChoice(IGuildUser? choice)
     {
         if (!IsChecking)
             base.HandleChoice(choice);
         else
         {
-            CheckedRole = choice is null ? null : CheckableRoles.FirstOrDefault(r => r.Player == choice);
+            HandleChoiceInternal(this, choice);
+
+            CheckedRole = choice is null ? null : CheckableRoles.FirstOrDefault(r => r.Player.Id == choice.Id);
         }
-    }
-
-
-    // ***************************
-    public override async Task<Vote> VoteAsync(MafiaContext context, CancellationToken token, IMessageChannel? voteChannel = null, IMessageChannel? voteResultChannel = null)
-    {
-        var vote = await base.VoteAsync(context, token, voteChannel, voteResultChannel);
 
         if (IsNight && !IsChecking)
         {
             IsChecking = true;
         }
-
-        return vote;
     }
 }

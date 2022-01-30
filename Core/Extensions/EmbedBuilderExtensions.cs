@@ -6,6 +6,7 @@ public static class EmbedBuilderExtensions
 {
     private const string EmptySpace = "⠀";
 
+    private static readonly Color ColorDebug = new(228, 126, 133);
     private static readonly Color ColorInformation = new(52, 104, 194);
     private static readonly Color ColorWaiting = new(178, 185, 189);
     private static readonly Color ColorSuccessfully = new(35, 115, 13);
@@ -39,6 +40,10 @@ public static class EmbedBuilderExtensions
         .WithDescription($"{builder.Description} 🕓")
         .WithColor(ColorWaiting);
 
+    public static EmbedBuilder WithDebugMessage(this EmbedBuilder builder)
+        => builder
+        .WithDescription($"{builder.Description} 🛠")
+        .WithColor(ColorDebug);
 
     public static EmbedBuilder WithInformationMessage(this EmbedBuilder builder, bool addSmile = false)
         => builder

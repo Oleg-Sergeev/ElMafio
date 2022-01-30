@@ -7,6 +7,7 @@ using Core.Common;
 using Core.Extensions;
 using Discord;
 using Discord.Commands;
+using Discord.WebSocket;
 using Fergun.Interactive;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
@@ -38,14 +39,14 @@ public class AdminModule : GuildModuleBase
     {
         if (string.IsNullOrEmpty(nickname))
         {
-            await ReplyEmbedAsync(EmbedStyle.Error, "Никнейм не может быть пустым");
+            await ReplyEmbedAsync("Никнейм не может быть пустым", EmbedStyle.Error);
 
             return;
         }
 
         if (nickname.Length > 32)
         {
-            await ReplyEmbedAsync(EmbedStyle.Error, "Никнейм не может быть длиннее, чем 32 символа");
+            await ReplyEmbedAsync("Никнейм не может быть длиннее, чем 32 символа", EmbedStyle.Error);
 
             return;
         }
@@ -53,7 +54,7 @@ public class AdminModule : GuildModuleBase
 
         await guildUser.ModifyAsync(props => props.Nickname = nickname);
 
-        await ReplyEmbedAsync(EmbedStyle.Successfull, "Никнейм успешно измененен");
+        await ReplyEmbedAsync("Никнейм успешно измененен", EmbedStyle.Successfull);
     }
 
 
@@ -99,7 +100,7 @@ public class AdminModule : GuildModuleBase
         await textChannel.DeleteMessagesAsync(messagesToDelete);
 
 
-        await ReplyEmbedAndDeleteAsync(EmbedStyle.Successfull, $"Сообщения успешно удалены ({count} шт)");
+        await ReplyEmbedAndDeleteAsync($"Сообщения успешно удалены ({count} шт)", EmbedStyle.Successfull);
     }
 
 
@@ -120,10 +121,10 @@ public class AdminModule : GuildModuleBase
             {
                 await Context.Guild.AddBanAsync(guildUser, pruneDays, reason);
 
-                await ReplyEmbedAsync(EmbedStyle.Successfull, $"Пользователь {guildUser.GetFullName()} успешно забанен");
+                await ReplyEmbedAsync($"Пользователь {guildUser.GetFullName()} успешно забанен", EmbedStyle.Successfull);
             }
             else
-                await ReplyEmbedAsync(EmbedStyle.Error, $"Пользователь {guildUser.GetFullName()} не найден");
+                await ReplyEmbedAsync($"Пользователь {guildUser.GetFullName()} не найден", EmbedStyle.Error);
         }
     }
 
@@ -138,7 +139,7 @@ public class AdminModule : GuildModuleBase
 
         if (arr.Length < 2)
         {
-            await ReplyEmbedAsync(EmbedStyle.Warning, $"Пожалуйста, укажите имя пользователя и его тег. Пример: @{Context.User.GetFullName()}");
+            await ReplyEmbedAsync($"Пожалуйста, укажите имя пользователя и его тег. Пример: @{Context.User.GetFullName()}", EmbedStyle.Warning);
 
             return;
         }
@@ -148,16 +149,17 @@ public class AdminModule : GuildModuleBase
         var bans = await Context.Guild.GetBansAsync();
 
         var user = bans.FirstOrDefault(ban => (ban.User.Username, ban.User.Discriminator) == userName)?.User;
-
+        
         if (user == null)
         {
-            await ReplyEmbedAsync(EmbedStyle.Error, $"Пользователь с именем {userName.Item1}#{userName.Item2} не найден в списке банов.");
+            await ReplyEmbedAsync($"Пользователь с именем {userName.Item1}#{userName.Item2} не найден в списке банов.", EmbedStyle.Error);
 
             return;
         }
 
         await UnbanAsync(user.Id);
     }
+
     [Command("Разбан")]
     [Summary("Разбанить указанного пользователя")]
     [RequireBotPermission(GuildPermission.BanMembers)]
@@ -170,7 +172,7 @@ public class AdminModule : GuildModuleBase
 
         if (user == null)
         {
-            await ReplyEmbedAsync(EmbedStyle.Error, $"Пользователь с айди {id} не найден в списке банов.");
+            await ReplyEmbedAsync($"Пользователь с айди {id} не найден в списке банов.", EmbedStyle.Error);
 
             return;
         }
@@ -184,7 +186,7 @@ public class AdminModule : GuildModuleBase
         {
             await Context.Guild.RemoveBanAsync(user);
 
-            await ReplyEmbedAsync(EmbedStyle.Successfull, $"Пользователь {user.GetFullName()} успешно разбанен");
+            await ReplyEmbedAsync($"Пользователь {user.GetFullName()} успешно разбанен", EmbedStyle.Successfull);
         }
     }
 
@@ -205,7 +207,7 @@ public class AdminModule : GuildModuleBase
         {
             await guildUser.KickAsync(reason);
 
-            await ReplyEmbedAsync(EmbedStyle.Successfull, $"Пользователь {guildUser.GetFullName()} успешно выгнан");
+            await ReplyEmbedAsync($"Пользователь {guildUser.GetFullName()} успешно выгнан", EmbedStyle.Successfull);
         }
     }
 
@@ -250,9 +252,10 @@ public class AdminModule : GuildModuleBase
         }
 
         await guildUser.AddRoleAsync(roleMute);
+        
 
 
-        await ReplyEmbedAsync(EmbedStyle.Successfull, $"Пользователь {guildUser.GetFullMention()} успешно замьючен");
+        await ReplyEmbedAsync($"Пользователь {guildUser.GetFullMention()} успешно замьючен", EmbedStyle.Successfull);
     }
 
 
@@ -274,7 +277,7 @@ public class AdminModule : GuildModuleBase
 
         if (!guildUser.RoleIds.Contains(guildSettings.RoleMuteId.Value))
         {
-            await ReplyEmbedAsync(EmbedStyle.Information, "Пользователь не замьючен");
+            await ReplyEmbedAsync("Пользователь не замьючен");
 
             return;
         }
@@ -287,7 +290,7 @@ public class AdminModule : GuildModuleBase
         {
             await guildUser.RemoveRoleAsync(guildSettings.RoleMuteId.Value);
 
-            await ReplyEmbedAsync(EmbedStyle.Successfull, $"Пользователь {guildUser.GetFullMention()} успешно размьючен");
+            await ReplyEmbedAsync($"Пользователь {guildUser.GetFullMention()} успешно размьючен", EmbedStyle.Successfull);
         }
     }
 
@@ -322,7 +325,7 @@ public class AdminModule : GuildModuleBase
 
         if (rolePerms is null)
         {
-            await ReplyEmbedAsync(EmbedStyle.Error, $"Для роли **{role}** нет переопределений в канале **{guildChannel}**");
+            await ReplyEmbedAsync($"Для роли **{role}** нет переопределений в канале **{guildChannel}**", EmbedStyle.Warning);
 
             return;
         }
@@ -353,7 +356,7 @@ public class AdminModule : GuildModuleBase
 
         if (rolePerms is null)
         {
-            await ReplyEmbedAsync(EmbedStyle.Error, $"Для пользователя **{guildUser}** нет переопределений в канале **{guildChannel}**");
+            await ReplyEmbedAsync($"Для пользователя **{guildUser}** нет переопределений в канале **{guildChannel}**", EmbedStyle.Warning);
 
             return;
         }
@@ -417,7 +420,7 @@ public class AdminModule : GuildModuleBase
 
                 if (resp is null || !resp.IsSuccessStatusCode)
                 {
-                    await ReplyEmbedAsync(EmbedStyle.Error, "Прикрепите к своему сообщению картинку, или ответьте на сообщение, содержащее картинку");
+                    await ReplyEmbedAsync("Прикрепите к своему сообщению картинку, или ответьте на сообщение, содержащее картинку", EmbedStyle.Warning);
                     
                     return;
                 }
@@ -432,12 +435,12 @@ public class AdminModule : GuildModuleBase
 
                 if (smileExtension is null)
                 {
-                    await ReplyEmbedAsync(EmbedStyle.Error, "Прикрепите к своему сообщению картинку, или ответьте на сообщение, содержащее картинку");
+                    await ReplyEmbedAsync("Прикрепите к своему сообщению картинку, или ответьте на сообщение, содержащее картинку", EmbedStyle.Error);
 
                     return;
                 }
 
-                var embed = CreateEmbed(EmbedStyle.Information, "Ваша картинка");
+                var embed = EmbedHelper.CreateEmbed("Ваша картинка");
 
                 var file = await Context.Channel.SendFileAsync(resptream, $"smile.{smileExtension}", embed: embed, messageReference: new(Context.Message.Id));
 
@@ -446,8 +449,8 @@ public class AdminModule : GuildModuleBase
 
             if (attachment.Size > 256 * 1024)
             {
-                await ReplyEmbedAsync(EmbedStyle.Error,
-                    $"Изображение имеет слишком большой размер. Допустимый размер: 256Кб; Размер изображения: {attachment.Size / 1024}Кб");
+                await ReplyEmbedAsync($"Изображение имеет слишком большой размер. Допустимый размер: 256Кб; Размер изображения: {attachment.Size / 1024}Кб",
+                    EmbedStyle.Error);
 
                 return;
             }
@@ -457,7 +460,7 @@ public class AdminModule : GuildModuleBase
 
             if (stream is null)
             {
-                await ReplyEmbedAsync(EmbedStyle.Error, "Не удалось загрузить картинку");
+                await ReplyEmbedAsync("Не удалось загрузить картинку", EmbedStyle.Error);
 
                 return;
             }
@@ -467,7 +470,7 @@ public class AdminModule : GuildModuleBase
             var emote = await Context.Guild.CreateEmoteAsync(name, image);
 
 
-            var msg = await ReplyEmbedAsync(EmbedStyle.Successfull, "Смайл успешно добавлен");
+            var msg = await ReplyEmbedAsync("Смайл успешно добавлен", EmbedStyle.Successfull);
 
             await msg.AddReactionAsync(emote);
         }
@@ -479,7 +482,7 @@ public class AdminModule : GuildModuleBase
         {
             if (!Context.Guild.Emotes.Contains(emote))
             {
-                await ReplyEmbedAsync(EmbedStyle.Error, "Смайл не найден");
+                await ReplyEmbedAsync("Смайл не найден", EmbedStyle.Error);
 
                 return;
             }
@@ -488,7 +491,7 @@ public class AdminModule : GuildModuleBase
 
             await Context.Guild.DeleteEmoteAsync(guildEmote);
 
-            await ReplyEmbedAsync(EmbedStyle.Successfull, "Смайл успешно удален");
+            await ReplyEmbedAsync("Смайл успешно удален", EmbedStyle.Successfull);
         }
     }
 
@@ -510,12 +513,12 @@ public class AdminModule : GuildModuleBase
 
             if (filestream is null)
             {
-                await ReplyEmbedAsync(EmbedStyle.Error, "Файл не найден");
+                await ReplyEmbedAsync("Файл не найден", EmbedStyle.Error);
 
                 return;
             }
 
-            await ReplyEmbedAsync(EmbedStyle.Successfull, "Файл успешно отправлен");
+            await ReplyEmbedAsync("Файл успешно отправлен", EmbedStyle.Successfull);
 
             await Context.User.SendFileAsync(filestream, filestream.Name);
         }
@@ -525,8 +528,8 @@ public class AdminModule : GuildModuleBase
         [Command("рестарт")]
         public async Task RestartAsync()
         {
-            await ReplyEmbedAsync(EmbedStyle.Information, "Перезапуск...");
-
+            await ReplyEmbedAsync("Перезапуск...", EmbedStyle.Debug);
+            
             Log.Debug("({0:l}): Restart request received from server {1} by user {2}",
                       nameof(RestartAsync),
                       Context.Guild.Name,

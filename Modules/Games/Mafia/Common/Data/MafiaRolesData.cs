@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using Core.Extensions;
 using Discord;
 using Modules.Games.Mafia.Common.GameRoles;
 using Modules.Games.Mafia.Common.GameRoles.RolesGroups;
@@ -18,28 +19,28 @@ public class MafiaRolesData
     private readonly Dictionary<string, GroupRole> _groupRoles;
 
     public IReadOnlyDictionary<IGuildUser, Innocent> Innocents => _innocents;
-    private Dictionary<IGuildUser, Innocent> _innocents;
+    private readonly Dictionary<IGuildUser, Innocent> _innocents;
 
     public IReadOnlyDictionary<IGuildUser, Doctor> Doctors => _doctors;
-    private Dictionary<IGuildUser, Doctor> _doctors;
+    private readonly Dictionary<IGuildUser, Doctor> _doctors;
 
     public IReadOnlyDictionary<IGuildUser, Sheriff> Sheriffs => _sheriffs;
-    private Dictionary<IGuildUser, Sheriff> _sheriffs;
+    private readonly Dictionary<IGuildUser, Sheriff> _sheriffs;
 
     public IReadOnlyDictionary<IGuildUser, Murder> Murders => _murders;
-    private Dictionary<IGuildUser, Murder> _murders;
+    private readonly Dictionary<IGuildUser, Murder> _murders;
 
     public IReadOnlyDictionary<IGuildUser, Don> Dons => _dons;
-    private Dictionary<IGuildUser, Don> _dons;
+    private readonly Dictionary<IGuildUser, Don> _dons;
 
     public IReadOnlyDictionary<IGuildUser, Neutral> Neutrals => _neutrals;
-    private Dictionary<IGuildUser, Neutral> _neutrals;
+    private readonly Dictionary<IGuildUser, Neutral> _neutrals;
 
     public IReadOnlyDictionary<IGuildUser, Maniac> Maniacs => _maniacs;
-    private Dictionary<IGuildUser, Maniac> _maniacs;
+    private readonly Dictionary<IGuildUser, Maniac> _maniacs;
 
     public IReadOnlyDictionary<IGuildUser, Hooker> Hookers => _hookers;
-    private Dictionary<IGuildUser, Hooker> _hookers;
+    private readonly Dictionary<IGuildUser, Hooker> _hookers;
 
 
     public MafiaRolesData()
@@ -78,16 +79,15 @@ public class MafiaRolesData
         foreach (var role in AllRoles)
             AliveRoles.Add(role.Key, role.Value);
 
+        _innocents.AddRange(AllRoles.Values.Where(r => r is Innocent).ToDictionary(r => r.Player, r => (Innocent)r));
+        _doctors.AddRange(Innocents.Values.Where(i => i is Doctor).ToDictionary(i => i.Player, i => (Doctor)i));
+        _sheriffs.AddRange(Innocents.Values.Where(i => i is Sheriff).ToDictionary(i => i.Player, i => (Sheriff)i));
 
-        _innocents = AllRoles.Values.Where(r => r is Innocent).ToDictionary(r => r.Player, r => (Innocent)r);
-        _doctors = Innocents.Values.Where(i => i is Doctor).ToDictionary(i => i.Player, i => (Doctor)i);
-        _sheriffs = Innocents.Values.Where(i => i is Sheriff).ToDictionary(i => i.Player, i => (Sheriff)i);
+        _murders.AddRange(AllRoles.Values.Where(r => r is Murder).ToDictionary(r => r.Player, r => (Murder)r));
+        _dons.AddRange(Murders.Values.Where(m => m is Don).ToDictionary(m => m.Player, m => (Don)m));
 
-        _murders = AllRoles.Values.Where(r => r is Murder).ToDictionary(r => r.Player, r => (Murder)r);
-        _dons = Murders.Values.Where(m => m is Don).ToDictionary(m => m.Player, m => (Don)m);
-
-        _neutrals = AllRoles.Values.Where(r => r is Neutral).ToDictionary(r => r.Player, r => (Neutral)r);
-        _maniacs = Neutrals.Values.Where(n => n is Maniac).ToDictionary(n => n.Player, n => (Maniac)n);
-        _hookers = Neutrals.Values.Where(n => n is Hooker).ToDictionary(n => n.Player, n => (Hooker)n);
+        _neutrals.AddRange(AllRoles.Values.Where(r => r is Neutral).ToDictionary(r => r.Player, r => (Neutral)r));
+        _maniacs.AddRange(Neutrals.Values.Where(n => n is Maniac).ToDictionary(n => n.Player, n => (Maniac)n));
+        _hookers.AddRange(Neutrals.Values.Where(n => n is Hooker).ToDictionary(n => n.Player, n => (Hooker)n));
     }
 }

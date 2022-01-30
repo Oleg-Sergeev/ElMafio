@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using Core.Common;
 using Core.Extensions;
 using Discord;
-using Fergun.Interactive.Pagination;
 using Microsoft.Extensions.Options;
 using Modules.Games.Mafia.Common.Data;
 using Modules.Games.Mafia.Common.GameRoles.Data;
@@ -47,7 +46,8 @@ public abstract class GameRole
 
 
 
-    public List<Vote> Votes { get; }
+    public IReadOnlyList<Vote> Votes => _votes;
+    public readonly List<Vote> _votes; // public!
 
     public int Priority { get; }
 
@@ -66,7 +66,7 @@ public abstract class GameRole
 
         IsAlive = true;
 
-        Votes = new();
+        _votes = new List<Vote>();
     }
 
 
@@ -127,6 +127,9 @@ public abstract class GameRole
     public virtual void SetPhase(bool isNight)
     {
         IsNight = isNight;
+
+        if (isNight)
+            UnblockAll();
     }
 
 
@@ -141,14 +144,15 @@ public abstract class GameRole
 
 
     protected static void HandleChoiceInternal(GameRole role, IGuildUser? choice)
-        => role.HandleChoice(choice);
-
-    protected virtual void HandleChoice(IGuildUser? choice)
     {
-        LastMove = choice;
+        role.LastMove = choice;
     }
 
-    protected virtual async Task SendVotingResultsAsync(IMessageChannel channel)
+    // public ???
+    public virtual void HandleChoice(IGuildUser? choice)
+        => HandleChoiceInternal(this, choice);
+
+    public virtual async Task SendVotingResultsAsync(IMessageChannel channel)
     {
         var seq = GetMoveResultPhasesSequence();
 
@@ -157,16 +161,39 @@ public abstract class GameRole
     }
 
 
-    public virtual async Task<Vote> VoteAsync(MafiaContext context, CancellationToken token, IMessageChannel? voteChannel = null, IMessageChannel? voteResultChannel = null)
+    protected static async Task<Vote> VoteInternalAsync(GameRole role, MafiaContext context, IMessageChannel? voteChannel = null, IMessageChannel? voteResultChannel = null, bool waitAfterVote = true)
     {
-        // Preconditions
+        var token = context.MafiaData.TokenSource.Token;
 
-        var except = GetExceptList();
+        if (!role.IsAlive)
+        {
+            await Task.Delay(context.VoteTime * 1000, token);
 
-        var playersToVote = context.RolesData.AliveRoles.Keys.Except(except);
+            return new Vote(role, null, false);
+        }
+
+
+        if (voteChannel is null)
+        {
+            voteChannel = await role.Player.CreateDMChannelAsync();
+            voteResultChannel = voteChannel;
+        }
+
+        if (role.BlockedByHooker)
+        {
+            await role.Player.SendMessageAsync(embed: EmbedHelper.CreateEmbed("Вас охмурила путана, развлекайтесь с ней", EmbedStyle.Warning));
+
+            await Task.Delay(context.VoteTime * 1000, token);
+
+            return new Vote(role, null, true);
+        }
+
+
+        var playersToVote = context.RolesData.AliveRoles.Keys.Except(role.GetExceptList());
+
+        var cts = new CancellationTokenSource();
 
         var timeout = TimeSpan.FromSeconds(context.VoteTime);
-
 
         IGuildUser? selectedPlayer = null;
 
@@ -177,12 +204,6 @@ public abstract class GameRole
         Task? timeoutTask = null;
 
         Vote? vote = null;
-
-        if (voteChannel is null)
-        {
-            voteChannel = await Player.CreateDMChannelAsync();
-            voteResultChannel = voteChannel;
-        }
 
         do
         {
@@ -203,10 +224,10 @@ public abstract class GameRole
 
             var description = selectedPlayer is null
                 ? "Выберите человека из списка"
-                : $"Вы выбрали - {selectedPlayer.GetFullMention()}";
+                : $"Вы выбрали - {selectedPlayer.GetFullName()}";
 
             var embed = new EmbedBuilder()
-               .WithTitle($"Голосование: {Player.GetFullName()}")
+               .WithTitle($"Голосование ({role.Player.GetFullName()})")
                .WithColor(Color.Gold)
                .WithDescription(description)
                .AddField("Игрок", string.Join('\n', playersToVote.Select(p => p.GetFullName())), true)
@@ -228,32 +249,31 @@ public abstract class GameRole
 
             if (timeoutMessage is null)
             {
-                var ts = timeout;
-
-                var embedTimeout = EmbedHelper.CreateEmbed($"Осталось времени: {ts.Minutes}м {ts.Seconds}с", EmbedStyle.Waiting);
+                var embedTimeout = EmbedHelper.CreateEmbed($"Осталось времени: {timeout.Minutes}м {timeout.Seconds}с", EmbedStyle.Waiting);
 
                 timeoutMessage = await message.Channel.SendMessageAsync(embed: embedTimeout);
 
+                var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(token, cts.Token);
 
                 timeoutTask = Task.Run(async () =>
                 {
                     while (vote is null && timeout.TotalSeconds > 0)
                     {
+                        await Task.Delay(5000, linkedCts.Token);
+
                         await timeoutMessage.ModifyAsync(msg =>
                         {
-                            msg.Embed = EmbedHelper.CreateEmbed($"Осталось времени: {ts.Minutes}м {ts.Seconds}с", EmbedStyle.Waiting);
+                            msg.Embed = EmbedHelper.CreateEmbed($"Осталось времени: {timeout.Minutes}м {timeout.Seconds}с", EmbedStyle.Waiting);
                         });
 
-                        await Task.Delay(5000);
-
-                        ts -= TimeSpan.FromSeconds(5);
+                        timeout -= TimeSpan.FromSeconds(5);
                     }
-                });
+                }, linkedCts.Token);
             }
 
 
             var result = await context.Interactive.NextMessageComponentAsync(
-                x => x.Message.Id == message.Id && (x.User.Id == Player.Id || x.User.Id == context.CommandContext.Guild.OwnerId),
+                x => x.Message.Id == message.Id && (x.User.Id == role.Player.Id || x.User.Id == context.CommandContext.Guild.OwnerId),
                 timeout: timeout, cancellationToken: token);
 
 
@@ -262,19 +282,19 @@ public abstract class GameRole
             {
                 var data = result.Value.Data;
 
-                await result.Value.DeferAsync(true);
+                await result.Value.DeferAsync();
 
                 if (data.Type == ComponentType.Button)
                 {
                     if (data.CustomId == "skip")
                     {
-                        vote = new Vote(this, null, true);
+                        vote = new Vote(role, null, true);
 
                         break;
                     }
                     else if (data.CustomId == "vote")
                     {
-                        vote = new Vote(this, selectedPlayer, false);
+                        vote = new Vote(role, selectedPlayer, false);
 
                         break;
                     }
@@ -299,7 +319,7 @@ public abstract class GameRole
             }
             else
             {
-                vote = new Vote(this, null, false);
+                vote = new Vote(role, null, false);
 
                 break;
             }
@@ -308,21 +328,44 @@ public abstract class GameRole
 
 
         if (timeoutTask is not null)
-            await timeoutTask;
+        {
+            cts.Cancel();
+
+            try
+            {
+                await timeoutTask;
+            }
+            catch (OperationCanceledException) { }
+        }
 
         await timeoutMessage.DeleteAsync();
 
-        vote ??= new Vote(this, null, false);
 
-        HandleChoice(vote.Option);
+
+        vote ??= new Vote(role, null, false);
+
+        role.HandleChoice(vote.Option);
 
 
         if (voteResultChannel is not null)
-            await SendVotingResultsAsync(voteResultChannel);
+            await role.SendVotingResultsAsync(voteResultChannel);
 
 
-        Votes.Add(vote);
+        role._votes.Add(vote);
+
+        if (waitAfterVote && timeout.TotalSeconds > 0)
+            await Task.Delay(timeout, token);
+
 
         return vote;
     }
+   
+    public virtual Task<Vote> VoteAsync(MafiaContext context, IMessageChannel? voteChannel = null, IMessageChannel? voteResultChannel = null, bool waitAfterVote = true)
+        => VoteInternalAsync(this, context, voteChannel, voteResultChannel, waitAfterVote);
+
+
+
+
+
+    public override string ToString() => Name;
 }

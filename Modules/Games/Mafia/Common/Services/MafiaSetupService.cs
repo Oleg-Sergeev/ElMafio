@@ -121,7 +121,7 @@ public class MafiaSetupService : IMafiaSetupService
 
             var guildPlayer = (SocketGuildUser)player;
 
-            if (false && serverSettings.RenameUsers && guildPlayer.Nickname is null && guildPlayer.Id != context.CommandContext.Guild.OwnerId)
+            if (serverSettings.RenameUsers && guildPlayer.Nickname is null && guildPlayer.Id != context.CommandContext.Guild.OwnerId)
             {
                 await guildPlayer.ModifyAsync(props => props.Nickname = $"_{guildPlayer.Username}_");
 
@@ -129,7 +129,7 @@ public class MafiaSetupService : IMafiaSetupService
             }
 
 
-            if (false && serverSettings.RemoveRolesFromUsers)
+            if (serverSettings.RemoveRolesFromUsers)
             {
                 var playerRoles = guildPlayer.Roles
                     .Where(role => !role.IsEveryone && role.Id != guildData.MafiaRole.Id && role.Id != (guildData.SpectatorRole?.Id ?? 0));
@@ -187,7 +187,7 @@ public class MafiaSetupService : IMafiaSetupService
 
             donsCount = roleAmount.DonsCount ?? (murdersCount > 2 ? 1 : 0);
 
-            if (roleAmount.DonsCount is null)
+            if (roleAmount.DonsCount is not null)
                 murdersCount -= donsCount;
 
         }
@@ -245,7 +245,6 @@ public class MafiaSetupService : IMafiaSetupService
             rolesData.AddSingleRole(doctor);
         }
 
-
         for (int i = 0; i < sheriffsCount; i++, offset++)
         {
             var sheriff = new Sheriff(mafiaData.Players[offset], _gameRoleData, rolesInfo.SheriffShotsCount ?? 0, rolesData.Murders.Values);
@@ -253,7 +252,6 @@ public class MafiaSetupService : IMafiaSetupService
 
             rolesData.AddSingleRole(sheriff);
         }
-
 
 
         for (int i = offset; i < mafiaData.Players.Count; i++)

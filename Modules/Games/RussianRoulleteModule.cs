@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Core.Common;
+using Core.Common.Data;
 using Core.Extensions;
 using Core.Interfaces;
 using Discord;
@@ -21,12 +22,12 @@ namespace Modules.Games;
 [Alias("р")]
 public class RussianRouletteModule : GameModule
 {
-    public RussianRouletteModule(InteractiveService interactiveService, IConfiguration config) : base(interactiveService, config)
+    public RussianRouletteModule(InteractiveService interactiveService) : base(interactiveService)
     {
     }
 
 
-    protected override GameModuleData CreateGameData(IGuildUser creator)
+    protected override GameData CreateGameData(IGuildUser creator)
         => new("Русская рулетка", 2, creator);
 
 
@@ -34,21 +35,20 @@ public class RussianRouletteModule : GameModule
     [RequireBotPermission(GuildPermission.AddReactions)]
     public override async Task StartAsync()
     {
-        GameData = GetGameData();
-
-        if (!CanStart(out var msg))
+        if (!CheckPreconditions(out var msg))
         {
-            await ReplyEmbedAsync(EmbedStyle.Error, msg ?? "Невозможно начать игру");
+            await ReplyEmbedAsync(msg, EmbedStyle.Error);
 
             return;
         }
 
-        GameData!.IsPlaying = true;
 
-        var playersId = new HashSet<ulong>(GameData.Players.Select(p => p.Id));
+        var data = GetGameData();
+
+        var playersId = new HashSet<ulong>(data.Players.Select(p => p.Id));
 
 
-        await ReplyEmbedAsync(EmbedStyle.Information, $"{GameData.Name} начинается!");
+        await ReplyEmbedStampAsync($"{data.Name} начинается!");
 
         var delay = Task.Delay(3000);
 
@@ -59,7 +59,7 @@ public class RussianRouletteModule : GameModule
         var winner = await PlayAsync(rrData);
 
 
-        if (GameData.IsPlaying && winner is not null)
+        if (data.IsPlaying && winner is not null)
         {
             await Task.Delay(2000);
 
@@ -69,14 +69,14 @@ public class RussianRouletteModule : GameModule
 
             delay = Task.Delay(1000);
 
-            await AddNewUsersAsync(playersId);
+            //await AddNewUsersAsync(playersId);
 
             await delay;
 
             var updateStatsTask = UpdatePlayersStatAsync(winner, playersId);
 
 
-            await ReplyEmbedAsync(EmbedStyle.Successfull, "Игра завершена!");
+            await ReplyEmbedAsync("Игра завершена!", EmbedStyle.Successfull);
 
 
             await updateStatsTask;
@@ -93,19 +93,21 @@ public class RussianRouletteModule : GameModule
 
         var delay = Task.Delay(3000);
 
-        GameData!.Players.Shuffle();
+
+        var data = GetGameData();
+        data.Players.Shuffle();
 
         await delay;
 
 
-        var alivePlayers = new List<IGuildUser>(GameData.Players);
+        var alivePlayers = new List<IGuildUser>(data.Players);
 
         var hasCustomSmileKilled = rrData.CustomEmoteKilled is not null;
         var hasCustomSmileSurvived = rrData.CustomEmoteSurvived is not null;
 
-        while (alivePlayers.Count > 1 && GameData.IsPlaying)
+        while (alivePlayers.Count > 1 && data.IsPlaying)
         {
-            for (int drum = 1, i = alivePlayers.Count; drum <= 6 && GameData.IsPlaying; drum++)
+            for (int drum = 1, i = alivePlayers.Count; drum <= 6 && data.IsPlaying; drum++)
             {
                 if (--i < 0)
                     i = alivePlayers.Count - 1;
@@ -115,7 +117,7 @@ public class RussianRouletteModule : GameModule
 
                 await Task.Delay(3000);
 
-                if (!GameData.IsPlaying)
+                if (!data.IsPlaying)
                     return null;
 
 
@@ -312,7 +314,7 @@ public class RussianRouletteModule : GameModule
             await Context.Db.SaveChangesAsync();
 
 
-            var msg = await ReplyEmbedAsync(EmbedStyle.Successfull, $"Смайл {emoji} успешно настроен");
+            var msg = await ReplyEmbedAsync($"Смайл {emoji} успешно настроен", EmbedStyle.Successfull);
 
             await msg.AddReactionAsync(emoji);
         }
@@ -328,7 +330,7 @@ public class RussianRouletteModule : GameModule
             await Context.Db.SaveChangesAsync();
 
 
-            var msg = await ReplyEmbedAsync(EmbedStyle.Successfull, $"Смайл {emote} успешно настроен");
+            var msg = await ReplyEmbedAsync($"Смайл {emote} успешно настроен", EmbedStyle.Successfull);
 
             await msg.AddReactionAsync(emote);
         }
@@ -346,7 +348,7 @@ public class RussianRouletteModule : GameModule
             await Context.Db.SaveChangesAsync();
 
 
-            var msg = await ReplyEmbedAsync(EmbedStyle.Successfull, $"Смайл {emoji} успешно настроен");
+            var msg = await ReplyEmbedAsync($"Смайл {emoji} успешно настроен", EmbedStyle.Successfull);
 
             await msg.AddReactionAsync(emoji);
         }
@@ -362,7 +364,7 @@ public class RussianRouletteModule : GameModule
             await Context.Db.SaveChangesAsync();
 
 
-            var msg = await ReplyEmbedAsync(EmbedStyle.Successfull, $"Смайл {emote} успешно настроен");
+            var msg = await ReplyEmbedAsync($"Смайл {emote} успешно настроен", EmbedStyle.Successfull);
 
             await msg.AddReactionAsync(emote);
         }
@@ -372,7 +374,8 @@ public class RussianRouletteModule : GameModule
 
     public class RussianRouletteHelpModule : HelpModule
     {
-        public RussianRouletteHelpModule(InteractiveService interactiveService, IConfiguration config) : base(interactiveService, config)
+        public RussianRouletteHelpModule(InteractiveService interactiveService, IConfiguration configuration) 
+            : base(interactiveService, configuration)
         {
         }
     }

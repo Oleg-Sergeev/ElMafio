@@ -19,6 +19,7 @@ public static class EmbedHelper
             EmbedStyle.Warning => innerEmbedBuilder.WithWarningMessage(),
             EmbedStyle.Successfull => innerEmbedBuilder.WithSuccessfullyMessage(),
             EmbedStyle.Waiting => innerEmbedBuilder.WithWaitingMessage(),
+            EmbedStyle.Debug => innerEmbedBuilder.WithDebugMessage(),
             _ => innerEmbedBuilder.WithInformationMessage()
         };
 

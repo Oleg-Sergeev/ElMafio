@@ -1,11 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Core.Common;
-using Core.Common.Chronology;
-using Core.Common.Data;
 using Core.Extensions;
 using Discord;
 using Fergun.Interactive;
@@ -94,9 +93,12 @@ public class MafiaGame
 
         try
         {
-            while (winner is null)
+            while (true)
             {
                 winner = await LoopAsync(lastWordNightCount--);
+
+                if (winner is not null)
+                    break;
             }
 
             await _guildData.GeneralTextChannel.SendEmbedAsync("Игра завершена", "Мафия");
@@ -223,10 +225,13 @@ public class MafiaGame
         }
 
 
+        var fooledPlayerIds = new List<ulong?>();
+        foreach (var hooker in _rolesData.Hookers.Values.Where(h => h.IsAlive))
+            if (hooker.Votes.Count > 0)
+                fooledPlayerIds.Add(hooker.Votes[^1].Option?.Id);
 
 
         await timer;
-
 
         await ChangeCitizenPermsAsync(_denyWrite, _denyView);
 
@@ -243,11 +248,9 @@ public class MafiaGame
             {
                 var role = _rolesData.AliveRoles[citizenVotingResult.Choice.Option];
 
-                if (!role.BlockedByHooker)
+                if (!fooledPlayerIds.Contains(role.Player.Id))
                 {
                     await EjectPlayerAsync(role.Player);
-
-                    await _guildData.GeneralTextChannel.SendEmbedAsync($"Выгнан {role.Player.GetFullMention()}", EmbedStyle.Successfull);
                 }
                 else
                 {
@@ -290,16 +293,16 @@ public class MafiaGame
     {
         var citizen = _rolesData.GroupRoles[nameof(CitizenGroup)];
 
-        var votingResult = await citizen.VoteManyAsync(_context, _token);
+        var votingResult = await citizen.VoteManyAsync(_context, waitAfterVote: false);
 
         return votingResult;
     }
 
     private async Task DoNightMovesAsync()
     {
-        var exceptRoles = new List<GameRole>(_rolesData.Murders.Values);
+        var exceptRoles = new List<GameRole>(_rolesData.Murders.Values.Where(m => m is not Don));
 
-        var roles = _rolesData.AliveRoles.Values.ToList();
+        var roles = _rolesData.AllRoles.Values.ToList();
 
 
         //handle specific roles
@@ -320,8 +323,6 @@ public class MafiaGame
 
         roles = roles.Except(exceptRoles).ToList();
 
-
-
         var priorityGroups = roles.GroupBy(r => r.Priority).OrderByDescending(g => g.Key);
 
         foreach (var rolesGrouping in priorityGroups)
@@ -332,9 +333,9 @@ public class MafiaGame
             foreach (var role in rolesGrouping)
             {
                 if (role is GroupRole rolesGroup)
-                    tasksGroup.Add(rolesGroup.VoteManyAsync(_context, _token));
+                    tasksGroup.Add(rolesGroup.VoteManyAsync(_context));
                 else
-                    tasksSingle.Add(role.VoteAsync(_context, _token));
+                    tasksSingle.Add(role.VoteAsync(_context));
             }
 
 
@@ -350,7 +351,8 @@ public class MafiaGame
 
                     if (_guildData.SpectatorTextChannel is not null)
                         await _guildData.SpectatorTextChannel.SendEmbedAsync(
-                            $"{vote.VotedRole.Name} [{vote.VotedRole.Player.GetFullName()}] - {(vote.IsSkip ? "Skip" : vote.Option?.GetFullName() ?? "None")}", "Голосование");
+                            $"{(vote.VotedRole.IsAlive ? "" : "**[Dead]** ")}{vote.VotedRole} [{vote.VotedRole.Player.GetFullName()}] - {(vote.IsSkip ? "Skip" : vote.Option?.GetFullName() ?? "None")}",
+                            "Голосование");
                 }
             });
 
@@ -360,17 +362,17 @@ public class MafiaGame
                 {
                     var task = await Task.WhenAny(tasksGroup);
 
-                    var votingResult = await task;
+                    var voteGroup = await task;
 
                     tasksGroup.Remove(task);
 
                     if (_guildData.SpectatorTextChannel is not null)
                     {
                         var embed = new EmbedBuilder()
-                            .WithTitle("Голосование")
-                            .AddField("Игрок", string.Join('\n', votingResult.PlayersVote.Values.Select(vote => $"{vote.VotedRole.Name} [{vote.VotedRole.Player.GetFullName()}]")), true)
-                            .AddField("Голос", string.Join('\n', votingResult.PlayersVote.Values.Select(vote => $"{(vote.IsSkip ? "Skip" : vote.Option?.GetFullName() ?? "None")}")), true)
-                            .AddField("Результат", votingResult.Choice.IsSkip ? "Skip" : votingResult.Choice.Option?.GetFullName() ?? "None")
+                            .WithTitle($"Голосование [{voteGroup.Choice.VotedRole}]")
+                            .AddField("Игрок", string.Join('\n', voteGroup.PlayersVote.Values.Select(vote => $"{vote.VotedRole} [{vote.VotedRole.Player.GetFullName()}]")), true)
+                            .AddField("Голос", string.Join('\n', voteGroup.PlayersVote.Values.Select(vote => $"{(vote.IsSkip ? "Skip" : vote.Option?.GetFullName() ?? "None")}")), true)
+                            .AddField("Результат", voteGroup.Choice.IsSkip ? "Skip" : voteGroup.Choice.Option?.GetFullName() ?? "None")
                             .Build();
 
                         await _guildData.SpectatorTextChannel.SendMessageAsync(embed: embed);
@@ -380,6 +382,8 @@ public class MafiaGame
 
 
             await Task.WhenAll(taskSingle, taskGroup);
+
+            await _guildData.GeneralTextChannel.SendEmbedAsync($"Priority {rolesGrouping.Key} completed", EmbedStyle.Debug);
         }
     }
 
@@ -390,25 +394,27 @@ public class MafiaGame
 
         var kills = killers
             .Where(k => k.KilledPlayer is not null)
-            .Select(k => k.KilledPlayer!);
+            .Select(k => k.KilledPlayer!)
+            .Distinct();
 
         var heals = healers
             .Where(h => h.HealedPlayer is not null)
-            .Select(k => k.HealedPlayer!);
+            .Select(k => k.HealedPlayer!)
+            .Distinct();
 
 
         var corpses = kills
             .Except(heals)
-            .Shuffle()
+            .Distinct()
             .ToList();
 
 
         var maniacKills = _rolesData.Maniacs.Values
-            .Where(m => m.KilledPlayer is not null)
+            .Where(m => m.IsAlive && m.KilledPlayer is not null)
             .Select(m => m.KilledPlayer!)
             .Except(_rolesData.Hookers.Values
-                .Where(m => m.HealedPlayer is not null)
-                .Select(m => m.HealedPlayer!));
+                .Where(h => h.IsAlive && h.HealedPlayer is not null)
+                .Select(h => h.HealedPlayer!));
 
         corpses.AddRange(maniacKills);
 
@@ -431,7 +437,10 @@ public class MafiaGame
 
         revealedManiacs = maniacs;
 
-        return corpses;
+        return corpses
+            .Distinct()
+            .Shuffle()
+            .ToList();
     }
 
 
@@ -638,26 +647,46 @@ public class MafiaGame
         {
             var activeNeutralsCount = _rolesData.Neutrals.Values.Count(n => n.IsAlive && n is IKiller);
 
-            if (activeNeutralsCount > 0 && innocentsCount == 0 && murdersCount == 0)
-                return Winner.None;
 
-
-            if (innocentsCount > 0)
+            if (innocentsCount == 0)
             {
-                if (murdersCount == 0 && (!gameSettings.ConditionContinueGameWithNeutrals || activeNeutralsCount == 0))
-                    return GetCitizen();
+                if (murdersCount > 0)
+                {
+                    if (!gameSettings.ConditionContinueGameWithNeutrals || activeNeutralsCount == 0)
+                        return GetMurders();
 
-                if (!gameSettings.ConditionAliveAtLeast1Innocent && innocentsCount <= murdersCount)
-                    return GetMurders();
+                    //if (murdersCount == 1 && activeNeutralsCount == 1)
+                    return Winner.None;
 
-                return Winner.None;
+                    //return null;
+                }
+                else
+                {
+                    if (activeNeutralsCount > 0)
+                        return Winner.None; // concrete neutral win
+
+                    return Winner.None;
+                }
             }
             else
             {
-                if (murdersCount > 0)
-                    return GetMurders();
+                if (murdersCount == 0)
+                {
+                    if (!gameSettings.ConditionContinueGameWithNeutrals || activeNeutralsCount == 0)
+                        return GetCitizen();
 
-                return Winner.None;
+                    if (innocentsCount == 1 && activeNeutralsCount == 1)
+                        return Winner.None;
+
+                    return null;
+                }
+                else
+                {
+                    if (!gameSettings.ConditionAliveAtLeast1Innocent && innocentsCount <= murdersCount)
+                        return GetMurders();
+
+                    return null;
+                }
             }
         }
         else
@@ -698,7 +727,7 @@ public class MafiaGame
         .WithTitle("Состав мафии")
         .WithColor(Color.DarkRed)
         .AddField("Игрок", string.Join("\n", _rolesData.Murders.Keys.Select(u => u.GetFullMention())), true)
-        .AddField("Роль", string.Join("\n", _rolesData.Murders.Values.Select(m => m.Name), true))
+        .AddField("Роль", string.Join("\n", _rolesData.Murders.Values.Select(m => m.Name)), true)
         .Build();
 }
 
@@ -711,7 +740,6 @@ public class Winner
     public GameRole? Role { get; }
 
     public IEnumerable<IGuildUser>? Players;
-
 
     public Winner(GameRole? role, IEnumerable<IGuildUser>? players = null)
     {

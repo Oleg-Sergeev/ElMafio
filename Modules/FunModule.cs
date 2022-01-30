@@ -22,7 +22,7 @@ public class FunModule : GuildModuleBase
     {
         int num = Random.Next(101);
 
-        await ReplyAsync(embed: CreateEmbed(EmbedStyle.Information, $"Шанс того, что {text} - **{num}%**"),
+        await ReplyAsync(embed: EmbedHelper.CreateEmbed($"Шанс того, что {text} - **{num}%**"),
             messageReference: new(Context.Message.Id));
     }
 
@@ -56,7 +56,7 @@ public class FunModule : GuildModuleBase
         var user = Context.Guild.Users.ToList()[num];
         var nickname = user.Nickname ?? user.Username;
 
-        await ReplyAsync(embed: CreateEmbed(EmbedStyle.Information, $"**{nickname}** {message}"),
+        await ReplyAsync(embed: EmbedHelper.CreateEmbed($"**{nickname}** {message}"),
             messageReference: new(Context.Message.Id));
     }
 
@@ -95,7 +95,7 @@ public class FunModule : GuildModuleBase
             }
         }
 
-        var response = await ReplyEmbedStampAsync(EmbedStyle.Information, options, title);
+        var response = await ReplyEmbedStampAsync(options, EmbedStyle.Information, title);
 
         await response.AddReactionsAsync(emotes.ToArray());
     }
@@ -143,7 +143,7 @@ public class FunModule : GuildModuleBase
 
         if (resp is null)
         {
-            await ReplyEmbedAsync(EmbedStyle.Error, "Не удалось загрузить аватар");
+            await ReplyEmbedAsync("Не удалось загрузить аватар", EmbedStyle.Error);
 
             return;
         }
@@ -161,7 +161,7 @@ public class FunModule : GuildModuleBase
         if (Emote.TryParse(emoteId, out var emote))
             await GetSmileByIdAsync(emote.Id);
         else
-            await ReplyEmbedAsync(EmbedStyle.Error, "Не удалось распознать пользовательский смайлик");
+            await ReplyEmbedAsync("Не удалось распознать пользовательский смайлик", EmbedStyle.Error);
     }
 
 
@@ -187,7 +187,7 @@ public class FunModule : GuildModuleBase
             return;
         }
 
-        await ReplyEmbedAsync(EmbedStyle.Error, "Не удалось найти пользовательский смайлик");
+        await ReplyEmbedAsync("Не удалось найти пользовательский смайлик", EmbedStyle.Error);
     }
 
 }

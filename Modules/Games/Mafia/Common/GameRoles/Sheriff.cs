@@ -74,7 +74,7 @@ public class Sheriff : Innocent, IKiller, IChecker
     }
 
 
-    protected override void HandleChoice(IGuildUser? choice)
+    public override void HandleChoice(IGuildUser? choice)
     {
         base.HandleChoice(choice);
 
@@ -93,15 +93,15 @@ public class Sheriff : Innocent, IKiller, IChecker
         {
             KilledPlayer = null;
 
-            CheckedRole = choice is null ? null : CheckableRoles.FirstOrDefault(r => r.Player == choice);
+            CheckedRole = choice is null ? null : CheckableRoles.FirstOrDefault(r => r.Player.Id == choice.Id);
         }
     }
 
 
-    public override async Task<Vote> VoteAsync(MafiaContext context, CancellationToken token, IMessageChannel? voteChannel = null, IMessageChannel? voteResultChannel = null)
+    public override async Task<Vote> VoteAsync(MafiaContext context, IMessageChannel? voteChannel = null, IMessageChannel? voteResultChannel = null, bool waitAfterVote = true)
     {
         if (!IsNight)
-            return await base.VoteAsync(context, token, voteChannel, voteResultChannel);
+            return await base.VoteAsync(context, voteChannel, voteResultChannel, waitAfterVote);
 
 
         ShotSelected = false;
@@ -113,13 +113,14 @@ public class Sheriff : Innocent, IKiller, IChecker
 
 
             var selection = new SelectionBuilder<bool>()
+                .WithSelectionPage(pageBuilder)
                 .WithOptions(new List<bool> { true, false })
                 .WithStringConverter(o => o ? "Выстрел" : "Проверка")
                 .Build();
 
 
             var result = await context.Interactive.SendSelectionAsync(selection, await Player.CreateDMChannelAsync(),
-                TimeSpan.FromSeconds(context.VoteTime), cancellationToken: token);
+                TimeSpan.FromSeconds(context.VoteTime / 2), cancellationToken: context.MafiaData.TokenSource.Token);
 
             if (result.IsSuccess)
                 ShotSelected = result.Value;
@@ -127,7 +128,8 @@ public class Sheriff : Innocent, IKiller, IChecker
                 ShotSelected = false;
         }
 
-        var vote = await base.VoteAsync(context, token, voteChannel, voteResultChannel);
+
+        var vote = await VoteInternalAsync(this, context, voteChannel, voteResultChannel);
 
 
         return vote;
