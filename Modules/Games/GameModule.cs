@@ -8,6 +8,8 @@ using Core.Extensions;
 using Discord;
 using Discord.Commands;
 using Fergun.Interactive;
+using Fergun.Interactive.Extensions;
+using Fergun.Interactive.Pagination;
 using Microsoft.Extensions.Configuration;
 
 namespace Modules.Games;
@@ -288,47 +290,33 @@ public abstract class GameModule<T> : GuildModuleBase where T : GameData
 
 
 
-
-
-
     protected abstract T CreateGameData(IGuildUser host);
 
 
-    protected virtual bool CheckPreconditions([NotNullWhen(false)] out string? failMessage)
+    protected virtual Task<PreconditionResult> CheckPreconditionsAsync()
     {
-        failMessage = null;
-
-
         if (!TryGetGameData(out var gameData))
         {
-            failMessage = "Игра еще не создана";
-
-            return false;
+            return Task.FromResult(PreconditionResult.FromError("Игра еще не создана"));
         }
-
+        
         if (gameData.Players.Count < gameData.MinPlayersCount)
         {
-            failMessage = $"Недостаточно игроков. Минимальное количество игроков для игры: {gameData.MinPlayersCount}";
-
-            return false;
+            return Task.FromResult(PreconditionResult.FromError($"Недостаточно игроков. Минимальное количество игроков для игры: {gameData.MinPlayersCount}"));
         }
 
         if (gameData.IsPlaying)
         {
-            failMessage = $"{gameData.Name} уже запущена, дождитесь завершения игры";
-
-            return false;
+            return Task.FromResult(PreconditionResult.FromError($"{gameData.Name} уже запущена, дождитесь завершения игры"));
         }
 
         if (gameData.Host.Id != Context.User.Id && Context.User.Id != Context.Guild.OwnerId)
         {
-            failMessage = "Вы не являетесь хостом игры. Запустить игру может только хост";
-
-            return false;
+            return Task.FromResult(PreconditionResult.FromError("Вы не являетесь хостом игры. Запустить игру может только хост"));
         }
 
 
-        return true;
+        return Task.FromResult(PreconditionResult.FromSuccess());
     }
 
 
@@ -437,6 +425,9 @@ public abstract class GameModule<T> : GuildModuleBase where T : GameData
                 return;
             }
 
+            var paginatorBuilder = new StaticPaginatorBuilder()
+                .WithActionOnCancellation(ActionOnStop.DeleteMessage);
+
             for (int i = 1; ; i++)
             {
                 var part = gameDetailsSection.GetSection($"Part{i}");
@@ -470,11 +461,15 @@ public abstract class GameModule<T> : GuildModuleBase where T : GameData
                 if (postParagraph is not null)
                     builder.AddFieldWithEmptyName(postParagraph);
 
-                if (!sendToServer)
-                    await Context.User.SendMessageAsync(embed: builder.Build());
-                else
-                    await ReplyAsync(embed: builder.Build());
+                paginatorBuilder.AddPage(PageBuilder.FromEmbedBuilder(builder));
+
             }
+
+
+            if (!sendToServer)
+                await Interactive.SendPaginatorAsync(paginatorBuilder.Build(), await Context.User.CreateDMChannelAsync(), TimeSpan.FromMinutes(10));
+            else
+                await Interactive.SendPaginatorAsync(paginatorBuilder.Build(), Context.Channel, TimeSpan.FromMinutes(10));
         }
     }
 

@@ -14,7 +14,7 @@ public record GameSubSettings
 
     public bool ConditionContinueGameWithNeutrals { get; init; }
 
-    public bool IsTurnByTurnVote { get; init; }
+    public bool IsFillWithMurders { get; init; }
 
 
     public int VoteTime { get; init; }
@@ -36,7 +36,7 @@ public record GameSubSettings
 
         ConditionContinueGameWithNeutrals = false;
 
-        IsTurnByTurnVote = false;
+        IsFillWithMurders = false;
 
 
         VoteTime = 40;

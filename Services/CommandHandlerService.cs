@@ -82,22 +82,8 @@ public class CommandHandlerService : DiscordClientService
 
     private async Task HandleInteraction(SocketInteraction arg)
     {
-        try
-        {
-            // Create an execution context that matches the generic type parameter of your InteractionModuleBase<T> modules
-
-            var ctx = new SocketInteractionContext<SocketSlashCommand>(Client, (SocketSlashCommand)arg);
-            await _interactionService.ExecuteCommandAsync(ctx, _provider);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine(ex);
-
-            // If a Slash Command execution fails it is most likely that the original interaction acknowledgement will persist. It is a good idea to delete the original
-            // response, or at least let the user know that something went wrong during the command execution.
-            if (arg.Type == InteractionType.ApplicationCommand)
-                await arg.GetOriginalResponseAsync().ContinueWith(async (msg) => await msg.Result.DeleteAsync());
-        }
+        var ctx = new SocketInteractionContext(Client, arg);
+        await _interactionService.ExecuteCommandAsync(ctx, _provider);
     }
 
 
@@ -112,6 +98,8 @@ public class CommandHandlerService : DiscordClientService
         Client.JoinedGuild += OnJoinedGuildAsync;
         Client.UserLeft += OnUserLeft;
         _db.SavedChanges += OnDbUpdated;
+
+
 
         await _interactionService.AddModulesAsync(Assembly.LoadFrom("Modules"), _provider);
         await _interactionService.RegisterCommandsToGuildAsync(776013268908113930);

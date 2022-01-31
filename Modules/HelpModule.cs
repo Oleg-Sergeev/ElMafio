@@ -28,6 +28,7 @@ public class HelpModule : GuildModuleBase
         _config = config;
     }
 
+
     [Command("Помощь")]
     [Alias("команды")]
     [Summary("Получить список доступных команд")]

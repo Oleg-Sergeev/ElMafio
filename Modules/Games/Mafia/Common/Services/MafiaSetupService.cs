@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Core.Exceptions;
 using Discord;
 using Discord.WebSocket;
 using Microsoft.Extensions.Configuration;
@@ -156,50 +157,51 @@ public class MafiaSetupService : IMafiaSetupService
 
 
         var rolesInfo = settings.Current.RolesInfoSubSettings;
-        var isCustomGame = settings.Current.GameSubSettings.IsCustomGame;
-        var mafiaCoefficient = settings.Current.GameSubSettings.MafiaCoefficient;
-        var roleAmount = settings.Current.RoleAmountSubSettings;
+        var gameSettings = settings.Current.GameSubSettings;
 
-        var blackRolesCount = Math.Max(mafiaData.Players.Count / mafiaCoefficient, 1);
-        var redRolesCount = Math.Max((int)(blackRolesCount / 2.5f), 1);
+        var isCustomGame = gameSettings.IsCustomGame;
+        var roleAmount = settings.Current.RoleAmountSubSettings;
 
 
         int donsCount;
         int doctorsCount;
         int murdersCount;
         int sheriffsCount;
+        int innocentsCount;
 
         if (isCustomGame)
         {
-            var neutralsCount = roleAmount.NeutralRolesCount ?? 0;
+            donsCount = roleAmount.DonsCount;
+            doctorsCount = roleAmount.DoctorsCount;
+            sheriffsCount = roleAmount.SheriffsCount;
+            murdersCount = roleAmount.MurdersCount;
+            innocentsCount = roleAmount.InnocentsCount;
 
-            var exceptInnocentsCount = mafiaData.Players.Count - roleAmount.InnocentCount;
+            var rolesCount = donsCount + doctorsCount + murdersCount + sheriffsCount + innocentsCount + (isCustomGame ? roleAmount.NeutralRolesCount : 0);
+            if (rolesCount > mafiaData.Players.Count)
+                throw new WrongPlayersCountException("Inconsistency in the number of roles and players", mafiaData.Players.Count, rolesCount);
 
-            var redRolesRemainsCount = exceptInnocentsCount - (roleAmount.BlackRolesCount ?? blackRolesCount) - neutralsCount;
-
-
-            doctorsCount = roleAmount.DoctorsCount ?? Math.Min(redRolesRemainsCount ?? redRolesCount, redRolesCount);
-
-            sheriffsCount = roleAmount.SheriffsCount ?? Math.Min(redRolesRemainsCount - doctorsCount ?? redRolesCount, redRolesCount);
-
-
-            murdersCount = roleAmount.MurdersCount ?? exceptInnocentsCount - doctorsCount - sheriffsCount - neutralsCount ?? blackRolesCount;
-
-            donsCount = roleAmount.DonsCount ?? (murdersCount > 2 ? 1 : 0);
-
-            if (roleAmount.DonsCount is not null)
-                murdersCount -= donsCount;
-
+            if (!gameSettings.IsFillWithMurders)
+                innocentsCount = mafiaData.Players.Count - doctorsCount - sheriffsCount - roleAmount.BlackRolesCount - roleAmount.NeutralRolesCount;
+            else
+                murdersCount = mafiaData.Players.Count - roleAmount.RedRolesCount - donsCount - roleAmount.NeutralRolesCount;
         }
         else
         {
+            var blackRolesCount = Math.Max(mafiaData.Players.Count / gameSettings.MafiaCoefficient, 1);
+            var redRolesCount = Math.Max((int)(blackRolesCount / 2.5f), 1);
+
             doctorsCount = redRolesCount;
 
             sheriffsCount = redRolesCount;
 
+
             murdersCount = blackRolesCount;
 
             donsCount = murdersCount > 2 ? 1 : 0;
+            murdersCount -= donsCount;
+
+            innocentsCount = mafiaData.Players.Count - doctorsCount - sheriffsCount - murdersCount - donsCount;
         }
 
 
@@ -254,11 +256,12 @@ public class MafiaSetupService : IMafiaSetupService
         }
 
 
-        for (int i = offset; i < mafiaData.Players.Count; i++)
+        for (int i = 0; i < innocentsCount; i++, offset++)
         {
-            var innocent = new Innocent(mafiaData.Players[i], _gameRoleData);
+            var innocent = new Innocent(mafiaData.Players[offset], _gameRoleData);
             rolesData.AddSingleRole(innocent);
         }
+
 
         rolesData.AssignRoles();
 

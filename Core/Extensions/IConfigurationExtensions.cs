@@ -36,4 +36,18 @@ public static class IConfigurationExtensions
 
         return null;
     }
+
+    public static IReadOnlyDictionary<string, string> GetSectionFields(this IConfigurationSection section)
+    {
+        var fields = new Dictionary<string, string>();
+        
+        var fieldsSection = section.GetChildren().ToDictionary(k => k.Key);
+
+        foreach (var field in fieldsSection)
+        {
+            fields.Add(field.Key, field.Value.Value);
+        }
+
+        return fields;
+    }
 }

@@ -87,7 +87,7 @@ public class MafiaGame
 
         await Task.Delay(5000);
 
-        Winner? winner = null;
+        Winner? winner;
 
         var lastWordNightCount = _settings.Current.GameSubSettings.LastWordNightCount;
 
@@ -109,8 +109,6 @@ public class MafiaGame
         }
         catch (OperationCanceledException)
         {
-            await _guildData.GeneralTextChannel.SendEmbedAsync("Михалыч дернул ручник", EmbedStyle.Warning);
-
             return Winner.None;
         }
         finally
@@ -325,8 +323,16 @@ public class MafiaGame
 
         var priorityGroups = roles.GroupBy(r => r.Priority).OrderByDescending(g => g.Key);
 
+        int i = 1;
         foreach (var rolesGrouping in priorityGroups)
         {
+            var uniqueRoles = rolesGrouping.DistinctBy(r => r.Name);
+
+            var str = "Сейчас ход делают:\n" + string.Join('\n', uniqueRoles.Select(r => $"**{r.Name}**"));
+
+            await _guildData.GeneralTextChannel.SendEmbedAsync(str, EmbedStyle.Waiting, $"Очередь #{i}");
+
+
             var tasksSingle = new List<Task<Vote>>();
             var tasksGroup = new List<Task<VoteGroup>>();
 
@@ -383,7 +389,10 @@ public class MafiaGame
 
             await Task.WhenAll(taskSingle, taskGroup);
 
-            await _guildData.GeneralTextChannel.SendEmbedAsync($"Priority {rolesGrouping.Key} completed", EmbedStyle.Debug);
+
+            await _guildData.GeneralTextChannel.SendEmbedAsync("Игроки сделали свои ходы", EmbedStyle.Successfull, $"Очередь #{i}");
+
+            i++;
         }
     }
 

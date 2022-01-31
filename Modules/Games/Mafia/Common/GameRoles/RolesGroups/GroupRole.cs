@@ -187,54 +187,98 @@ public abstract class GroupRole : GameRole
 
         async Task<Vote> HandleVotingAsync(SocketMessageComponent interaction, GameRole role)
         {
-            var deferTask = interaction.DeferAsync(true);
+            await interaction.DeferAsync(true);
 
 
-            var playersToVote = context.RolesData.AliveRoles.Keys.Except(GetExceptList());
+            IGuildUser? selectedPlayer = null;
 
-            var options = playersToVote
-                .Select(p => new SelectMenuOptionBuilder(p.GetFullName(), p.Id.ToString()))
-                .ToList();
-
-            var select = new SelectMenuBuilder()
-                .WithCustomId("select")
-                .WithPlaceholder("Выберите игрока")
-                .WithOptions(options);
-
-            var component = new ComponentBuilder()
-                   .WithSelectMenu(select)
-                   .WithButton("Пропустить", "skip", ButtonStyle.Danger)
-                   .Build();
-
-
-            await deferTask;
-
-            var msg = await interaction.FollowupAsync(embed: EmbedHelper.CreateEmbed("Выберите игрока из списка"), components: component, ephemeral: true);
-
-            var res = await context.Interactive.NextMessageComponentAsync(
-                x => x.Message.Id == msg.Id && (x.User.Id == role.Player.Id || x.User.Id == context.CommandContext.Guild.OwnerId),
-                timeout: timeout, cancellationToken: token);
+            IUserMessage? msg = null;
 
             Vote? vote = null;
 
-            if (res.IsSuccess)
+            var embed = new EmbedBuilder()
+                .WithDescription("Выберите игрока из списка")
+                .WithColor(Color.Gold)
+                .Build();
+
+            while (timeout.TotalSeconds > 0)
             {
-                await res.Value.DeferAsync(true);
+                var playersToVote = context.RolesData.AliveRoles.Keys.Except(GetExceptList());
 
-                var data = res.Value.Data;
-                if (data.Values is not null && data.Values.Count > 0)
+                var options = playersToVote
+                    .Select(p => new SelectMenuOptionBuilder(p.GetFullName(), p.Id.ToString(), isDefault: selectedPlayer?.Id == p.Id))
+                    .ToList();
+
+                var select = new SelectMenuBuilder()
+                    .WithCustomId("select")
+                    .WithPlaceholder("Выберите игрока")
+                    .WithOptions(options);
+
+                var component = new ComponentBuilder()
+                       .WithSelectMenu(select)
+                       .WithButton("Проголосовать", "vote")
+                       .WithButton("Пропустить", "skip", ButtonStyle.Danger)
+                       .Build();
+
+                if (msg is null)
+                    msg = await interaction.FollowupAsync(embed: embed, components: component, ephemeral: true);
+                else
+                    await msg.ModifyAsync(x =>
+                    {
+                        x.Embed = embed;
+                        x.Components = component;
+                        x.Embeds = Array.Empty<Embed>();
+                    });
+
+                var result = await context.Interactive.NextMessageComponentAsync(
+                    x => x.Message.Id == msg.Id && (x.User.Id == role.Player.Id || x.User.Id == context.CommandContext.Guild.OwnerId),
+                    timeout: timeout, cancellationToken: token);
+
+                if (result.IsSuccess)
                 {
-                    var value = data.Values.First();
+                    var data = result.Value.Data;
 
-                    if (!ulong.TryParse(value, out var id))
-                        throw new FormatException($"Failed to parse player id. Data has value: {value}");
+                    await result.Value.DeferAsync(true);
 
-                    var player = playersToVote.First(p => p.Id == id);
+                    if (data.Type == ComponentType.Button)
+                    {
+                        if (data.CustomId == "skip")
+                        {
+                            vote = new Vote(role, null, true);
 
-                    vote = new Vote(role, player, false);
+                            break;
+                        }
+                        else if (data.CustomId == "vote")
+                        {
+                            vote = new Vote(role, selectedPlayer, false);
+
+                            break;
+                        }
+                        else
+                        {
+                            throw new Exception("so bad");
+                        }
+                    }
+                    else if (data.Values.Count > 0)
+                    {
+                        var value = data.Values.First();
+
+                        if (!ulong.TryParse(value, out var id))
+                            throw new FormatException($"Failed to parse player id. Data has value: {value}");
+
+                        selectedPlayer = playersToVote.First(p => p.Id == id);
+                    }
+                    else
+                    {
+                        throw new Exception("bad");
+                    }
                 }
-                else if (data.CustomId == "skip")
-                    vote = new Vote(role, null, true);
+                else
+                {
+                    vote = new Vote(role, null, false);
+
+                    break;
+                }
             }
 
             vote ??= new Vote(role, null, false);

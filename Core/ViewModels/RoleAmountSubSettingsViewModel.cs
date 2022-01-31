@@ -10,7 +10,7 @@ public class RoleAmountSubSettingsViewModel
 
     public int? DonsCount { get; init; }
 
-    public int? InnocentCount { get; init; }
+    public int? InnocentsCount { get; init; }
 
     public int? ManiacsCount { get; init; }
 

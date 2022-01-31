@@ -1,15 +1,27 @@
 ﻿using System.Threading.Tasks;
+using Core.Extensions;
 using Discord;
+using Discord.Commands;
 using Discord.Interactions;
 using Discord.WebSocket;
-using Fergun.Interactive;
+using GroupAttribute = Discord.Interactions.GroupAttribute;
 
 namespace Modules;
 
-public class FeaturesModule : InteractionModuleBase<SocketInteractionContext<SocketSlashCommand>>
+[Group("фичи", "Современные фичи 2023ого года")]
+public class FeaturesModule : InteractionModuleBase<SocketInteractionContext>
 {
+    [SlashCommand("ало", "позвонить боту")]
+    public async Task GreetUserAsync([Remainder] string? text = null)
+           => await RespondAsync($"Ало, {text}");
 
-    [SlashCommand("ping", "Pings the bot and returns its latency.")]
-    public async Task GreetUserAsync()
-           => await RespondAsync(text: $":ping_pong: It took me {Context.Client.Latency}ms to respond to you!", ephemeral: true);
+
+    [UserCommand("ало")]
+    public async Task GreetUserAsync(IUser user)
+           => await RespondAsync($"Ало, {user.GetFullMention()}");
+
+
+    [MessageCommand("ало")]
+    public async Task GreetUserAsync(IMessage message)
+           => await RespondAsync($"Ало, {message.Content} [{message.Author.GetFullMention()}]");
 }

@@ -35,9 +35,10 @@ public class RussianRouletteModule : GameModule
     [RequireBotPermission(GuildPermission.AddReactions)]
     public override async Task StartAsync()
     {
-        if (!CheckPreconditions(out var msg))
+        var check = await CheckPreconditionsAsync();
+        if (!check.IsSuccess)
         {
-            await ReplyEmbedAsync(msg, EmbedStyle.Error);
+            await ReplyEmbedAsync(check.ErrorReason, EmbedStyle.Error);
 
             return;
         }

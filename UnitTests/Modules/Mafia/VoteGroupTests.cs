@@ -1,11 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Discord;
-using Microsoft.Extensions.Options;
 using Modules.Games.Mafia.Common.Data;
-using Modules.Games.Mafia.Common.GameRoles;
-using Modules.Games.Mafia.Common.GameRoles.Data;
-using Moq;
 using Xunit;
 
 namespace UnitTests.Modules.Mafia;
@@ -17,7 +12,7 @@ public class VoteGroupTests
     [MemberData(nameof(GetData_NotDefinedChoice))]
     public void NotDefinedChoice(IReadOnlyDictionary<IGuildUser, Vote> votes)
     {
-        var gameRole = GetMockedGameRole();
+        var gameRole = TestsHelper.GetMockedGameRole();
 
         var voteGroup = new VoteGroup(gameRole, votes);
 
@@ -25,12 +20,12 @@ public class VoteGroupTests
         Assert.Null(voteGroup.Choice.Option);
         Assert.False(voteGroup.Choice.IsSkip);
     }
-    
+
     [Theory(DisplayName = "Should return null Choice and true Skip")]
     [MemberData(nameof(GetData_SkippedChoice))]
     public void SkippedChoice(IReadOnlyDictionary<IGuildUser, Vote> votes)
     {
-        var gameRole = GetMockedGameRole();
+        var gameRole = TestsHelper.GetMockedGameRole();
 
         var voteGroup = new VoteGroup(gameRole, votes);
 
@@ -44,7 +39,7 @@ public class VoteGroupTests
     [MemberData(nameof(GetData_ExpectedChoice))]
     public void ExpectedChoice(IGuildUser expected, IReadOnlyDictionary<IGuildUser, Vote> votes)
     {
-        var gameRole = GetMockedGameRole();
+        var gameRole = TestsHelper.GetMockedGameRole();
 
         var voteGroup = new VoteGroup(gameRole, votes);
 
@@ -57,9 +52,9 @@ public class VoteGroupTests
 
     public static IEnumerable<object[]> GetData_NotDefinedChoice()
     {
-        var gameRole = GetMockedGameRole();
+        var gameRole = TestsHelper.GetMockedGameRole();
 
-        var players = GetPlayers(5);
+        var players = TestsHelper.GetPlayers(5);
 
 
         return new List<object[]>
@@ -138,12 +133,12 @@ public class VoteGroupTests
             }
         };
     }
-    
+
     public static IEnumerable<object[]> GetData_SkippedChoice()
     {
-        var gameRole = GetMockedGameRole();
+        var gameRole = TestsHelper.GetMockedGameRole();
 
-        var players = GetPlayers(5);
+        var players = TestsHelper.GetPlayers(5);
 
 
         return new List<object[]>
@@ -191,9 +186,9 @@ public class VoteGroupTests
 
     public static IEnumerable<object[]> GetData_ExpectedChoice()
     {
-        var gameRole = GetMockedGameRole();
+        var gameRole = TestsHelper.GetMockedGameRole();
 
-        var players = GetPlayers(5);
+        var players = TestsHelper.GetPlayers(5);
 
 
         return new List<object[]>
@@ -265,26 +260,5 @@ public class VoteGroupTests
                 }
             },
         };
-    }
-
-
-
-
-    private static List<IGuildUser> GetPlayers(int n)
-    {
-        var players = new List<IGuildUser>();
-
-        for (int i = 0; i < n; i++)
-            players.Add(new Mock<IGuildUser>().Object);
-
-        return players;
-    }
-
-    private static GameRole GetMockedGameRole()
-    {
-        var mock = new Mock<IOptionsSnapshot<GameRoleData>>();
-        mock.Setup(g => g.Get(It.IsAny<string>())).Returns(new GameRoleData());
-
-        return new Mock<GameRole>(new Mock<IGuildUser>().Object, mock.Object).Object;
     }
 }

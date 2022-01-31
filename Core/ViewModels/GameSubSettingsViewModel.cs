@@ -18,8 +18,8 @@ public class GameSubSettingsViewModel
 
     public bool? ConditionContinueGameWithNeutrals { get; init; }
 
-    [DisplayName("Поочередное голосование")]
-    public bool? IsTurnByTurnVote { get; init; }
+    [DisplayName("Заполнять стол мафией")]
+    public bool? IsFillWithMurders { get; init; }
 
     public int? VoteTime { get; init; }
 }

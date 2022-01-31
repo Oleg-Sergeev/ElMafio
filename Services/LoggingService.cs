@@ -35,7 +35,7 @@ public class LoggingService
 
 
         _commandService.CommandExecuted += OnCommandExecutedAsync;
-        _commandService.Log += OnLogAsync;
+
         _interactionService.Log += OnLogAsync;
     }
 

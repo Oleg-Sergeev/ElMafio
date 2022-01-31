@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -14,6 +15,7 @@ using Discord;
 using Discord.Commands;
 using Discord.WebSocket;
 using Fergun.Interactive;
+using Fergun.Interactive.Pagination;
 using Fergun.Interactive.Selection;
 using Infrastructure.Data.Models.Games.Settings.Mafia;
 using Microsoft.EntityFrameworkCore;
@@ -42,13 +44,13 @@ public class MafiaModule : GameModule<MafiaData>
 
     public override async Task StartAsync()
     {
-        if (!CheckPreconditions(out var msg))
+        var check = await CheckPreconditionsAsync();
+        if (!check.IsSuccess)
         {
-            await ReplyEmbedAsync(msg, EmbedStyle.Error);
+            await ReplyEmbedAsync(check.ErrorReason, EmbedStyle.Error);
 
             return;
         }
-
 
         var data = GetGameData();
         data.Players.Shuffle(3);
@@ -110,12 +112,13 @@ public class MafiaModule : GameModule<MafiaData>
         }
     }
 
-    [RequireOwner]
+
     public override async Task StopAsync()
     {
-        await base.StopAsync();
+        if (TryGetGameData(out var data))
+            data.TokenSource.Cancel();
 
-        GetGameData().TokenSource.Cancel();
+        await base.StopAsync();
     }
 
     private async Task<MafiaContext> CreateMafiaContextAsync(MafiaSettings settings, MafiaData data)
@@ -166,7 +169,51 @@ public class MafiaModule : GameModule<MafiaData>
 
 
 
+    protected override async Task<PreconditionResult> CheckPreconditionsAsync()
+    {
+        var check = await base.CheckPreconditionsAsync();
 
+        if (!check.IsSuccess)
+            return check;
+
+
+        var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
+        settings.Current = Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
+
+        if (!settings.Current.GameSubSettings.IsCustomGame)
+            return PreconditionResult.FromSuccess();
+
+
+        var data = GetGameData();
+
+        var rolesSettings = settings.Current.RoleAmountSubSettings;
+        var gameSettings = settings.Current.GameSubSettings;
+
+
+        if (data.Players.Count < rolesSettings.MinimumPlayersCount)
+            return PreconditionResult.FromError($"Недостаточно игроков." +
+                $"Минимальное количество игроков согласно пользовательским настройкам игры: {rolesSettings.MinimumPlayersCount}");
+
+
+        if (!gameSettings.IsFillWithMurders && rolesSettings.BlackRolesCount == 0)
+            return PreconditionResult.FromError("Для игры необходимо наличие хотя бы одной черной роли. " +
+                    "Измените настройки ролей, добавив черную роль, или назначьте автозаполнение ролями мафии");
+
+        if (rolesSettings.RedRolesCount + rolesSettings.NeutralRolesCount == data.Players.Count)
+            return PreconditionResult.FromError("Невозможно добавить черную роль на стол: не хватает места." +
+                "Уберите мирную или нейтральную роль, или добавьте еще хотя бы одного игрока");
+
+
+        if (gameSettings.IsFillWithMurders && rolesSettings.RedRolesCount == 0)
+            return PreconditionResult.FromError("Для игры необходимо наличие хотя бы одной красной роли. " +
+                    "Измените настройки ролей, добавив красную роль, или назначьте автозаполнение ролями мирных жителей");
+
+        if (rolesSettings.BlackRolesCount + rolesSettings.NeutralRolesCount == data.Players.Count)
+            return PreconditionResult.FromError("Невозможно добавить красную роль на стол: не хватает места." +
+                "Уберите черную или нейтральную роль, или добавьте еще хотя бы одного игрока");
+
+        return PreconditionResult.FromSuccess();
+    }
 
 
 
@@ -200,7 +247,6 @@ public class MafiaModule : GameModule<MafiaData>
             }
 
             settings.Current = Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
-
 
             var template = originalTemplateName == settings.CurrentTemplateName
                 ? settings.Current
@@ -1239,9 +1285,9 @@ public class MafiaModule : GameModule<MafiaData>
         [Command("Роли")]
         public virtual async Task ShowGameRolesAsync(bool sendToServer = false)
         {
-            var gameRulesSection = GetGameSection("Roles");
+            var gameRolesSection = GetGameSection("Roles");
 
-            if (gameRulesSection is null)
+            if (gameRolesSection is null)
             {
                 await ReplyEmbedAsync("Список ролей не найден", EmbedStyle.Error);
 
@@ -1249,24 +1295,37 @@ public class MafiaModule : GameModule<MafiaData>
             }
 
 
-            var title = gameRulesSection.GetTitle() ?? "Роли";
+            var title = gameRolesSection.GetTitle() ?? "Роли";
 
             var builder = new EmbedBuilder()
                 .WithTitle(title)
                 .WithInformationMessage();
 
-            foreach (var section in gameRulesSection.GetChildren())
-            {
-                var roleField = section.GetEmbedFieldInfo();
+            var paginatorBuilder = new StaticPaginatorBuilder()
+                .WithActionOnCancellation(ActionOnStop.DeleteMessage);
 
-                if (roleField is not null)
-                    builder.AddField(roleField?.Item1, roleField?.Item2);
+            foreach (var section in gameRolesSection.GetChildren())
+            {
+                var roleFields = section.GetSectionFields();
+
+
+                if (!roleFields.TryGetValue("Key", out var name) || !roleFields.TryGetValue("Value", out var value))
+                    continue;
+
+                var pageBuilder = new PageBuilder()
+                        .WithTitle(title)
+                        .AddField(name, value);
+
+                if (roleFields.TryGetValue("Color", out var colorStr) && uint.TryParse(colorStr, NumberStyles.HexNumber, null, out var rawColor))
+                    pageBuilder.WithColor(new Color(rawColor));
+
+                    paginatorBuilder.AddPage(pageBuilder);
             }
 
             if (!sendToServer)
-                await Context.User.SendMessageAsync(embed: builder.Build());
+                await Interactive.SendPaginatorAsync(paginatorBuilder.Build(), await Context.User.CreateDMChannelAsync(), TimeSpan.FromMinutes(10));
             else
-                await ReplyAsync(embed: builder.Build());
+                await Interactive.SendPaginatorAsync(paginatorBuilder.Build(), Context.Channel, TimeSpan.FromMinutes(10));
         }
     }
 
