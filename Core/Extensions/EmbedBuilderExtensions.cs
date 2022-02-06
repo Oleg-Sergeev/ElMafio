@@ -56,4 +56,8 @@ public static class EmbedBuilderExtensions
 
     public static EmbedBuilder WithUserAuthor(this EmbedBuilder builder, IUser user)
         => builder.WithAuthor(user.GetFullName(), user.GetAvatarUrlOrDefaultAvatarUrl());
+
+
+    public static EmbedBuilder WithRandomColor(this EmbedBuilder builder)
+        => builder.WithColor(Random.Shared.Next(0, 256), Random.Shared.Next(0, 256), Random.Shared.Next(0, 256));
 }

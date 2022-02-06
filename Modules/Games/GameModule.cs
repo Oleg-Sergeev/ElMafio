@@ -22,6 +22,7 @@ public abstract class GameModule : GameModule<GameData>
     }
 }
 
+
 [RequireContext(ContextType.Guild)]
 public abstract class GameModule<T> : GuildModuleBase where T : GameData
 {

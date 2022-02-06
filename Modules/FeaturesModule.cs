@@ -1,27 +1,108 @@
-﻿using System.Threading.Tasks;
-using Core.Extensions;
+﻿using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Discord;
 using Discord.Commands;
-using Discord.Interactions;
 using Discord.WebSocket;
-using GroupAttribute = Discord.Interactions.GroupAttribute;
+using Fergun.Interactive;
+using Fergun.Interactive.Pagination;
+using Fergun.Interactive.Selection;
+using Microsoft.VisualBasic;
+using Modules.Common.MultiSelect;
 
 namespace Modules;
-
-[Group("фичи", "Современные фичи 2023ого года")]
-public class FeaturesModule : InteractionModuleBase<SocketInteractionContext>
+#nullable disable
+[Group("Фичи")]
+public class FeaturesModule : GuildModuleBase
 {
-    [SlashCommand("ало", "позвонить боту")]
-    public async Task GreetUserAsync([Remainder] string? text = null)
-           => await RespondAsync($"Ало, {text}");
+    public FeaturesModule(InteractiveService interactiveService) : base(interactiveService)
+    {
+    }
+
+    public CommandService CommandService { get; set; }
+
+    // Sends a multi selection (a message with multiple select menus with options)
+    [Command("select", RunMode = RunMode.Async)]
+    public async Task MultiSelectionAsync()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+
+        var modules = CommandService.Modules.ToArray();
+        var color = Color.Gold;
+
+        string selectedModule = null;
+
+        IUserMessage message = null;
+        InteractiveMessageResult<MultiSelectionOption<string>> result = null;
+
+        var timeoutPage = new PageBuilder()
+            .WithDescription("Timeout!")
+            .WithColor(color);
+
+        while (result is null || result.IsSuccess && result.Value?.Row != 1)
+        {
+            var options = modules
+                .Select(x => new MultiSelectionOption<string>(option: x.Name, row: 0, isDefault: x.Name == selectedModule))
+                .DistinctBy(o => o.Option);
+
+            string description = "Select a module";
 
 
-    [UserCommand("ало")]
-    public async Task GreetUserAsync(IUser user)
-           => await RespondAsync($"Ало, {user.GetFullMention()}");
+            if (result != null)
+            {
+                description = "Select a command\nNote: You can also update your selected module.";
+                var commands = modules
+                    .First(x => x.Name == result.Value!.Option)
+                    .Commands
+                    .Select(x => new MultiSelectionOption<string>(x.Name, 1))
+                    .DistinctBy(o => o.Option);
 
+                options = options.Concat(commands);
+            }
 
-    [MessageCommand("ало")]
-    public async Task GreetUserAsync(IMessage message)
-           => await RespondAsync($"Ало, {message.Content} [{message.Author.GetFullMention()}]");
+            var pageBuilder = new PageBuilder()
+                .WithDescription(description)
+                .WithColor(color);
+
+            var multiSelection = new MultiSelectionBuilder<string>()
+                .WithSelectionPage(pageBuilder)
+                .WithTimeoutPage(timeoutPage)
+                .WithCanceledPage(timeoutPage)
+                .WithActionOnTimeout(ActionOnStop.ModifyMessage | ActionOnStop.DeleteInput)
+                .WithActionOnCancellation(ActionOnStop.ModifyMessage | ActionOnStop.DeleteInput)
+                .WithOptions(options.ToArray())
+                .WithStringConverter(x => x.Option)
+                .AddUser(Context.User)
+                .Build();
+
+                result = message is null
+                ? await Interactive.SendSelectionAsync(multiSelection, Context.Channel, TimeSpan.FromMinutes(2), null, cts.Token)
+                : await Interactive.SendSelectionAsync(multiSelection, message, TimeSpan.FromMinutes(2), null, cts.Token);
+
+            message = result.Message;
+
+            if (result.IsSuccess && result.Value!.Row == 0)
+            {
+                // We need to track the selected module so we can set it as the default option.
+                selectedModule = result.Value!.Option;
+            }
+        }
+
+        if (!result.IsSuccess)
+            return;
+
+        var embed = new EmbedBuilder()
+            .WithDescription($"You selected:\n**Module**: {selectedModule}\n**Command**: {result.Value!.Option}")
+            .WithColor(color)
+            .Build();
+
+        await message.ModifyAsync(x =>
+        {
+            x.Embed = embed;
+            x.Components = new ComponentBuilder().Build(); // Remove components
+        });
+    }
 }

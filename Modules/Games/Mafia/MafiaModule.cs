@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,8 +21,10 @@ using Fergun.Interactive.Selection;
 using Infrastructure.Data.Models.Games.Settings.Mafia;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Modules.Common.MultiSelect;
 using Modules.Games.Mafia.Common.Data;
 using Modules.Games.Mafia.Common.Services;
+using Newtonsoft.Json.Linq;
 using Serilog;
 
 namespace Modules.Games.Mafia;
@@ -491,218 +494,214 @@ public class MafiaModule : GameModule<MafiaData>
         {
         }
 
-
         [Command]
-        [Priority(-2)]
+        [RequireOwner(Group = "perm")]
+        [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
         public async Task SetSettingsAsync()
         {
-            var builder = new ComponentBuilder();
+            const string CancelOption = "Завершить настройку";
 
-            builder.WithButton(customId: $"stop", style: ButtonStyle.Danger, emote: new Emoji("❌"));
-            var msg = await ReplyAsync("Press this button!");
+            using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
 
-            InteractiveMessageResult<PropertyInfo?>? result = null;
+            string? selectedBlock = null;
+            string? selectedSetting = null;
+
+            (string? displayName, string? previousValue, string? currentValue, bool isModified) = (null, null, null, false);
+
+            var isCanceled = false;
+            var wasSettingsModified = false;
+
+            IUserMessage? message = null;
+            InteractiveMessageResult<MultiSelectionOption<string>?>? result = null;
 
             var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
+            settings.Current = Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
+            var current = settings.Current;
 
-            var settingsVM = new MafiaSettingsViewModel();
+            var settingsBlocks = new Dictionary<string, Dictionary<string, SettingsDisplay>>()
+            {
+                {"Общее", CreateSettingsDisplays(settings, new MafiaSettingsViewModel())},
+                {"Игра", CreateSettingsDisplays(current.GameSubSettings, new GameSubSettingsViewModel())},
+                {"Сервер", CreateSettingsDisplays(current.ServerSubSettings, new ServerSubSettingsViewModel())},
+                {"Состав ролей", CreateSettingsDisplays(current.RoleAmountSubSettings, new RoleAmountSubSettingsViewModel())},
+                {"Доп. настройки ролей", CreateSettingsDisplays(current.RolesInfoSubSettings, new RolesInfoSubSettingsViewModel())}
+            };
 
-            var message = "Выберите параметр из списка ниже, чтобы изменить значение";
-
-            var wasSettingsUpdated = false;
 
             do
             {
-                // var cancelTask = Interactive.NextMessageComponentAsync(x => x.Message.Id == msg.Id, timeout: TimeSpan.FromSeconds(300));
+                var title = "Настройки";
+                var description = "Выберите интересующий вас блок настроек";
 
-                var parametersVM = settingsVM.GetType().GetProperties().Where(p => p.CanWrite).ToList();
-                var parameters = settings.GetType().GetProperties().Where(p => p.CanWrite).IntersectBy(parametersVM.Select(p => p.Name), p => p.Name);
+                var options = settingsBlocks.Keys
+                    .Select(k => new MultiSelectionOption<string>(k, 0, selectedBlock == k));
 
-                var parameterNames = GetPropertiesName(parametersVM).ToList();
+                var embedBuilder = new EmbedBuilder()
+                    .WithColor(new Color(49, 148, 146));
 
-                var page = new PageBuilder()
-                    .WithTitle("Настройки")
-                    .WithDescription(message)
-                    .AddField("Параметр", string.Join('\n', parameterNames), true)
-                    .AddField("Значение", string.Join('\n', parameters.Select(p =>
+                if (result is not null && selectedBlock is not null)
+                {
+                    var settingsBlockValues = settingsBlocks[selectedBlock].Keys
+                        .Select(n => new MultiSelectionOption<string>(n, 1, description: $"Добавить краткое описание параметра, 50 символов"));
+
+                    options = options.Concat(settingsBlockValues);
+
+                    title = $"Блок {selectedBlock}";
+                    description = isModified 
+                        ? $"Значение **{displayName}** успешно изменено: {previousValue ?? "[Н/д]"} -> {currentValue ?? "[Н/д]"}"
+                        : "Выберите интересующий вас параметр";
+
+
+                    var displayNames = settingsBlocks[selectedBlock].Values.Select(x => x.DisplayName);
+
+                    var values = settingsBlocks[selectedBlock].Values.Select(x => x.ModelValue);
+
+                    var fields = new List<EmbedFieldBuilder>()
                     {
-                        var value = p.GetValue(settings);
+                        new()
+                        {
+                            Name = "Параметр",
+                            Value = string.Join('\n', displayNames),
+                            IsInline = true
+                        },
+                        new()
+                        {
+                            Name = "Значение",
+                            Value = string.Join('\n', values.Select(v =>
+                            {
+                                if (ulong.TryParse(v?.ToString(), out var id))
+                                    return Context.Guild.GetMentionFromId(id);
 
-                        if (ulong.TryParse(value?.ToString(), out var id))
-                            return Context.Guild.GetMentionFromId(id);
+                                return v?.ToString() ?? "[Н/д]";
+                            })),
+                            IsInline = true
+                        }
+                    };
 
-                        return value ?? "[Null]";
+                    embedBuilder.WithFields(fields);
+                }
 
-                    })), true);
+
+                embedBuilder
+                    .WithTitle(title)
+                    .WithDescription(description);
+
+                var pageBuilder = PageBuilder.FromEmbedBuilder(embedBuilder);
 
 
-                var selection = new SelectionBuilder<PropertyInfo>()
+                var multiSelection = new MultiSelectionBuilder<string>()
                     .AddUser(Context.User)
-                    .WithOptions(parametersVM)
-                    .WithSelectionPage(page)
-                    .WithInputType(InputType.SelectMenus)
-                    .WithStringConverter(p => GetPropertyName(p))
-                    .WithAllowCancel(true)
+                    .WithOptions(options.ToArray())
+                    .WithCancelButton(CancelOption)
+                    .WithStringConverter(s =>
+                    {
+                        if (s.Option != CancelOption && !settingsBlocks.TryGetValue(s.Option, out _) && selectedBlock is not null)
+                            return settingsBlocks[selectedBlock][s.Option].DisplayName;
+
+                        return s.ToString() ?? "[Н/д]";
+                    })
+                    .WithSelectionPage(pageBuilder)
+                    .WithActionOnCancellation(ActionOnStop.DeleteMessage)
+                    .WithActionOnTimeout(ActionOnStop.DeleteMessage)
                     .Build();
 
-                //builder.
 
-                var selectTask = Interactive.SendSelectionAsync(selection, msg, TimeSpan.FromMinutes(2));
+                result = message is null
+                ? await Interactive.SendSelectionAsync(multiSelection, Context.Channel, TimeSpan.FromMinutes(2), null, cts.Token)
+                : await Interactive.SendSelectionAsync(multiSelection, message, TimeSpan.FromMinutes(2), null, cts.Token);
 
-                //await msg.ModifyAsync(x => x.Components = selection.BuildComponents(false));
+                message = result.Message;
 
-                //var task = await Task.WhenAny(cancelTask, selectTask);
-
-                //if (task == cancelTask)
-                //    break;
-
-
-                result = await selectTask;
-
-
-                if (result.IsSuccess && result.Value is not null)
+                if (result.IsSuccess)
                 {
-                    if (await TrySetParameterAsync(result.Value, settingsVM))
+                    if (result.Value.Option == CancelOption)
                     {
-                        message = $"Параметр успешно настроен: {result.Value.Name}: {result.Value.GetValue(settingsVM)}";
+                        isCanceled = true;
 
-                        SetParameters(settings, settingsVM);
+                        await message.DeleteAsync();
 
-                        wasSettingsUpdated = true;
+                        break;
+                    }
+
+                    switch (result.Value.Row)
+                    {
+                        case 0:
+                            selectedBlock = result.Value.Option;
+                            break;
+
+                        case 1:
+                            selectedSetting = result.Value.Option;
+
+                            if (selectedBlock is null)
+                                throw new InvalidOperationException("selectedBlock cannot be null when a row 1 is selected");
+
+                            var settingsDisplay = settingsBlocks[selectedBlock][selectedSetting];
+
+                            var prop = settingsDisplay.ViewModel.GetType().GetProperty(selectedSetting)
+                                ?? throw new InvalidOperationException($"Property \"{selectedSetting}\" was not found");
+
+                            previousValue = settingsDisplay.ModelValue?.ToString();
+
+                            var success = await TrySetParameterAsync(prop, settingsDisplay.ViewModel);
+
+                            if (success)
+                            {
+                                SetParameters(settingsDisplay.Model, settingsDisplay.ViewModel);
+
+                                currentValue = settingsDisplay.ModelValue?.ToString();
+
+                                displayName = settingsDisplay.DisplayName;
+
+                                wasSettingsModified = true;
+                            }
+
+                            isModified = success;
+
+                            break;
+
+                        default:
+                            throw new InvalidOperationException($"Unknown select row. Value: {result.Value.Row}");
                     }
                 }
             }
-            while (result?.IsSuccess ?? false);
+            while (result is null || result.IsSuccess && !isCanceled);
 
 
-            if (!wasSettingsUpdated)
+            Embed embed;
+
+            if (wasSettingsModified)
             {
-                await ReplyEmbedAsync("Общие настройки мафии не были сохранены", EmbedStyle.Warning);
+                var n = await Context.Db.SaveChangesAsync();
 
-                return;
+                if (n > 0)
+                    embed = EmbedHelper.CreateEmbed("Настройки успешно сохранены", EmbedStyle.Successfull);
+                else
+                    embed = EmbedHelper.CreateEmbed("Изменения не найдены", EmbedStyle.Warning);
+
+            }
+            else
+            {
+                embed = EmbedHelper.CreateEmbed("Настройки не были сохранены", EmbedStyle.Warning);
             }
 
-            await Context.Db.SaveChangesAsync();
-
-            await ReplyEmbedAsync("Общие настройки мафии успешно сохранены", EmbedStyle.Successfull);
-        }
-
-        [Command("menu", RunMode = RunMode.Async)]
-        public async Task MenuAsync()
-        {
-            // Create CancellationTokenSource that will be canceled after 10 minutes.
-            var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
-
-            var options = new[]
-            {
-                "Cache messages",
-                "Cache users",
-                "Allow using mentions as prefix",
-                "Ignore command errors",
-                "Cache messages",
-                "Cache users",
-                "Allow using mentions as prefix",
-                "Ignore command errors",
-                "Allow using mentions as prefix",
-                "Cache users"
-            };
-
-            var values = new[]
-            {
-                true,
-                false,
-                true,
-                false,
-                true,
-                false,
-                true,
-                false,
-                true,
-                false
-            };
-
-            // Dynamically create the number emotes
-            var emotes = Enumerable.Range(1, options.Length)
-                .ToDictionary(x => new Emoji($"{x}\ufe0f\u20e3") as IEmote, y => y);
-
-            // Add the cancel emote at the end of the dictionary
-            emotes.Add(new Emoji("❌"), -1);
-
-            var color = Color.Green;
-
-            // Prefer disabling the input (buttons, select menus) instead of removing them from the message.
-            var actionOnStop = ActionOnStop.DisableInput;
-
-            InteractiveMessageResult<KeyValuePair<IEmote, int>> result = null!;
-            IUserMessage message = null!;
-
-            while (result is null || result.Status == InteractiveStatus.Success)
-            {
-                var pageBuilder = new PageBuilder()
-                    .WithTitle("Bot Control Panel")
-                    .WithDescription("Use the reactions/buttons to enable or disable an option.")
-                    .AddField("Option", string.Join('\n', options.Select((x, i) => $"**{i + 1}**. {x}")), true)
-                    .AddField("Value", string.Join('\n', values), true)
-                    .WithColor(color);
-
-                var selection = new EmoteSelectionBuilder<int>()
-                    .AddUser(Context.User)
-                    .WithSelectionPage(pageBuilder)
-                    .WithOptions(emotes)
-                    .WithAllowCancel(true)
-                    .WithActionOnCancellation(actionOnStop)
-                    .WithActionOnTimeout(actionOnStop)
-                    .Build();
-
-                // if message is null, SendSelectionAsync() will send a message, otherwise it will modify the message.
-                // The cancellation token persists here, so it will be canceled after 10 minutes no matter how many times the selection is used.
-                result = message is null
-                    ? await Interactive.SendSelectionAsync(selection, Context.Channel, TimeSpan.FromMinutes(10), cancellationToken: cts.Token)
-                    : await Interactive.SendSelectionAsync(selection, message, TimeSpan.FromMinutes(10), cancellationToken: cts.Token);
+            _ = Interactive.DelayedSendMessageAndDeleteAsync(Context.Channel,
+                embed: embed,
+                deleteDelay: TimeSpan.FromSeconds(10),
+                messageReference: new(Context.Message.Id));
 
 
 
-                // Store the used message.
-                message = result.Message;
 
-                // Break the loop if the result isn't successful
-                if (!result.IsSuccess)
-                    break;
-
-                int selected = result.Value.Value;
-
-                // Invert the value of the selected option
-                values[selected - 1] = !values[selected - 1];
-
-                // Do stuff with the selected option
-            }
+            static Dictionary<string, SettingsDisplay> CreateSettingsDisplays(object model, object viewModel)
+                => viewModel
+                .GetType()
+                .GetProperties()
+                .ToDictionary(
+                    p => p.Name,
+                    p => new SettingsDisplay(p.Name, p.GetDisplayNameOrFullName(), model, viewModel));
         }
 
 
-        [Command("Общие")]
-        [Alias("о")]
-        public async Task SetGeneralSettingsAsync()
-        {
-            var settingsVM = new MafiaSettingsViewModel();
-
-            var success = await TrySetParametersAsync(settingsVM);
-
-
-            if (!success)
-            {
-                await ReplyEmbedAsync("Общие настройки мафии не были сохранены", EmbedStyle.Warning);
-
-                return;
-            }
-
-            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
-
-            SetParameters(settings, settingsVM);
-
-            await Context.Db.SaveChangesAsync();
-
-            await ReplyEmbedAsync("Общие настройки мафии успешно сохранены", EmbedStyle.Successfull);
-        }
 
 
         [Command("Автонастройка")]
@@ -805,169 +804,6 @@ public class MafiaModule : GameModule<MafiaData>
         }
 
 
-        [Command("Роли")]
-        [Alias("р")]
-        public async Task SetRoleAmountSettingsAsync()
-        {
-            var settingsVM = new RoleAmountSubSettingsViewModel();
-
-            var success = await TrySetParametersAsync(settingsVM);
-
-            if (!success)
-            {
-                await ReplyEmbedAsync("Настройки ролей не были сохранены", EmbedStyle.Warning);
-
-                return;
-            }
-
-            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
-            settings.Current = Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
-
-            var roleAmountSettings = settings.Current.RoleAmountSubSettings;
-            SetParameters(roleAmountSettings, settingsVM);
-            settings.Current.RoleAmountSubSettings = roleAmountSettings;
-
-
-            if (settings.Current.RoleAmountSubSettings.MurdersCount == 0 && settings.Current.RoleAmountSubSettings.DonsCount == 0)
-            {
-                await ReplyEmbedAndDeleteAsync("Для игры необходима хотя бы одна черная роль", EmbedStyle.Error);
-
-                return;
-            }
-
-
-            await Context.Db.SaveChangesAsync();
-
-
-            await ReplyEmbedAndDeleteAsync("Настройки ролей успешно сохранены", EmbedStyle.Successfull);
-        }
-
-        [Command("РолиДействия")]
-        [Alias("РДействия", "рд")]
-        public async Task SetRolesInfoSubSettingsAsync()
-        {
-            var settingsVM = new RolesInfoSubSettingsViewModel();
-
-            var success = await TrySetParametersAsync(settingsVM);
-
-            if (!success)
-            {
-                await ReplyEmbedAsync("Дополнительные настройки ролей не были сохранены", EmbedStyle.Warning);
-
-                return;
-            }
-
-            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
-
-            settings.Current ??= Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
-
-
-            var rolesSettings = settings.Current.RolesInfoSubSettings;
-            SetParameters(rolesSettings, settingsVM);
-            settings.Current.RolesInfoSubSettings = rolesSettings;
-
-
-            var MurdersKnowEachOther = settings.Current.RolesInfoSubSettings.MurdersKnowEachOther;
-            var MurdersVoteTogether = settings.Current.RolesInfoSubSettings.MurdersVoteTogether;
-
-            if (!MurdersKnowEachOther && MurdersVoteTogether)
-            {
-                await ReplyEmbedAndDeleteAsync($"Конфликт настроек. " +
-                    $"Параметры {nameof(MurdersKnowEachOther)} ({MurdersKnowEachOther}) и {nameof(MurdersVoteTogether)} ({MurdersVoteTogether}) взаимоисключают друг друга. " +
-                    $"Измените значение одного или двух параметров для устранения конфликта", EmbedStyle.Error);
-
-                return;
-            }
-
-
-            await Context.Db.SaveChangesAsync();
-
-
-            await ReplyEmbedAndDeleteAsync("Дополнительные настройки ролей успешно сохранены", EmbedStyle.Successfull);
-        }
-
-        [Command("Сервер")]
-        [Alias("серв", "с")]
-        public async Task SetServerSubSettingsAsync()
-        {
-            var serverSettingsVM = new ServerSubSettingsViewModel();
-
-            var success = await TrySetParametersAsync(serverSettingsVM);
-
-
-            if (!success)
-            {
-                await ReplyEmbedAsync("Серверные настройки не были сохранены", EmbedStyle.Warning);
-
-                return;
-            }
-
-            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
-
-            settings.Current ??= Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
-
-
-            var serverSettings = settings.Current.ServerSubSettings;
-            SetParameters(serverSettings, serverSettingsVM);
-            settings.Current.ServerSubSettings = serverSettings;
-
-
-            await Context.Db.SaveChangesAsync();
-
-            await ReplyEmbedAsync("Настройки сервера успешно сохранены", EmbedStyle.Successfull);
-        }
-
-        [Command("Игра")]
-        [Alias("и")]
-        public async Task SetGameSubSettingsAsync()
-        {
-            var settingsVM = new GameSubSettingsViewModel();
-
-            var success = await TrySetParametersAsync(settingsVM);
-
-
-            if (!success)
-            {
-                await ReplyEmbedAsync("Настройки игры не были сохранены", EmbedStyle.Warning);
-
-                return;
-            }
-
-            var settings = await Context.GetGameSettingsAsync<MafiaSettings>();
-
-            settings.Current = Context.Db.MafiaSettingsTemplates.First(s => s.MafiaSettingsId == settings.Id && s.Name == settings.CurrentTemplateName);
-
-
-            var gameSettings = settings.Current.GameSubSettings;
-            SetParameters(gameSettings, settingsVM);
-            settings.Current.GameSubSettings = gameSettings;
-
-
-            if (settings.Current.GameSubSettings.MafiaCoefficient <= 1)
-            {
-                await ReplyEmbedAndDeleteAsync("Коэффиент мафии не может быть меньше 2. Установлено стандартное значение **3**", EmbedStyle.Warning);
-
-                settings.Current.GameSubSettings = gameSettings with
-                {
-                    MafiaCoefficient = 3
-                };
-            }
-
-            if (settings.Current.GameSubSettings.VoteTime <= 0)
-            {
-                await ReplyEmbedAndDeleteAsync("Установлено стандартное значение времени голосования: **40**", EmbedStyle.Warning);
-
-                settings.Current.GameSubSettings = gameSettings with
-                {
-                    VoteTime = 40
-                };
-            }
-
-            await Context.Db.SaveChangesAsync();
-
-            await ReplyEmbedAsync("Настройки сервера успешно сохранены", EmbedStyle.Successfull);
-        }
-
 
         [Command("Текущие")]
         [Alias("тек", "т")]
@@ -1062,86 +898,42 @@ public class MafiaModule : GameModule<MafiaData>
         }
 
 
-        private async Task<bool> TrySetParametersAsync<T>(T settings) where T : notnull
-        {
-            var wasSetSettings = false;
-
-
-            var parameters = settings.GetType().GetProperties().Where(p => p.CanWrite).ToList();
-
-            var parameterNames = GetPropertiesName(parameters).ToList();
-
-            var emotes = GetEmotesList(parameterNames.Count, parameterNames, out var text);
-
-
-            while (true)
-            {
-                var message = await ReplyEmbedAsync($"Выберите интересующий вас параметр\n{text}");
-
-
-                var reactionResult = await NextReactionAsync(message, TimeSpan.FromSeconds(30), emotes, true);
-
-
-                if (!reactionResult.IsSuccess)
-                {
-                    await ReplyEmbedAsync("Вы не выбрали параметр", EmbedStyle.Warning);
-
-                    break;
-                }
-
-                if (reactionResult?.Value.Emote is not IEmote selectedEmote)
-                {
-                    await ReplyEmbedAsync("Неверный параметр", EmbedStyle.Warning);
-
-                    break;
-                }
-
-                if (selectedEmote.Name == CancelEmote.Name)
-                {
-                    await ReplyEmbedAsync("Вы отменили выбор");
-
-                    break;
-                }
-
-                var index = emotes.IndexOf(selectedEmote);
-
-
-                if (index == -1 || index > parameters.Count)
-                {
-                    await ReplyEmbedAsync("Параметр не найден", EmbedStyle.Error);
-
-                    break;
-                }
-
-                if (!await TrySetParameterAsync(parameters[index], settings, parameterNames[index]))
-                    break;
-
-                wasSetSettings = true;
-
-                await ReplyEmbedAndDeleteAsync($"Значение параметра **{parameterNames[index]}** успешно установлено", EmbedStyle.Successfull);
-
-
-                var isContinue = await ConfirmActionAsync("Продолжить настройку?");
-
-                if (isContinue is not true)
-                    break;
-            }
-
-
-            if (wasSetSettings)
-                await ReplyEmbedAndDeleteAsync("Настройки успешно установлены", EmbedStyle.Successfull);
-            else
-                await ReplyEmbedAndDeleteAsync("Настройки не были установлены", EmbedStyle.Warning);
-
-            return wasSetSettings;
-        }
-
         private async Task<bool> TrySetParameterAsync(PropertyInfo parameter, object obj, string? displayName = null)
         {
-            displayName ??= parameter.GetPropertyFullName();
+            displayName ??= parameter.GetFullName();
+
+            var cancelComponent = new ComponentBuilder()
+                .WithButton("Отмена", "cancel", ButtonStyle.Danger)
+                .Build();
 
             var embed = EmbedHelper.CreateEmbed($"Укажите значение выбранного параметра **{displayName}**");
-            var valueMessageResult = await NextMessageAsync(embed: embed);
+
+            var data = new MessageData()
+            {
+                Embed = embed,
+                MessageReference = new(Context.Message.Id),
+                MessageComponent = cancelComponent
+            };
+
+
+            var msg = await ReplyAsync(data);
+
+
+            var valueTask = Interactive.NextMessageAsync(x => x.Channel.Id == msg.Channel.Id && x.Author.Id == Context.User.Id,
+                timeout: 30d.ToTimeSpanSeconds());
+
+            var cancelTask = Interactive.NextMessageComponentAsync(x => x.Message.Id == msg.Id && x.User.Id == Context.User.Id,
+                timeout: 35d.ToTimeSpanSeconds());
+
+            var task = await Task.WhenAny(valueTask, cancelTask);
+
+            await msg.DeleteAsync();
+
+            if (task == cancelTask)
+                return false;
+
+
+            var valueMessageResult = await valueTask;
 
             if (!valueMessageResult.IsSuccess)
             {
@@ -1150,9 +942,11 @@ public class MafiaModule : GameModule<MafiaData>
                 return false;
             }
 
-            if (valueMessageResult?.Value is not SocketMessage valueMessage)
+            await valueMessageResult.Value.DeleteAsync();
+
+            if (valueMessageResult.Value is not SocketMessage valueMessage)
             {
-                await ReplyEmbedAsync("Неверное значение параметра", EmbedStyle.Warning);
+                await ReplyEmbedAndDeleteAsync("Неверное значение параметра", EmbedStyle.Error);
 
                 return false;
             }
@@ -1164,7 +958,7 @@ public class MafiaModule : GameModule<MafiaData>
                     parameter.SetValue(obj, result.Values is not null ? result.BestMatch : null);
                 else
                 {
-                    await ReplyEmbedAsync($"Не удалось установить значение параметра **{displayName}**", EmbedStyle.Error);
+                    await ReplyEmbedAndDeleteAsync($"Не удалось установить значение параметра **{displayName}**", EmbedStyle.Error);
 
                     return false;
                 }
@@ -1180,7 +974,7 @@ public class MafiaModule : GameModule<MafiaData>
                 }
                 else
                 {
-                    await ReplyEmbedAsync($"Не удалось установить значение параметра **{displayName}**", EmbedStyle.Error);
+                    await ReplyEmbedAndDeleteAsync($"Не удалось установить значение параметра **{displayName}**", EmbedStyle.Error);
 
                     return false;
                 }
@@ -1258,16 +1052,44 @@ public class MafiaModule : GameModule<MafiaData>
             }
         }
 
-        private static IEnumerable<string> GetPropertiesName(IEnumerable<PropertyInfo> props)
-            => props.Select(p => GetPropertyName(p));
-
         private static string GetPropertyName(PropertyInfo prop)
         {
             var displayNameAttribute = prop.GetCustomAttribute<DisplayNameAttribute>();
 
             return displayNameAttribute is not null
-            ? $"{displayNameAttribute.DisplayName} {prop.GetPropertyShortType()}"
-            : prop.GetPropertyFullName();
+            ? $"{displayNameAttribute.DisplayName} {prop.GetShortTypeName()}"
+            : prop.GetFullName();
+        }
+
+
+
+
+
+        private class SettingsDisplay
+        {
+            private readonly string _propName;
+
+            private readonly PropertyInfo _prop;
+
+
+            public string DisplayName { get; }
+            public object Model { get; set; }
+            public object ViewModel { get; }
+
+
+            public object? ModelValue => _prop.GetValue(Model);
+
+
+            public SettingsDisplay(string propName, string displayName, object model, object viewModel)
+            {
+                DisplayName = displayName;
+                Model = model;
+                ViewModel = viewModel;
+
+                _propName = propName;
+
+                _prop = Model.GetType().GetProperty(_propName) ?? throw new InvalidOperationException($"Property \"{_propName}\" was not found");
+            }
         }
     }
 
@@ -1319,7 +1141,7 @@ public class MafiaModule : GameModule<MafiaData>
                 if (roleFields.TryGetValue("Color", out var colorStr) && uint.TryParse(colorStr, NumberStyles.HexNumber, null, out var rawColor))
                     pageBuilder.WithColor(new Color(rawColor));
 
-                    paginatorBuilder.AddPage(pageBuilder);
+                paginatorBuilder.AddPage(pageBuilder);
             }
 
             if (!sendToServer)
@@ -1328,5 +1150,4 @@ public class MafiaModule : GameModule<MafiaData>
                 await Interactive.SendPaginatorAsync(paginatorBuilder.Build(), Context.Channel, TimeSpan.FromMinutes(10));
         }
     }
-
 }

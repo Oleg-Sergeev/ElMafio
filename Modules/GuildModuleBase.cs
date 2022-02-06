@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Data;
 using System.Linq;
 using System.Threading;
@@ -152,14 +153,18 @@ public abstract class GuildModuleBase : ModuleBase<DbSocketCommandContext>
         return result;
     }
 
-    public async Task<InteractiveResult<SocketMessage?>> NextMessageAsync(string? message = null, bool isTTS = false, Embed? embed = null,
-        bool fromSourceUser = true, bool fromSourceChannel = true, TimeSpan? timeout = null, IMessageChannel? messageChannel = null, CancellationToken cancellationToken = default)
-    {
-        messageChannel ??= Context.Channel;
 
-        await messageChannel.SendMessageAsync(message, isTTS, embed);
+    public async Task<InteractiveResult<SocketMessage?>> NextMessageAsync(MessageData data, bool fromSourceUser = true, bool fromSourceChannel = true, bool deleteNextMessage = false,
+        TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+    {
+        var messageChannel = Context.Channel;
+
+        var msg = await messageChannel.SendMessageAsync(data);
 
         var result = await Interactive.NextMessageAsync(Filter, null, timeout, cancellationToken);
+
+        if (deleteNextMessage)
+            await msg.DeleteAsync();
 
         return result;
 
@@ -175,6 +180,11 @@ public abstract class GuildModuleBase : ModuleBase<DbSocketCommandContext>
             return true;
         }
     }
+
+    public Task<InteractiveResult<SocketMessage?>> NextMessageAsync(string? message = null, bool isTTS = false, Embed? embed = null,
+        bool fromSourceUser = true, bool fromSourceChannel = true, bool deleteNextMessage = false, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+        => NextMessageAsync(new MessageData() { Message = message, IsTTS = isTTS, Embed = embed },
+            fromSourceUser, fromSourceChannel, deleteNextMessage, timeout, cancellationToken);
 
 
 
