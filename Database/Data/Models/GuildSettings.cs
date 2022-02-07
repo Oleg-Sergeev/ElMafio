@@ -9,11 +9,13 @@ public class GuildSettings
     [DatabaseGenerated(DatabaseGeneratedOption.None)]
     public ulong Id { get; set; }
 
-    public string Prefix { get; set; } = null!;
 
-    public ulong? RoleMuteId { get; set; }
+    public string Prefix { get; set; } = string.Empty;
+
+    public ulong? RoleMuteId { get; set; } // TODO: Remove
 
     public ulong? LogChannelId { get; set; }
+
 
     public MafiaSettings MafiaSettings { get; set; } = null!;
 

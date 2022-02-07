@@ -23,7 +23,7 @@ public class MafiaSetupServiceTests
 
         var mafiaSettings = new MafiaSettings()
         {
-            Current = new("test")
+            Current = new()
             {
                 GameSubSettings = new()
                 {
@@ -58,7 +58,7 @@ public class MafiaSetupServiceTests
 
         var mafiaSettings = new MafiaSettings()
         {
-            Current = new("test")
+            Current = new()
             {
                 GameSubSettings = gameSettings,
                 RoleAmountSubSettings = roleAmount

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Discord.Commands;
 using Discord.WebSocket;
@@ -31,7 +32,7 @@ public class DbSocketCommandContext : SocketCommandContext
         return guildSettings;
     }
 
-    public async Task<T> GetGameSettingsAsync<T>(bool isTracking = true) where T : GameSettings, new()
+    public async Task<T> GetGameSettingsOrCreateAsync<T>(bool isTracking = true) where T : GameSettings, new()
     {
         T? gameSettings;
 
@@ -46,8 +47,28 @@ public class DbSocketCommandContext : SocketCommandContext
 
 
         if (gameSettings is null)
-            throw new InvalidOperationException($"Game settings of guild {Guild.Id} not found in database");
+        {
+            gameSettings = new();
 
+            await Db.Set<T>().AddAsync(gameSettings);
+
+            await Db.SaveChangesAsync();
+        }
+
+
+        return gameSettings;
+    }
+
+    public IQueryable<T> GetGameSettingsAsync<T>(bool isTracking = true) where T : GameSettings, new()
+    {
+        IQueryable<T> gameSettings;
+
+        if (isTracking)
+            gameSettings = Db.Set<T>()
+               .AsTracking();
+        else
+            gameSettings = Db.Set<T>()
+               .AsNoTracking();
 
         return gameSettings;
     }

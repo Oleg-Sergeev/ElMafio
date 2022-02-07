@@ -1,21 +1,26 @@
 ﻿namespace Infrastructure.Data.Models.Games.Settings.Mafia.SubSettings;
 
 
-public record class RoleAmountSubSettings
+public class RoleAmountSubSettings
 {
-    public int DoctorsCount { get; init; }
+    public int Id { get; set; }
 
-    public int SheriffsCount { get; init; }
+    public int MafiaSettingsTemplateId { get; set; }
 
-    public int MurdersCount { get; init; }
 
-    public int DonsCount { get; init; }
+    public int DoctorsCount { get; set; }
 
-    public int InnocentsCount { get; init; }
+    public int SheriffsCount { get; set; }
 
-    public int ManiacsCount { get; init; }
+    public int MurdersCount { get; set; }
 
-    public int HookersCount { get; init; }
+    public int DonsCount { get; set; }
+
+    public int InnocentsCount { get; set; }
+
+    public int ManiacsCount { get; set; }
+
+    public int HookersCount { get; set; }
 
 
 

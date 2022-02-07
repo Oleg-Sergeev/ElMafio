@@ -5,13 +5,10 @@ namespace Infrastructure.Data.Models.Games.Settings.Mafia;
 
 public class MafiaSettings : GameSettings
 {
-    public const string DefaultTemplateName = "_Current";
-
-
     public static readonly MafiaSettings Empty = new();
 
-
-    public string CurrentTemplateName { get; set; }
+    [ForeignKey($"{nameof(MafiaSettingsTemplate)}Id")]
+    public int? CurrentTemplateId { get; set; }
 
 
     public ulong? CategoryChannelId { get; set; }
@@ -41,17 +38,9 @@ public class MafiaSettings : GameSettings
 
 
 
-    public List<SettingsTemplate> SettingsTemplates { get; private set; } = null!;
+    public List<MafiaSettingsTemplate> MafiaSettingsTemplates { get; private set; } = null!;
 
 
-    [NotMapped]
-    public SettingsTemplate Current { get; set; }
-
-
-    public MafiaSettings()
-    {
-        CurrentTemplateName = "_Current";
-
-        Current = new(CurrentTemplateName);
-    }
+    [ForeignKey(nameof(CurrentTemplateId))]
+    public MafiaSettingsTemplate Current { get; set; } = null!;//?????????
 }

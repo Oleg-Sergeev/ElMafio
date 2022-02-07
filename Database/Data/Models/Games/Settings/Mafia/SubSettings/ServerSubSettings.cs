@@ -1,18 +1,23 @@
 ﻿namespace Infrastructure.Data.Models.Games.Settings.Mafia.SubSettings;
 
-public record class ServerSubSettings
+public class ServerSubSettings
 {
-    public bool RemoveRolesFromUsers { get; init; }
+    public int Id { get; set; }
 
-    public bool RenameUsers { get; init; }
+    public int MafiaSettingsTemplateId { get; set; }
 
-    public bool ReplyMessagesOnSetupError { get; init; }
 
-    public bool AbortGameWhenError { get; init; }
+    public bool RemoveRolesFromUsers { get; set; }
 
-    public bool SendWelcomeMessage { get; init; }
+    public bool RenameUsers { get; set; }
 
-    public bool MentionPlayersOnGameStart { get; init; }
+    public bool ReplyMessagesOnSetupError { get; set; }
+
+    public bool AbortGameWhenError { get; set; }
+
+    public bool SendWelcomeMessage { get; set; }
+
+    public bool MentionPlayersOnGameStart { get; set; }
 
 
 

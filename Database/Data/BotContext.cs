@@ -13,7 +13,7 @@ public class BotContext : DbContext
 
     public DbSet<MafiaStats> MafiaStats => Set<MafiaStats>();
     public DbSet<MafiaSettings> MafiaSettings => Set<MafiaSettings>();
-    public DbSet<SettingsTemplate> MafiaSettingsTemplates => Set<SettingsTemplate>();
+    public DbSet<MafiaSettingsTemplate> MafiaSettingsTemplates => Set<MafiaSettingsTemplate>();
 
 
     public DbSet<RussianRouletteStats> RussianRouletteStats => Set<RussianRouletteStats>();

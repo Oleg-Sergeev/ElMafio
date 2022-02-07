@@ -156,7 +156,7 @@ public class MafiaSetupService : IMafiaSetupService
         var rolesData = context.RolesData;
 
 
-        var rolesInfo = settings.Current.RolesInfoSubSettings;
+        var rolesInfo = settings.Current.RolesExtraInfoSubSettings;
         var gameSettings = settings.Current.GameSubSettings;
 
         var isCustomGame = gameSettings.IsCustomGame;

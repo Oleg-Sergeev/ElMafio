@@ -46,19 +46,6 @@ public abstract class GameModule<T> : GuildModuleBase where T : GameData
         await JoinAsync(guildUser);
     }
 
-    protected void AddGameDataToGamesList(T gameData)
-    {
-        var type = GetType();
-
-        if (GamesData.TryGetValue(Context.Guild.Id, out var games))
-            games.Add(type, gameData);
-        else
-            GamesData.Add(Context.Guild.Id, new()
-            {
-                { type, gameData }
-            });
-    }
-
     [RequireOwner]
     [Command("Играть")]
     [Alias("игра")]
@@ -321,6 +308,19 @@ public abstract class GameModule<T> : GuildModuleBase where T : GameData
     }
 
 
+
+    protected void AddGameDataToGamesList(T gameData)
+    {
+        var type = GetType();
+
+        if (GamesData.TryGetValue(Context.Guild.Id, out var games))
+            games.Add(type, gameData);
+        else
+            GamesData.Add(Context.Guild.Id, new()
+            {
+                { type, gameData }
+            });
+    }
 
     protected bool DeleteGameData()
     {

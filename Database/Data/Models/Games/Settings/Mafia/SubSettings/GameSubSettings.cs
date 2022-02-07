@@ -1,23 +1,28 @@
 ﻿namespace Infrastructure.Data.Models.Games.Settings.Mafia.SubSettings;
 
-public record GameSubSettings
+public class GameSubSettings
 {
-    public int MafiaCoefficient { get; init; }
+    public int Id { get; set; }
 
-    public int LastWordNightCount { get; init; }
-
-    public bool IsRatingGame { get; init; }
-
-    public bool IsCustomGame { get; init; }
-
-    public bool ConditionAliveAtLeast1Innocent { get; init; }
-
-    public bool ConditionContinueGameWithNeutrals { get; init; }
-
-    public bool IsFillWithMurders { get; init; }
+    public int MafiaSettingsTemplateId { get; set; }
 
 
-    public int VoteTime { get; init; }
+    public int MafiaCoefficient { get; set; }
+
+    public int LastWordNightCount { get; set; }
+
+    public bool IsRatingGame { get; set; }
+
+    public bool IsCustomGame { get; set; }
+
+    public bool ConditionAliveAtLeast1Innocent { get; set; }
+
+    public bool ConditionContinueGameWithNeutrals { get; set; }
+
+    public bool IsFillWithMurders { get; set; }
+
+
+    public int VoteTime { get; set; }
 
 
 
@@ -37,7 +42,6 @@ public record GameSubSettings
         ConditionContinueGameWithNeutrals = false;
 
         IsFillWithMurders = false;
-
 
         VoteTime = 40;
     }

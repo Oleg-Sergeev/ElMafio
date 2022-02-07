@@ -4,6 +4,7 @@ using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,10 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations
 {
     [DbContext(typeof(BotContext))]
-    partial class GuildContextModelSnapshot : ModelSnapshot
+    [Migration("20220207182805_RefactoringSettings")]
+    partial class RefactoringSettings
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -67,8 +69,6 @@ namespace Infrastructure.Migrations
                         .HasColumnType("decimal(20,0)");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("CurrentTemplateId");
 
                     b.HasIndex("GuildSettingsId")
                         .IsUnique();
@@ -434,17 +434,11 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Infrastructure.Data.Models.Games.Settings.Mafia.MafiaSettings", b =>
                 {
-                    b.HasOne("Infrastructure.Data.Models.Games.Settings.Mafia.MafiaSettingsTemplate", "Current")
-                        .WithMany()
-                        .HasForeignKey("CurrentTemplateId");
-
                     b.HasOne("Infrastructure.Data.Models.GuildSettings", "GuildSettings")
                         .WithOne("MafiaSettings")
                         .HasForeignKey("Infrastructure.Data.Models.Games.Settings.Mafia.MafiaSettings", "GuildSettingsId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("Current");
 
                     b.Navigation("GuildSettings");
                 });

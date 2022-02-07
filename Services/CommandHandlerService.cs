@@ -27,6 +27,7 @@ public class CommandHandlerService : DiscordClientService
 
     private static readonly Dictionary<ulong, string> _prefixes = new();
 
+
     private readonly BotContext _db;
     private readonly CommandService _commandService;
     private readonly InteractionService _interactionService;
@@ -54,7 +55,7 @@ public class CommandHandlerService : DiscordClientService
         _commandService.AddTypeReader<Emoji>(new EmojiTypeReader());
         _commandService.AddTypeReader<Emote>(new EmoteTypeReader());
 
-        await _commandService.AddModulesAsync(Assembly.LoadFrom("Modules"), _provider);
+        await _commandService.AddModulesAsync(Assembly.LoadFrom("Modules.dll"), _provider);
 
         if (!_commandService.Modules.Any())
             throw new InvalidOperationException("Modules not loaded");
@@ -80,9 +81,10 @@ public class CommandHandlerService : DiscordClientService
             await _commandService.ExecuteAsync(context, argPos, _provider, MultiMatchHandling.Best);
     }
 
-    private async Task HandleInteraction(SocketInteraction arg)
+    private async Task OnInteractionCreatedAsync(SocketInteraction arg)
     {
         var ctx = new SocketInteractionContext(Client, arg);
+
         await _interactionService.ExecuteCommandAsync(ctx, _provider);
     }
 
@@ -104,7 +106,7 @@ public class CommandHandlerService : DiscordClientService
         await _interactionService.AddModulesAsync(Assembly.LoadFrom("Modules"), _provider);
         await _interactionService.RegisterCommandsToGuildAsync(776013268908113930);
 
-        Client.InteractionCreated += HandleInteraction;
+        Client.InteractionCreated += OnInteractionCreatedAsync;
     }
 
     private async Task OnUserLeft(SocketGuild guild, SocketUser user)
@@ -202,30 +204,9 @@ public class CommandHandlerService : DiscordClientService
         await _db.SaveChangesAsync();
 
 
-        await _db.RussianRouletteSettings.AddAsync(new()
-        {
-            GuildSettingsId = guildSettings.Id
-        });
-
-
-        var mafiaSettings = await _db.MafiaSettings.AddAsync(new()
-        {
-            GuildSettingsId = guildSettings.Id
-        });
-
-        await _db.SaveChangesAsync();
-
-        await _db.MafiaSettingsTemplates.AddAsync(new("_Default")
-        {
-            MafiaSettingsId = mafiaSettings.Entity.Id,
-        });
-
-
-        await _db.SaveChangesAsync();
-
-
         _prefixes.Add(guildSettings.Id, guildSettings.Prefix);
     }
+
     private async Task AddNewGuildsAsync(IEnumerable<ulong> newGuildsId)
     {
         foreach (var guildId in newGuildsId)

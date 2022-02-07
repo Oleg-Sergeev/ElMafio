@@ -13,7 +13,16 @@ public static class PropertyInfoExtensions
         => $"[{p.PropertyType.ToString().Split('.')[^1].Trim('[', ']')}]";
 
 
-    public static string GetDisplayNameOrFullName(this PropertyInfo prop)
+    public static string GetShortDisplayName(this PropertyInfo prop)
+    {
+        var displayNameAttribute = prop.GetCustomAttribute<DisplayNameAttribute>();
+
+        return displayNameAttribute is not null
+        ? displayNameAttribute.DisplayName
+        : prop.Name;
+    }
+
+    public static string GetFullDisplayName(this PropertyInfo prop)
     {
         var displayNameAttribute = prop.GetCustomAttribute<DisplayNameAttribute>();
 

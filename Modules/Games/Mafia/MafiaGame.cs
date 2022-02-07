@@ -73,7 +73,7 @@ public class MafiaGame
         await Task.Delay(5000);
 
 
-        if (_rolesData.Murders.Count > 1 && _settings.Current.RolesInfoSubSettings.MurdersKnowEachOther)
+        if (_rolesData.Murders.Count > 1 && _settings.Current.RolesExtraInfoSubSettings.MurdersKnowEachOther)
         {
             var meetTime = _rolesData.Murders.Count * 10;
 
@@ -165,7 +165,7 @@ public class MafiaGame
                     str += $"\n{revealedManiacs[i].GetFullMention()}";
                 }
 
-                if (_settings.Current.RolesInfoSubSettings.MurdersKnowEachOther)
+                if (_settings.Current.RolesExtraInfoSubSettings.MurdersKnowEachOther)
                     await _guildData.MurderTextChannel.SendMessageAsync(str);
                 else
                     await _guildData.GeneralTextChannel.SendMessageAsync(str);
@@ -305,10 +305,10 @@ public class MafiaGame
 
         //handle specific roles
 
-        if (!_settings.Current.GameSubSettings.IsCustomGame || _settings.Current.RolesInfoSubSettings.MurdersKnowEachOther)
+        if (!_settings.Current.GameSubSettings.IsCustomGame || _settings.Current.RolesExtraInfoSubSettings.MurdersKnowEachOther)
             await ChangeMurdersPermsAsync(_allowWrite, _allowSpeak);
 
-        if (!_settings.Current.GameSubSettings.IsCustomGame || _settings.Current.RolesInfoSubSettings.MurdersVoteTogether)
+        if (!_settings.Current.GameSubSettings.IsCustomGame || _settings.Current.RolesExtraInfoSubSettings.MurdersVoteTogether)
         {
             var murdersGroup = _rolesData.GroupRoles[nameof(MurdersGroup)];
 
