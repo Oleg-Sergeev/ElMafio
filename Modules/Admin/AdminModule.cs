@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Net.Http;
 using System.Reflection;
@@ -7,6 +9,7 @@ using Core.Common;
 using Core.Extensions;
 using Discord;
 using Discord.Commands;
+using Discord.WebSocket;
 using Fergun.Interactive;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
@@ -24,43 +27,8 @@ public class AdminModule : GuildModuleBase
     }
 
 
-    [Command("Ник")]
-    [RequireUserPermission(GuildPermission.ChangeNickname)]
-    [RequireBotPermission(GuildPermission.ManageNicknames)]
-    public async Task UpdateNickname(string nickName) =>
-        await UpdateNickname((IGuildUser)Context.User, nickName);
-
-    [Priority(-1)]
-    [RequireUserPermission(GuildPermission.ManageNicknames)]
-    [RequireBotPermission(GuildPermission.ManageNicknames)]
-    [Command("Ник")]
-    public async Task UpdateNickname(IGuildUser guildUser, string nickname)
-    {
-        if (string.IsNullOrEmpty(nickname))
-        {
-            await ReplyEmbedAsync("Никнейм не может быть пустым", EmbedStyle.Error);
-
-            return;
-        }
-
-        if (nickname.Length > 32)
-        {
-            await ReplyEmbedAsync("Никнейм не может быть длиннее, чем 32 символа", EmbedStyle.Error);
-
-            return;
-        }
-
-
-        await guildUser.ModifyAsync(props => props.Nickname = nickname);
-
-        await ReplyEmbedAsync("Никнейм успешно измененен", EmbedStyle.Successfull);
-    }
-
-
-
     [Command("Слоумод")]
     [Alias("смод")]
-    [Summary("Установить слоумод для канала (от 0 до 300 секунд)")]
     [RequireBotPermission(GuildPermission.ManageChannels)]
     [RequireUserPermission(GuildPermission.ManageChannels)]
     public async Task SetSlowMode([Summary("Количество секунд")] int secs)
@@ -74,20 +42,23 @@ public class AdminModule : GuildModuleBase
 
         await textChannel.ModifyAsync(props => props.SlowModeInterval = secs);
 
-        await textChannel.SendMessageAsync($"Слоумод успешно установлен на {secs}с");
+        await textChannel.SendEmbedAsync($"Слоумод успешно установлен на {secs}с", EmbedStyle.Successfull);
     }
 
 
 
     [Command("Очистить")]
     [Alias("оч")]
-    [Summary("Удалить сообщения из канала (от 0 до 100 сообщений)")]
     [RequireBotPermission(GuildPermission.ManageMessages)]
     [RequireUserPermission(GuildPermission.Administrator)]
-    public async Task ClearAsync([Summary("Количество удаляемых сообщений")] int count)
+    public async Task ClearAsync(int count)
     {
         if (Context.Channel is not ITextChannel textChannel)
+        {
+            await ReplyEmbedAndDeleteAsync("Невозможно удалить сообщения. Возможно вы указали не текстовый канал", EmbedStyle.Error);
+
             return;
+        }
 
         count = Math.Clamp(count, 0, 100);
 
@@ -103,195 +74,84 @@ public class AdminModule : GuildModuleBase
     }
 
 
-
-    [Command("Бан")]
-    [Summary("Забанить указанного пользователя")]
-    [RequireBotPermission(GuildPermission.BanMembers)]
-    [RequireUserPermission(GuildPermission.BanMembers)]
-    public async Task BanAsync(IGuildUser guildUser, int pruneDays = 0, [Remainder] string? reason = null)
+    [Command("ОчиститьДо")]
+    [Alias("Очдо")]
+    [RequireBotPermission(GuildPermission.ManageMessages)]
+    [RequireUserPermission(GuildPermission.Administrator)]
+    public async Task ClearToAsync(ulong? messageId = null)
     {
-        var guildSettings = await Context.GetGuildSettingsAsync();
+        var message = messageId is not null
+            ? await Context.Channel.GetMessageAsync(messageId.Value) ?? Context.Message.ReferencedMessage
+            : Context.Message.ReferencedMessage;
 
-        var confirmed = await ConfirmActionWithHandlingAsync($"Забанить {guildUser.GetFullName()}", guildSettings.LogChannelId);
-
-        if (confirmed)
+        if (message is null)
         {
-            if (Context.Guild.GetUser(guildUser.Id) is not null)
-            {
-                await Context.Guild.AddBanAsync(guildUser, pruneDays, reason);
-
-                await ReplyEmbedAsync($"Пользователь {guildUser.GetFullName()} успешно забанен", EmbedStyle.Successfull);
-            }
-            else
-                await ReplyEmbedAsync($"Пользователь {guildUser.GetFullName()} не найден", EmbedStyle.Error);
-        }
-    }
-
-
-    [Command("Разбан")]
-    [Summary("Разбанить указанного пользователя")]
-    [RequireBotPermission(GuildPermission.BanMembers)]
-    [RequireUserPermission(GuildPermission.BanMembers)]
-    public async Task UnbanAsync(string str)
-    {
-        var arr = str.Replace("@", null).Split('#');
-
-        if (arr.Length < 2)
-        {
-            await ReplyEmbedAsync($"Пожалуйста, укажите имя пользователя и его тег. Пример: @{Context.User.GetFullName()}", EmbedStyle.Warning);
+            await ReplyEmbedAndDeleteAsync("Укажите сообщение, до которого вы хотите очистить канал", EmbedStyle.Error);
 
             return;
         }
 
-        var userName = (arr[0], arr[1]);
-
-        var bans = await Context.Guild.GetBansAsync();
-
-        var user = bans.FirstOrDefault(ban => (ban.User.Username, ban.User.Discriminator) == userName)?.User;
-
-        if (user == null)
+        if (Context.Channel is not ITextChannel textChannel)
         {
-            await ReplyEmbedAsync($"Пользователь с именем {userName.Item1}#{userName.Item2} не найден в списке банов.", EmbedStyle.Error);
+            await ReplyEmbedAndDeleteAsync("Невозможно удалить сообщения из данного канала", EmbedStyle.Error);
 
             return;
         }
 
-        await UnbanAsync(user.Id);
-    }
-
-    [Command("Разбан")]
-    [Summary("Разбанить указанного пользователя")]
-    [RequireBotPermission(GuildPermission.BanMembers)]
-    [RequireUserPermission(GuildPermission.BanMembers)]
-    public async Task UnbanAsync(ulong id)
-    {
-        var bans = await Context.Guild.GetBansAsync();
-
-        var user = bans.FirstOrDefault(ban => ban.User.Id == id)?.User;
-
-        if (user == null)
+        if (await textChannel.GetMessageAsync(message.Id) is null)
         {
-            await ReplyEmbedAsync($"Пользователь с айди {id} не найден в списке банов.", EmbedStyle.Error);
+            await ReplyEmbedAndDeleteAsync("Сообщение не найдено", EmbedStyle.Error);
 
             return;
         }
 
-        var settings = await Context.GetGuildSettingsAsync();
+        var limit = 500;
 
-        var confirmed = await ConfirmActionWithHandlingAsync($"Разбанить {user.GetFullName()}", settings.LogChannelId);
+        var messages = (await textChannel.GetMessagesAsync(message.Id, Direction.After, limit).FlattenAsync())
+            .Where(msg => (DateTime.UtcNow - msg.Timestamp).TotalDays <= 14);
+
+        if (!messages.TryGetNonEnumeratedCount(out var count))
+            count = messages.Count();
+
+        await textChannel.DeleteMessagesAsync(messages);
 
 
-        if (confirmed)
-        {
-            await Context.Guild.RemoveBanAsync(user);
-
-            await ReplyEmbedAsync($"Пользователь {user.GetFullName()} успешно разбанен", EmbedStyle.Successfull);
-        }
+        await ReplyEmbedAndDeleteAsync($"Сообщения успешно удалены ({count} шт)", EmbedStyle.Successfull);
     }
 
 
 
-    [Command("Кик")]
-    [Summary("Выгнать указанного пользователя")]
-    [RequireBotPermission(GuildPermission.KickMembers)]
-    [RequireUserPermission(GuildPermission.KickMembers)]
-    public async Task KickAsync(IGuildUser guildUser, [Remainder] string? reason = null)
-    {
-        var guildSettings = await Context.GetGuildSettingsAsync();
-
-        var confirmed = await ConfirmActionWithHandlingAsync($"Выгнать {guildUser.GetFullName()}", guildSettings.LogChannelId);
-
-
-        if (confirmed)
-        {
-            await guildUser.KickAsync(reason);
-
-            await ReplyEmbedAsync($"Пользователь {guildUser.GetFullName()} успешно выгнан", EmbedStyle.Successfull);
-        }
-    }
-
-
-    [Command("Мьют")]
-    [Alias("мут")]
-    [Summary("Замьютить указанного пользователя")]
-    [RequireUserPermission(GuildPermission.ManageRoles)]
+    [Command("РольЦвет")]
+    [Alias("Рц")]
     [RequireBotPermission(GuildPermission.ManageRoles)]
-    public async Task MuteAsync(IGuildUser guildUser)
+    public async Task UpdateRoleColor(IRole role, Color color)
     {
-        var guildSettings = await Context.GetGuildSettingsAsync();
+        var user = (SocketGuildUser)Context.User;
 
+        var highestRole = user.Roles.OrderByDescending(r => r.Position).First();
 
-        var confirmed = await ConfirmActionWithHandlingAsync($"Замьютить {guildUser.GetFullName()}", guildSettings.LogChannelId);
+        await ReplyEmbedAsync($"user hierarchy: {user.Hierarchy}\nuser role position: {highestRole.Position}\nrole position: {role.Position}", EmbedStyle.Debug);
 
-        if (!confirmed)
-            return;
-
-        IRole? roleMute;
-
-        if (guildSettings.RoleMuteId is not null)
-            roleMute = Context.Guild.GetRole(guildSettings.RoleMuteId.Value);
-        else
+        if (role.Position > highestRole.Position)
         {
-            roleMute = await Context.Guild.CreateRoleAsync(
-                "Muted",
-                new GuildPermissions(sendMessages: false),
-                Color.DarkerGrey,
-                true,
-                true
-                );
-
-            foreach (var channel in Context.Guild.Channels)
-                await channel.AddPermissionOverwriteAsync(roleMute, OverwritePermissions.DenyAll(channel).Modify(
-                    readMessageHistory: PermValue.Inherit,
-                    viewChannel: PermValue.Inherit));
-
-            guildSettings.RoleMuteId = roleMute.Id;
-
-            await Context.Db.SaveChangesAsync();
+            await ReplyEmbedAsync("Иерерахия", EmbedStyle.Error);
+                
+            return;
         }
 
-        await guildUser.AddRoleAsync(roleMute);
-
-
-
-        await ReplyEmbedAsync($"Пользователь {guildUser.GetFullMention()} успешно замьючен", EmbedStyle.Successfull);
-    }
-
-
-    [Command("Размьют")]
-    [Alias("размут")]
-    [Summary("Размьютить указанного пользователя")]
-    [RequireUserPermission(GuildPermission.ManageRoles)]
-    [RequireBotPermission(GuildPermission.ManageRoles)]
-    public async Task UnmuteAsync(IGuildUser guildUser)
-    {
-        var guildSettings = await Context.GetGuildSettingsAsync();
-
-        if (guildSettings is null)
-            throw new NullReferenceException("Guild id was not found in database");
-
-        if (guildSettings.RoleMuteId is null)
-            throw new NullReferenceException($"[Guild {guildSettings.Id}] Role id is null");
-
-
-        if (!guildUser.RoleIds.Contains(guildSettings.RoleMuteId.Value))
+        if (role.Color == color)
         {
-            await ReplyEmbedAsync("Пользователь не замьючен");
+            await ReplyEmbedStampAsync("Роль уже имеет такой цвет", EmbedStyle.Warning);
 
             return;
         }
 
+        await role.ModifyAsync(r => r.Color = color);
 
-        var confirmed = await ConfirmActionWithHandlingAsync($"Размьютить {guildUser.GetFullName()}", guildSettings.LogChannelId);
-
-
-        if (confirmed)
-        {
-            await guildUser.RemoveRoleAsync(guildSettings.RoleMuteId.Value);
-
-            await ReplyEmbedAsync($"Пользователь {guildUser.GetFullMention()} успешно размьючен", EmbedStyle.Successfull);
-        }
+        await ReplyEmbedStampAsync("Цвет роли успешно изменен", EmbedStyle.Successfull);
     }
+
+
 
 
     [Command("Рольправа")]
@@ -303,83 +163,126 @@ public class AdminModule : GuildModuleBase
         var allPerms = GuildPermissions.All.ToList();
         var rolePerms = role.Permissions.ToList();
 
-        var builder = new EmbedBuilder()
-            .WithInformationMessage(false);
+        var builder = new EmbedBuilder().WithInformationMessage();
 
         for (int i = 0; i < allPerms.Count; i++)
-        {
             str += $"{(rolePerms.Contains(allPerms[i]) ? "✅" : "❌")} {allPerms[i]}\n";
-        }
 
         builder.AddField($"Права роли {role}", str);
 
         await ReplyAsync(embed: builder.Build());
     }
 
-    [Command("каналправа")]
+
+    [Command("Каналправа")]
     [RequireUserPermission(GuildPermission.ManageChannels)]
     public async Task ShowChannelOverwritePermissionsAsync(IRole role, IGuildChannel guildChannel)
     {
-        var rolePerms = guildChannel.GetPermissionOverwrite(role)?.ToAllowList();
+        var overwritePerms = guildChannel.GetPermissionOverwrite(role);
 
-        if (rolePerms is null)
+        var allowPerms = overwritePerms?.ToAllowList();
+        var denyPerms = overwritePerms?.ToDenyList();
+
+
+        if (allowPerms is null && denyPerms is null)
         {
-            await ReplyEmbedAsync($"Для роли **{role}** нет переопределений в канале **{guildChannel}**", EmbedStyle.Warning);
+            await ReplyEmbedAsync($"Для роли **{role.Mention}** нет переопределений в канале **{guildChannel}**", EmbedStyle.Warning);
 
             return;
         }
 
 
-        var str = "\n";
+        allowPerms ??= new();
+        denyPerms ??= new();
+
         var allPerms = OverwritePermissions.AllowAll(guildChannel).ToAllowList();
 
 
-        var builder = new EmbedBuilder()
-            .WithInformationMessage(false);
+        var str = GetPermissionsString(allPerms, allowPerms, denyPerms);
 
-        for (int i = 0; i < allPerms.Count; i++)
-        {
-            str += $"{(rolePerms.Contains(allPerms[i]) ? "✅" : "❌")} {allPerms[i]}\n";
-        }
 
-        builder.AddField($"Права роли {role} в канале {guildChannel}", str);
+        var embed = new EmbedBuilder()
+            .WithInformationMessage()
+            .AddField($"Права роли {role.Mention} в канале {guildChannel}", str)
+            .Build();
 
-        await ReplyAsync(embed: builder.Build());
+        await ReplyAsync(embed: embed);
     }
 
-    [Command("каналправа")]
+
+    [Command("Каналправа")]
     [RequireUserPermission(GuildPermission.ManageChannels)]
     public async Task ShowChannelOverwritePermissionsAsync(IGuildUser guildUser, IGuildChannel guildChannel)
-    {
-        var rolePerms = guildChannel.GetPermissionOverwrite(guildUser)?.ToAllowList();
+{
+        var overwritePerms = guildChannel.GetPermissionOverwrite(guildUser);
 
-        if (rolePerms is null)
+        var allowPerms = overwritePerms?.ToAllowList();
+        var denyPerms = overwritePerms?.ToDenyList();
+
+        if (allowPerms is null && denyPerms is null)
         {
-            await ReplyEmbedAsync($"Для пользователя **{guildUser}** нет переопределений в канале **{guildChannel}**", EmbedStyle.Warning);
+            await ReplyEmbedAsync($"Для пользователя {guildUser.Mention} нет переопределений в канале **{guildChannel}**", EmbedStyle.Warning);
 
             return;
         }
 
+        allowPerms ??= new();
+        denyPerms ??= new();
 
-        var str = "\n";
         var allPerms = OverwritePermissions.AllowAll(guildChannel).ToAllowList();
 
 
-        var builder = new EmbedBuilder()
-            .WithInformationMessage(false);
+        var str = GetPermissionsString(allPerms, allowPerms, denyPerms);
+
+        var embed = new EmbedBuilder()
+            .WithInformationMessage()
+            .AddField($"Права пользователя {guildUser} в канале {guildChannel}", str)
+            .Build();
+
+        await ReplyAsync(embed: embed);
+    }
+
+
+    private static string GetPermissionsString(List<ChannelPermission> allPerms, List<ChannelPermission>? allowPerms, List<ChannelPermission>? denyPerms)
+    {
+        allowPerms ??= new();
+        denyPerms ??= new();
+
+        var str = "\n";
 
         for (int i = 0; i < allPerms.Count; i++)
         {
-            str += $"{(rolePerms.Contains(allPerms[i]) ? "✅" : "❌")} {allPerms[i]}\n";
+            if (allowPerms.Contains(allPerms[i]))
+                str += "✅ ";
+            else if (denyPerms.Contains(allPerms[i]))
+                str += "❌ ";
+            else
+                str += "▫️ ";
+
+            str += $"{allPerms[i]}\n";
         }
 
-        builder.AddField($"Права пользователя {guildUser} в канале {guildChannel}", str);
-
-        await ReplyAsync(embed: builder.Build());
+        return str;
     }
+
+
+    private async Task<bool> CanManageWithNotifyAsync(IUser user1, IUser user2)
+    {
+        if (user1.CompareHierarchy(user2) <= 0)
+        {
+            await ReplyEmbedAsync("Невозможно управлять пользователем: недостаточно полномочий", EmbedStyle.Error);
+
+            return false;
+        }
+
+        return true;
+    }
+
 
 
     [Group("Смайл")]
+    [Alias("С")]
+    [RequireUserPermission(GuildPermission.Administrator)]
     public class SmileModule : GuildModuleBase
     {
         public SmileModule(InteractiveService interactiveService) : base(interactiveService)
@@ -389,12 +292,12 @@ public class AdminModule : GuildModuleBase
 
         [Priority(-1)]
         [Command("Добавить")]
-        [RequireUserPermission(GuildPermission.Administrator)]
+        [Alias("+")]
         public async Task AddEmoteAsync()
             => await AddEmoteAsync($"emoji_{Context.Guild.Emotes.Count + 1}");
 
         [Command("Добавить")]
-        [RequireUserPermission(GuildPermission.Administrator)]
+        [Alias("+")]
         public async Task AddEmoteAsync(string name)
         {
             var attachment = Context.Message.Attachments.FirstOrDefault() ?? Context.Message.ReferencedMessage?.Attachments.FirstOrDefault();
@@ -476,7 +379,7 @@ public class AdminModule : GuildModuleBase
 
 
         [Command("Удалить")]
-        [RequireUserPermission(GuildPermission.Administrator)]
+        [Alias("-")]
         public async Task DeleteEmoteAsync(Emote emote)
         {
             if (!Context.Guild.Emotes.Contains(emote))
@@ -495,7 +398,7 @@ public class AdminModule : GuildModuleBase
     }
 
 
-    [RequireOwner()]
+    [RequireOwner]
     [Group]
     public class OwnerModule : GuildModuleBase
     {
@@ -504,8 +407,7 @@ public class AdminModule : GuildModuleBase
         }
 
 
-        [RequireOwner]
-        [Command("лог")]
+        [Command("Лог")]
         public async Task GetFileLogTodayAsync()
         {
             using var filestream = LoggingService.GetGuildLogFileToday(Context.Guild.Id);
@@ -523,8 +425,7 @@ public class AdminModule : GuildModuleBase
         }
 
 
-        [RequireOwner]
-        [Command("рестарт")]
+        [Command("Рестарт")]
         public async Task RestartAsync()
         {
             await ReplyEmbedAsync("Перезапуск...", EmbedStyle.Debug);

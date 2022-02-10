@@ -52,6 +52,7 @@ public class CommandHandlerService : DiscordClientService
         _commandService.AddTypeReader<bool>(new BooleanTypeReader(), true);
         _commandService.AddTypeReader<Emoji>(new EmojiTypeReader());
         _commandService.AddTypeReader<Emote>(new EmoteTypeReader());
+        _commandService.AddTypeReader<Color>(new ColorTypeReader());
 
         await _commandService.AddModulesAsync(Assembly.LoadFrom("Modules.dll"), _provider);
 

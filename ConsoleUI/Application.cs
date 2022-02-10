@@ -80,7 +80,6 @@ public static class Application
             discordConfig.SocketConfig = new DiscordSocketConfig
             {
                 LogLevel = LogSeverity.Verbose,
-                MessageCacheSize = 1000,
                 UseSystemClock = true,
                 GatewayIntents = GatewayIntents.All
             };

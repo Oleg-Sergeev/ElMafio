@@ -913,8 +913,7 @@ public class MafiaModule : GameModule<MafiaData>
                 {
                     if (rawValue.Contains('<'))
                     {
-                        var replacement = "";
-                        rawValue = Regex.Replace(rawValue, @"[<>#@&!]", replacement);
+                        rawValue = Regex.Replace(rawValue, @"[\D]", string.Empty);
                     }
                 }
 
