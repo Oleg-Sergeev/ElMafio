@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using Core.Common;
 using Core.Common.Data;
 using Core.Extensions;
-using Core.Interfaces;
 using Discord;
 using Discord.Commands;
 using Fergun.Interactive;
@@ -14,16 +13,20 @@ using Infrastructure.Data.Models.Games.Settings;
 using Infrastructure.Data.Models.Games.Stats;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Modules.Games.Services;
 
-namespace Modules.Games;
+namespace Modules.Games.RussianRoullete;
 
 [Name("Русская рулетка")]
 [Group("Рулетка")]
 [Alias("р")]
 public class RussianRouletteModule : GameModule
 {
-    public RussianRouletteModule(InteractiveService interactiveService) : base(interactiveService)
+    private readonly IGameSettingsService<RussianRouletteSettings> _settingsService;
+
+    public RussianRouletteModule(InteractiveService interactiveService, IGameSettingsService<RussianRouletteSettings> settingsService) : base(interactiveService)
     {
+        _settingsService = settingsService;
     }
 
 
@@ -31,7 +34,7 @@ public class RussianRouletteModule : GameModule
         => new("Русская рулетка", 2, creator);
 
 
-   
+
     [RequireBotPermission(GuildPermission.AddReactions)]
     public override async Task StartAsync()
     {
@@ -234,7 +237,7 @@ public class RussianRouletteModule : GameModule
 
     private async Task<RussianRoulleteData> CreateRussianRoulleteDataAsync()
     {
-        var rrSettings = await Context.GetGameSettingsOrCreateAsync<RussianRouletteSettings>(false);
+        var rrSettings = await _settingsService.GetSettingsOrCreateAsync(Context, false);
 
         var rrdata = new RussianRoulleteData(new Emoji(rrSettings.UnicodeSmileKilled), new Emoji(rrSettings.UnicodeSmileSurvived))
         {
@@ -270,9 +273,13 @@ public class RussianRouletteModule : GameModule
     [RequireUserPermission(GuildPermission.Administrator)]
     public class SetSmileModule : GuildModuleBase
     {
-        public SetSmileModule(InteractiveService interactiveService) : base(interactiveService)
+        private readonly IGameSettingsService<RussianRouletteSettings> _settingsService;
+
+        public SetSmileModule(InteractiveService interactiveService, IGameSettingsService<RussianRouletteSettings> settingsService) : base(interactiveService)
         {
+            _settingsService = settingsService;
         }
+
 
         [Command("удалить")]
         public async Task RemoveCustomSmilesAsync()
@@ -285,7 +292,7 @@ public class RussianRouletteModule : GameModule
         [Command("удалитьубил")]
         public async Task RemoveCustomSmileKilled()
         {
-            var settings = await Context.GetGameSettingsOrCreateAsync<RussianRouletteSettings>();
+            var settings = await _settingsService.GetSettingsOrCreateAsync(Context);
 
             settings.CustomSmileKilled = null;
 
@@ -295,7 +302,7 @@ public class RussianRouletteModule : GameModule
         [Command("удалитьвыжил")]
         public async Task RemoveCustomSmileSurvived()
         {
-            var settings = await Context.GetGameSettingsOrCreateAsync<RussianRouletteSettings>();
+            var settings = await _settingsService.GetSettingsOrCreateAsync(Context);
 
             settings.CustomSmileSurvived = null;
 
@@ -304,11 +311,11 @@ public class RussianRouletteModule : GameModule
 
 
 
-        [Priority(0)]
+        [Priority(-1)]
         [Command("убил")]
         public async Task SetSmileKilledAsync(Emoji emoji)
         {
-            var settings = await Context.GetGameSettingsOrCreateAsync<RussianRouletteSettings>();
+            var settings = await _settingsService.GetSettingsOrCreateAsync(Context);
 
             settings.UnicodeSmileKilled = emoji.ToString();
 
@@ -320,11 +327,10 @@ public class RussianRouletteModule : GameModule
             await msg.AddReactionAsync(emoji);
         }
 
-        [Priority(1)]
         [Command("убил")]
         public async Task SetSmileKilledAsync(Emote emote)
         {
-            var settings = await Context.GetGameSettingsOrCreateAsync<RussianRouletteSettings>();
+            var settings = await _settingsService.GetSettingsOrCreateAsync(Context);
 
             settings.CustomSmileKilled = emote.ToString();
 
@@ -338,11 +344,11 @@ public class RussianRouletteModule : GameModule
 
 
 
-        [Priority(0)]
+        [Priority(-1)]
         [Command("выжил")]
         public async Task SetSmileSuvivedAsync(Emoji emoji)
         {
-            var settings = await Context.GetGameSettingsOrCreateAsync<RussianRouletteSettings>();
+            var settings = await _settingsService.GetSettingsOrCreateAsync(Context);
 
             settings.UnicodeSmileSurvived = emoji.ToString();
 
@@ -354,11 +360,10 @@ public class RussianRouletteModule : GameModule
             await msg.AddReactionAsync(emoji);
         }
 
-        [Priority(1)]
         [Command("выжил")]
         public async Task SetSmileSuvivedAsync(Emote emote)
         {
-            var settings = await Context.GetGameSettingsOrCreateAsync<RussianRouletteSettings>();
+            var settings = await _settingsService.GetSettingsOrCreateAsync(Context);
 
             settings.CustomSmileSurvived = emote.ToString();
 
@@ -375,7 +380,7 @@ public class RussianRouletteModule : GameModule
 
     public class RussianRouletteHelpModule : HelpModule
     {
-        public RussianRouletteHelpModule(InteractiveService interactiveService, IConfiguration configuration) 
+        public RussianRouletteHelpModule(InteractiveService interactiveService, IConfiguration configuration)
             : base(interactiveService, configuration)
         {
         }

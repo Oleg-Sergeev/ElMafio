@@ -8,7 +8,6 @@ using Core.Extensions;
 using Discord;
 using Discord.Commands;
 using Fergun.Interactive;
-using Fergun.Interactive.Extensions;
 using Fergun.Interactive.Pagination;
 using Microsoft.Extensions.Configuration;
 
@@ -24,9 +23,9 @@ public abstract class GameModule : GameModule<GameData>
 
 
 [RequireContext(ContextType.Guild)]
-public abstract class GameModule<T> : GuildModuleBase where T : GameData
+public abstract class GameModule<TData> : GuildModuleBase where TData : GameData
 {
-    protected static Dictionary<ulong, Dictionary<Type, T>> GamesData { get; } = new();
+    protected static Dictionary<ulong, Dictionary<Type, TData>> GamesData { get; } = new();
 
 
 
@@ -278,7 +277,7 @@ public abstract class GameModule<T> : GuildModuleBase where T : GameData
 
 
 
-    protected abstract T CreateGameData(IGuildUser host);
+    protected abstract TData CreateGameData(IGuildUser host);
 
 
     protected virtual Task<PreconditionResult> CheckPreconditionsAsync()
@@ -287,7 +286,7 @@ public abstract class GameModule<T> : GuildModuleBase where T : GameData
         {
             return Task.FromResult(PreconditionResult.FromError("Игра еще не создана"));
         }
-        
+
         if (gameData.Players.Count < gameData.MinPlayersCount)
         {
             return Task.FromResult(PreconditionResult.FromError($"Недостаточно игроков. Минимальное количество игроков для игры: {gameData.MinPlayersCount}"));
@@ -308,8 +307,7 @@ public abstract class GameModule<T> : GuildModuleBase where T : GameData
     }
 
 
-
-    protected void AddGameDataToGamesList(T gameData)
+    protected void AddGameDataToGamesList(TData gameData)
     {
         var type = GetType();
 
@@ -331,7 +329,7 @@ public abstract class GameModule<T> : GuildModuleBase where T : GameData
     }
 
 
-    protected T GetGameData()
+    protected TData GetGameData()
     {
         if (!TryGetGameData(out var gameData))
             throw new KeyNotFoundException($"Game data was not found. Guild Id: {Context.Guild.Id}, Game type: {GetType()}");
@@ -339,7 +337,7 @@ public abstract class GameModule<T> : GuildModuleBase where T : GameData
         return gameData;
     }
 
-    protected bool TryGetGameData([NotNullWhen(true)] out T? gameData)
+    protected bool TryGetGameData([NotNullWhen(true)] out TData? gameData)
     {
         var type = GetType();
 

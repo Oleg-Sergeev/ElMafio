@@ -1,27 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
-using System.Reflection.PortableExecutable;
-using System.Threading;
 using System.Threading.Tasks;
 using Core.Common;
 using Core.Common.Data;
 using Core.Extensions;
-using Core.Interfaces;
 using Discord;
 using Discord.Commands;
-using Discord.Net;
 using Fergun.Interactive;
 using Fergun.Interactive.Selection;
-using MediatR;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Options;
 using Trivia4NET;
 using Trivia4NET.Entities;
-using Trivia4NET.Payloads;
 
-namespace Modules.Games;
+namespace Modules.Games.Quiz;
 
 [RequireOwner]
 public class QuizModule : GameModule
@@ -80,7 +71,7 @@ public class QuizModule : GameModule
             var component = new ComponentBuilder()
                 .WithButton("Ответить", "answer")
                 .Build();
-            
+
             var msg = await ReplyAsync(embed: GenerateQuestionPageEmbed(num, question), components: component);
 
             var f = await Interactive.NextMessageComponentAsync(m =>
@@ -91,16 +82,16 @@ public class QuizModule : GameModule
             if (!f.IsSuccess)
                 continue;
 
-            await f.Value!.DeferAsync();
+            await f.Value.DeferAsync();
 
-            var selection = GenerateSelection(question, num++, f.Value!.User);
+            var selection = GenerateSelection(question, num++, f.Value.User);
 
             var res = await Interactive.SendSelectionAsync(selection, msg, TimeSpan.FromSeconds(15));
 
             if (res.IsSuccess)
             {
                 if (res.Value == question.Answer)
-                    await ReplyEmbedAsync($"{f.Value!.User.Mention} ответил верно", EmbedStyle.Successfull);
+                    await ReplyEmbedAsync($"{f.Value.User.Mention} ответил верно", EmbedStyle.Successfull);
             }
         }
     }
@@ -109,25 +100,22 @@ public class QuizModule : GameModule
     private static Embed GenerateQuestionPageEmbed(int num, Question question)
         => new EmbedBuilder()
         .WithTitle($"Вопрос #{num}")
-        .WithColor(question.Difficulty switch { Difficulty.Easy => Color.Green, Difficulty.Medium => Color.LightOrange, _ => Color.Red })
         .WithDescription(question.Content)
         .AddField("Категория", question.Category, true)
         .AddField("Сложность", question.Difficulty, true)
+        .WithColor(question.Difficulty switch
+        {
+            Difficulty.Easy => Color.Green,
+            Difficulty.Medium => Color.LightOrange,
+            _ => Color.Red
+        })
         .Build();
 
-    private static PageBuilder GenerateQuestionPage(int num, Question question)
-        => new PageBuilder()
-        .WithTitle($"Вопрос #{num}")
-        .WithColor(question.Difficulty switch { Difficulty.Easy => Color.Green, Difficulty.Medium => Color.LightOrange, _ => Color.Red })
-        .WithDescription(question.Content)
-        .AddField("Категория", question.Category, true)
-        .AddField("Сложность", question.Difficulty, true);
-
-    private Selection<string> GenerateSelection(Question question, int num, IUser user)
+    private static Selection<string> GenerateSelection(Question question, int num, IUser user)
     {
         var options = ConcatQuestions(question);
 
-        var pageBuilder = GenerateQuestionPage(num, question);
+        var pageBuilder = PageBuilder.FromEmbed(GenerateQuestionPageEmbed(num, question));
 
         var selection = new SelectionBuilder<string>()
             .AddUser(user)
@@ -140,7 +128,7 @@ public class QuizModule : GameModule
         return selection;
     }
 
-    private IList<string> ConcatQuestions(Question question)
+    private static IList<string> ConcatQuestions(Question question)
     {
         var list = new List<string>(question.IncorrectAnswers)
         {

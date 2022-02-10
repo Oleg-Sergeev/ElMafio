@@ -1,6 +1,6 @@
 ﻿using Discord;
 
-namespace Modules.Games.Mafia.Common.Interfaces;
+namespace Modules.Games.Mafia.Common.GameRoles;
 
 public interface IKiller
 {

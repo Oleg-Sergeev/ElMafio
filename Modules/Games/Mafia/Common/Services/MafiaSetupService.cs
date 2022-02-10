@@ -10,7 +10,6 @@ using Microsoft.Extensions.Options;
 using Modules.Games.Mafia.Common.Data;
 using Modules.Games.Mafia.Common.GameRoles;
 using Modules.Games.Mafia.Common.GameRoles.Data;
-using Modules.Games.Mafia.Common.GameRoles.RolesGroups;
 
 namespace Modules.Games.Mafia.Common.Services;
 
@@ -110,7 +109,7 @@ public class MafiaSetupService : IMafiaSetupService
 
         async Task HandlePlayerAsync(IGuildUser player)
         {
-            var serverSettings = context.Settings.Current.ServerSubSettings;
+            var serverSettings = context.SettingsTemplate.ServerSubSettings;
 
             var guildData = context.GuildData;
 
@@ -151,16 +150,16 @@ public class MafiaSetupService : IMafiaSetupService
     {
         int offset = 0;
 
-        var settings = context.Settings;
+        var template = context.SettingsTemplate;
         var mafiaData = context.MafiaData;
         var rolesData = context.RolesData;
 
 
-        var rolesInfo = settings.Current.RolesExtraInfoSubSettings;
-        var gameSettings = settings.Current.GameSubSettings;
+        var rolesInfo = template.RolesExtraInfoSubSettings;
+        var gameSettings = template.GameSubSettings;
 
         var isCustomGame = gameSettings.IsCustomGame;
-        var roleAmount = settings.Current.RoleAmountSubSettings;
+        var roleAmount = template.RoleAmountSubSettings;
 
 
         int donsCount;
@@ -242,14 +241,14 @@ public class MafiaSetupService : IMafiaSetupService
 
         for (int i = 0; i < doctorsCount; i++, offset++)
         {
-            var doctor = new Doctor(mafiaData.Players[offset], _gameRoleData, rolesInfo.DoctorSelfHealsCount ?? 1);
+            var doctor = new Doctor(mafiaData.Players[offset], _gameRoleData, rolesInfo.DoctorSelfHealsCount);
 
             rolesData.AddSingleRole(doctor);
         }
 
         for (int i = 0; i < sheriffsCount; i++, offset++)
         {
-            var sheriff = new Sheriff(mafiaData.Players[offset], _gameRoleData, rolesInfo.SheriffShotsCount ?? 0, rolesData.Murders.Values);
+            var sheriff = new Sheriff(mafiaData.Players[offset], _gameRoleData, rolesInfo.SheriffShotsCount, rolesData.Murders.Values);
 
 
             rolesData.AddSingleRole(sheriff);

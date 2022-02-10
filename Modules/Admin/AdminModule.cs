@@ -7,13 +7,12 @@ using Core.Common;
 using Core.Extensions;
 using Discord;
 using Discord.Commands;
-using Discord.WebSocket;
 using Fergun.Interactive;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Services;
 
-namespace Modules;
+namespace Modules.Admin;
 
 [Group("Админ")]
 [Alias("а")]
@@ -149,7 +148,7 @@ public class AdminModule : GuildModuleBase
         var bans = await Context.Guild.GetBansAsync();
 
         var user = bans.FirstOrDefault(ban => (ban.User.Username, ban.User.Discriminator) == userName)?.User;
-        
+
         if (user == null)
         {
             await ReplyEmbedAsync($"Пользователь с именем {userName.Item1}#{userName.Item2} не найден в списке банов.", EmbedStyle.Error);
@@ -252,7 +251,7 @@ public class AdminModule : GuildModuleBase
         }
 
         await guildUser.AddRoleAsync(roleMute);
-        
+
 
 
         await ReplyEmbedAsync($"Пользователь {guildUser.GetFullMention()} успешно замьючен", EmbedStyle.Successfull);
@@ -421,7 +420,7 @@ public class AdminModule : GuildModuleBase
                 if (resp is null || !resp.IsSuccessStatusCode)
                 {
                     await ReplyEmbedAsync("Прикрепите к своему сообщению картинку, или ответьте на сообщение, содержащее картинку", EmbedStyle.Warning);
-                    
+
                     return;
                 }
 
@@ -529,7 +528,7 @@ public class AdminModule : GuildModuleBase
         public async Task RestartAsync()
         {
             await ReplyEmbedAsync("Перезапуск...", EmbedStyle.Debug);
-            
+
             Log.Debug("({0:l}): Restart request received from server {1} by user {2}",
                       nameof(RestartAsync),
                       Context.Guild.Name,

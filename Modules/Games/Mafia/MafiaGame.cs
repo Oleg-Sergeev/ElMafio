@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,8 +11,6 @@ using Infrastructure.Data.Models.Games.Settings.Mafia;
 using Modules.Games.Mafia.Common;
 using Modules.Games.Mafia.Common.Data;
 using Modules.Games.Mafia.Common.GameRoles;
-using Modules.Games.Mafia.Common.GameRoles.RolesGroups;
-using Modules.Games.Mafia.Common.Interfaces;
 
 namespace Modules.Games.Mafia;
 
@@ -23,7 +20,7 @@ public class MafiaGame
 
     private readonly InteractiveService _interactive;
 
-    private readonly MafiaSettings _settings;
+    private readonly MafiaSettingsTemplate _template;
     private readonly MafiaGuildData _guildData;
     private readonly MafiaRolesData _rolesData;
 
@@ -34,8 +31,8 @@ public class MafiaGame
 
     private readonly CancellationToken _token;
 
-
     private bool _isZeroDay;
+
 
     public MafiaGame(MafiaContext context)
     {
@@ -45,7 +42,7 @@ public class MafiaGame
 
         _token = context.MafiaData.TokenSource.Token;
 
-        _settings = context.Settings;
+        _template = context.SettingsTemplate;
         _guildData = context.GuildData;
         _rolesData = context.RolesData;
         _interactive = context.Interactive;
@@ -60,9 +57,9 @@ public class MafiaGame
 
     public async Task<Winner> RunAsync()
     {
-        if (_settings.Current.GameSubSettings.IsCustomGame && _settings.Current.PreGameMessage is not null)
+        if (_template.GameSubSettings.IsCustomGame && _template.PreGameMessage is not null)
         {
-            await _guildData.GeneralTextChannel.SendEmbedAsync(_settings.Current.PreGameMessage, "Сообщение перед игрой");
+            await _guildData.GeneralTextChannel.SendEmbedAsync(_template.PreGameMessage, "Сообщение перед игрой");
 
             await Task.Delay(5000);
         }
@@ -73,7 +70,7 @@ public class MafiaGame
         await Task.Delay(5000);
 
 
-        if (_rolesData.Murders.Count > 1 && _settings.Current.RolesExtraInfoSubSettings.MurdersKnowEachOther)
+        if (_rolesData.Murders.Count > 1 && _template.RolesExtraInfoSubSettings.MurdersKnowEachOther)
         {
             var meetTime = _rolesData.Murders.Count * 10;
 
@@ -89,7 +86,7 @@ public class MafiaGame
 
         Winner? winner;
 
-        var lastWordNightCount = _settings.Current.GameSubSettings.LastWordNightCount;
+        var lastWordNightCount = _template.GameSubSettings.LastWordNightCount;
 
         try
         {
@@ -165,7 +162,7 @@ public class MafiaGame
                     str += $"\n{revealedManiacs[i].GetFullMention()}";
                 }
 
-                if (_settings.Current.RolesExtraInfoSubSettings.MurdersKnowEachOther)
+                if (_template.RolesExtraInfoSubSettings.MurdersKnowEachOther)
                     await _guildData.MurderTextChannel.SendMessageAsync(str);
                 else
                     await _guildData.GeneralTextChannel.SendMessageAsync(str);
@@ -305,10 +302,10 @@ public class MafiaGame
 
         //handle specific roles
 
-        if (!_settings.Current.GameSubSettings.IsCustomGame || _settings.Current.RolesExtraInfoSubSettings.MurdersKnowEachOther)
+        if (!_template.GameSubSettings.IsCustomGame || _template.RolesExtraInfoSubSettings.MurdersKnowEachOther)
             await ChangeMurdersPermsAsync(_allowWrite, _allowSpeak);
 
-        if (!_settings.Current.GameSubSettings.IsCustomGame || _settings.Current.RolesExtraInfoSubSettings.MurdersVoteTogether)
+        if (!_template.GameSubSettings.IsCustomGame || _template.RolesExtraInfoSubSettings.MurdersVoteTogether)
         {
             var murdersGroup = _rolesData.GroupRoles[nameof(MurdersGroup)];
 
@@ -643,7 +640,7 @@ public class MafiaGame
 
     private Winner? DetermineWinner()
     {
-        var gameSettings = _settings.Current.GameSubSettings;
+        var gameSettings = _template.GameSubSettings;
 
 
         var murdersCount = _rolesData.Murders.Values.Count(m => m.IsAlive);

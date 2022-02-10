@@ -2,7 +2,6 @@
 using Discord;
 using Microsoft.Extensions.Options;
 using Modules.Games.Mafia.Common.GameRoles.Data;
-using Modules.Games.Mafia.Common.Interfaces;
 
 namespace Modules.Games.Mafia.Common.GameRoles;
 

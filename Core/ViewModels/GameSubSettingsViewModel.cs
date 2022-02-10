@@ -8,7 +8,7 @@ public class GameSubSettingsViewModel
     public int? MafiaCoefficient { get; init; }
 
 
-    [DisplayName("Кол-во последних слов")]
+    [DisplayName("Число ночей с последним словом")]
     public int? LastWordNightCount { get; init; }
 
 
@@ -20,11 +20,11 @@ public class GameSubSettingsViewModel
     public bool? IsCustomGame { get; init; }
 
 
-    [DisplayName("Играть пока жив 1 мир")]
+    [DisplayName("Играть до последнего мирного")]
     public bool? ConditionAliveAtLeast1Innocent { get; init; }
 
 
-    [DisplayName("Продолжать с нейтрал")]
+    [DisplayName("Продолжать игру с нейтралами")]
     public bool? ConditionContinueGameWithNeutrals { get; init; }
 
 

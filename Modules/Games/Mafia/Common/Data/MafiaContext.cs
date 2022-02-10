@@ -1,4 +1,5 @@
-﻿using Core.Common.Data;
+﻿using System;
+using Core.Common.Data;
 using Fergun.Interactive;
 using Infrastructure.Data.Models.Games.Settings.Mafia;
 using Services;
@@ -15,6 +16,8 @@ public class MafiaContext
 
     public MafiaSettings Settings { get; }
 
+    public MafiaSettingsTemplate SettingsTemplate { get; }
+
     public DbSocketCommandContext CommandContext { get; }
 
     public InteractiveService Interactive { get; }
@@ -26,13 +29,17 @@ public class MafiaContext
     public MafiaContext(MafiaGuildData guildData, MafiaData mafiaData, MafiaSettings settings,
         DbSocketCommandContext commandContext, InteractiveService interactive)
     {
+        if (settings.CurrentTemplate is null)
+            throw new InvalidOperationException($"Mafia settings template cannot be null when creating a {nameof(MafiaContext)}. Parameter: {nameof(settings.CurrentTemplate)}");
+
         RolesData = new();
 
-        VoteTime = settings.Current.GameSubSettings.VoteTime;
+        Settings = settings;
+        SettingsTemplate = settings.CurrentTemplate;
+        VoteTime = settings.CurrentTemplate.GameSubSettings.VoteTime;
 
         GuildData = guildData;
         MafiaData = mafiaData;
-        Settings = settings;
         CommandContext = commandContext;
         Interactive = interactive;
     }

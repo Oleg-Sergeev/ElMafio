@@ -3,14 +3,13 @@ using System.IO;
 using System.Linq;
 using Core.Common;
 using Core.Extensions;
-using Core.Interfaces;
 using Discord;
 using Discord.Addons.Hosting;
-using Discord.Commands;
 using Discord.Interactions;
 using Discord.WebSocket;
 using Fergun.Interactive;
 using Infrastructure.Data;
+using Infrastructure.Data.Models.Games.Settings.Mafia;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,13 +17,13 @@ using Microsoft.Extensions.Hosting;
 using Modules.Games.Mafia.Common.GameRoles;
 using Modules.Games.Mafia.Common.GameRoles.Data;
 using Modules.Games.Mafia.Common.Services;
+using Modules.Games.Services;
 using Serilog;
 using Serilog.Events;
 using Serilog.Filters;
 using Services;
-
-using InrctRunMode = Discord.Interactions.RunMode;
 using CmdRunMode = Discord.Commands.RunMode;
+using InrctRunMode = Discord.Interactions.RunMode;
 
 namespace ConsoleUI;
 
@@ -112,7 +111,9 @@ public static class Application
                 LogLevel = LogSeverity.Verbose
             }))
             .AddSingleton<LoggingService>()
-            .AddTransient<IMafiaSetupService, MafiaSetupService>();
+            .AddTransient<IMafiaSetupService, MafiaSetupService>()
+            .AddTransient(typeof(IGameSettingsService<>), typeof(GameSettingsService<>))
+            .AddTransient<IGameSettingsService<MafiaSettings>, MafiaSettingsService>();
 
             var sections = typeof(GameRole).GetAllDerivedTypes().Select(t => t.Name);
 

@@ -9,7 +9,7 @@ using Discord;
 using Discord.Commands;
 using Fergun.Interactive;
 
-namespace Modules;
+namespace Modules.Fun;
 
 [Name("Фан")]
 public class FunModule : GuildModuleBase

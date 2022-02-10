@@ -7,6 +7,7 @@ public class MafiaSettings : GameSettings
 {
     public static readonly MafiaSettings Empty = new();
 
+
     [ForeignKey($"{nameof(MafiaSettingsTemplate)}Id")]
     public int? CurrentTemplateId { get; set; }
 
@@ -16,17 +17,16 @@ public class MafiaSettings : GameSettings
 
     public ulong? GeneralTextChannelId { get; set; }
 
-    public ulong? GeneralVoiceChannelId { get; set; }
-
-
     public ulong? MurdersTextChannelId { get; set; }
+
+    public ulong? SpectatorsTextChannelId { get; set; }
+
+
+    public ulong? GeneralVoiceChannelId { get; set; }
 
     public ulong? MurdersVoiceChannelId { get; set; }
 
-
-    public ulong? WatchersTextChannelId { get; set; }
-
-    public ulong? WatchersVoiceChannelId { get; set; }
+    public ulong? SpectatorsVoiceChannelId { get; set; }
 
 
     public ulong? MafiaRoleId { get; set; }
@@ -38,9 +38,9 @@ public class MafiaSettings : GameSettings
 
 
 
-    public List<MafiaSettingsTemplate> MafiaSettingsTemplates { get; private set; } = null!;
+    public List<MafiaSettingsTemplate> MafiaSettingsTemplates { get; private set; } = new();
 
 
     [ForeignKey(nameof(CurrentTemplateId))]
-    public MafiaSettingsTemplate Current { get; set; } = null!;//?????????
+    public MafiaSettingsTemplate? CurrentTemplate { get; set; }
 }

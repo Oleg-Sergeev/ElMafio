@@ -7,9 +7,9 @@ public class RolesExtraInfoSubSettings
     public int MafiaSettingsTemplateId { get; set; }
 
 
-    public int? DoctorSelfHealsCount { get; set; }
+    public int DoctorSelfHealsCount { get; set; }
 
-    public int? SheriffShotsCount { get; set; }
+    public int SheriffShotsCount { get; set; }
 
     public bool MurdersKnowEachOther { get; set; }
 
@@ -24,6 +24,10 @@ public class RolesExtraInfoSubSettings
 
     public RolesExtraInfoSubSettings()
     {
+        DoctorSelfHealsCount = 1;
+
+        SheriffShotsCount = 0;
+
         MurdersKnowEachOther = true;
 
         MurdersVoteTogether = true;

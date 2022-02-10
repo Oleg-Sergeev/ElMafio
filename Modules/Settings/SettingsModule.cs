@@ -4,7 +4,7 @@ using Discord;
 using Discord.Commands;
 using Fergun.Interactive;
 
-namespace Modules;
+namespace Modules.Settings;
 
 [Group("Настройки")]
 [Alias("н")]

@@ -25,7 +25,7 @@ public class RoleAmountSubSettings
 
 
     public int RedRolesCount => InnocentsCount + SheriffsCount + DoctorsCount;
-    
+
     public int BlackRolesCount => MurdersCount + DonsCount;
 
     public int NeutralRolesCount => ManiacsCount + HookersCount;

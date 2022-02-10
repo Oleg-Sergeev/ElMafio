@@ -10,7 +10,6 @@ using Discord;
 using Microsoft.Extensions.Options;
 using Modules.Games.Mafia.Common.Data;
 using Modules.Games.Mafia.Common.GameRoles.Data;
-using Modules.Games.Mafia.Common.Interfaces;
 
 namespace Modules.Games.Mafia.Common.GameRoles;
 
@@ -359,7 +358,7 @@ public abstract class GameRole
 
         return vote;
     }
-   
+
     public virtual Task<Vote> VoteAsync(MafiaContext context, IMessageChannel? voteChannel = null, IMessageChannel? voteResultChannel = null, bool waitAfterVote = true)
         => VoteInternalAsync(this, context, voteChannel, voteResultChannel, waitAfterVote);
 

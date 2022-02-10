@@ -1,19 +1,13 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Discord;
 using Discord.Commands;
-using Discord.WebSocket;
 using Fergun.Interactive;
-using Fergun.Interactive.Pagination;
-using Fergun.Interactive.Selection;
-using Microsoft.VisualBasic;
 using Modules.Common.MultiSelect;
 
-namespace Modules;
+namespace Modules.Features;
 #nullable disable
 [Group("Фичи")]
 public class FeaturesModule : GuildModuleBase
@@ -78,9 +72,9 @@ public class FeaturesModule : GuildModuleBase
                 .AddUser(Context.User)
                 .Build();
 
-                result = message is null
-                ? await Interactive.SendSelectionAsync(multiSelection, Context.Channel, TimeSpan.FromMinutes(2), null, cts.Token)
-                : await Interactive.SendSelectionAsync(multiSelection, message, TimeSpan.FromMinutes(2), null, cts.Token);
+            result = message is null
+            ? await Interactive.SendSelectionAsync(multiSelection, Context.Channel, TimeSpan.FromMinutes(2), null, cts.Token)
+            : await Interactive.SendSelectionAsync(multiSelection, message, TimeSpan.FromMinutes(2), null, cts.Token);
 
             message = result.Message;
 

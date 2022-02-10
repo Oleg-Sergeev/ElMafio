@@ -3,7 +3,6 @@ using System.Linq;
 using Core.Extensions;
 using Discord;
 using Modules.Games.Mafia.Common.GameRoles;
-using Modules.Games.Mafia.Common.GameRoles.RolesGroups;
 
 namespace Modules.Games.Mafia.Common.Data;
 

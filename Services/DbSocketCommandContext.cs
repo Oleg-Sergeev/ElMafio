@@ -31,45 +31,4 @@ public class DbSocketCommandContext : SocketCommandContext
 
         return guildSettings;
     }
-
-    public async Task<T> GetGameSettingsOrCreateAsync<T>(bool isTracking = true) where T : GameSettings, new()
-    {
-        T? gameSettings;
-
-        if (isTracking)
-            gameSettings = await Db.Set<T>()
-               .AsTracking()
-               .FirstOrDefaultAsync(s => s.GuildSettingsId == Guild.Id);
-        else
-            gameSettings = await Db.Set<T>()
-               .AsNoTracking()
-               .FirstOrDefaultAsync(s => s.GuildSettingsId == Guild.Id);
-
-
-        if (gameSettings is null)
-        {
-            gameSettings = new();
-
-            await Db.Set<T>().AddAsync(gameSettings);
-
-            await Db.SaveChangesAsync();
-        }
-
-
-        return gameSettings;
-    }
-
-    public IQueryable<T> GetGameSettingsAsync<T>(bool isTracking = true) where T : GameSettings, new()
-    {
-        IQueryable<T> gameSettings;
-
-        if (isTracking)
-            gameSettings = Db.Set<T>()
-               .AsTracking();
-        else
-            gameSettings = Db.Set<T>()
-               .AsNoTracking();
-
-        return gameSettings;
-    }
 }

@@ -48,5 +48,9 @@ public class BotContext : DbContext
 
         modelBuilder.Entity<MafiaStats>()
             .HasKey(nameof(GameStats.UserId), nameof(GameStats.GuildSettingsId));
+
+        modelBuilder.Entity<MafiaSettingsTemplate>()
+            .HasIndex(t => t.Name)
+            .IsUnique();
     }
 }

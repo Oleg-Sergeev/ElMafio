@@ -84,7 +84,7 @@ public static class GuildExtensions
     {
         if (guild.GetChannel(id) is IChannel channel)
             return $"<#{channel.Id}>";
-        
+
         if (guild.GetRole(id) is IMentionable role)
             return role.Mention;
 

@@ -7,11 +7,10 @@ using Core.Extensions;
 using Discord;
 using Discord.Commands;
 using Discord.Net;
-using Discord.WebSocket;
 using Fergun.Interactive;
 using Microsoft.Extensions.Configuration;
 
-namespace Modules;
+namespace Modules.Help;
 
 [Name("Помощь")]
 public class HelpModule : GuildModuleBase

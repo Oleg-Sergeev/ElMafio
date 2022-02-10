@@ -40,7 +40,7 @@ public static class IConfigurationExtensions
     public static IReadOnlyDictionary<string, string> GetSectionFields(this IConfigurationSection section)
     {
         var fields = new Dictionary<string, string>();
-        
+
         var fieldsSection = section.GetChildren().ToDictionary(k => k.Key);
 
         foreach (var field in fieldsSection)

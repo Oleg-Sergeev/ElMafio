@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using System.Threading;
 using System.Threading.Tasks;
 using Core.Common;
 using Core.Extensions;
@@ -8,7 +7,7 @@ using Microsoft.Extensions.Options;
 using Modules.Games.Mafia.Common.Data;
 using Modules.Games.Mafia.Common.GameRoles.Data;
 
-namespace Modules.Games.Mafia.Common.GameRoles.RolesGroups;
+namespace Modules.Games.Mafia.Common.GameRoles;
 
 public class CitizenGroup : GroupRole
 {

@@ -32,7 +32,7 @@ public class Innocent : GameRole
 
     public override async Task<Vote> VoteAsync(MafiaContext context, IMessageChannel? voteChannel = null, IMessageChannel? voteResultChannel = null, bool waitAfterVote = true)
     {
-        if (GetType() != typeof(Innocent) || context.Settings.Current.RolesExtraInfoSubSettings.CanInnocentsKillAtNight)
+        if (GetType() != typeof(Innocent) || context.SettingsTemplate.RolesExtraInfoSubSettings.CanInnocentsKillAtNight)
             return await base.VoteAsync(context, voteChannel, voteResultChannel, waitAfterVote);
 
         await Task.Delay(context.VoteTime * 1000, context.MafiaData.TokenSource.Token);

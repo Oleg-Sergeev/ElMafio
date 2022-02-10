@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Core.Common;
 using Core.Extensions;
@@ -11,7 +10,6 @@ using Fergun.Interactive.Selection;
 using Microsoft.Extensions.Options;
 using Modules.Games.Mafia.Common.Data;
 using Modules.Games.Mafia.Common.GameRoles.Data;
-using Modules.Games.Mafia.Common.Interfaces;
 
 namespace Modules.Games.Mafia.Common.GameRoles;
 
