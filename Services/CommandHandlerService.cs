@@ -13,6 +13,7 @@ using Discord.Interactions;
 using Discord.WebSocket;
 using Infrastructure.Data;
 using Infrastructure.Data.Models;
+using Infrastructure.Data.Models.Games.Stats;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -80,13 +81,6 @@ public class CommandHandlerService : DiscordClientService
             await _commandService.ExecuteAsync(context, argPos, _provider, MultiMatchHandling.Best);
     }
 
-    private async Task OnInteractionCreatedAsync(SocketInteraction arg)
-    {
-        var ctx = new SocketInteractionContext(Client, arg);
-
-        await _interactionService.ExecuteCommandAsync(ctx, _provider);
-    }
-
 
 
     private async Task OnReadyAsync()
@@ -98,14 +92,8 @@ public class CommandHandlerService : DiscordClientService
         Client.MessageReceived += OnMessageReceivedAsync;
         Client.JoinedGuild += OnJoinedGuildAsync;
         Client.UserLeft += OnUserLeft;
+
         _db.SavedChanges += OnDbUpdated;
-
-
-
-        await _interactionService.AddModulesAsync(Assembly.LoadFrom("Modules"), _provider);
-        await _interactionService.RegisterCommandsToGuildAsync(776013268908113930);
-
-        Client.InteractionCreated += OnInteractionCreatedAsync;
     }
 
     private async Task OnUserLeft(SocketGuild guild, SocketUser user)
@@ -141,7 +129,7 @@ public class CommandHandlerService : DiscordClientService
 
     private void OnDbUpdated(object? sender, SavedChangesEventArgs args)
     {
-        if (sender is null || sender is not BotContext db || args.EntitiesSavedCount != 1)
+        if (sender is not BotContext db || args.EntitiesSavedCount != 1)
             return;
 
 
@@ -198,7 +186,7 @@ public class CommandHandlerService : DiscordClientService
             Prefix = _config[PrefixSectionPath]
         };
 
-        await _db.GuildSettings.AddAsync(guildSettings);
+        _db.GuildSettings.Add(guildSettings);
 
         await _db.SaveChangesAsync();
 

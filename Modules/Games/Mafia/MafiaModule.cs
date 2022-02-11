@@ -17,11 +17,17 @@ using Discord.Commands;
 using Discord.WebSocket;
 using Fergun.Interactive;
 using Fergun.Interactive.Pagination;
+using Infrastructure.Data.Models;
 using Infrastructure.Data.Models.Games.Settings.Mafia;
+using Infrastructure.Data.Models.Games.Stats;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using Modules.Common.MultiSelect;
+using Modules.Games.Mafia.Common;
 using Modules.Games.Mafia.Common.Data;
+using Modules.Games.Mafia.Common.GameRoles;
+using Modules.Games.Mafia.Common.GameRoles.Data;
 using Modules.Games.Mafia.Common.Services;
 using Modules.Games.Services;
 using Serilog;
@@ -92,23 +98,62 @@ public class MafiaModule : GameModule<MafiaData>
 
             var winner = await game.RunAsync();
 
+            Task? updateStatsTask = null;
 
             if (winner.Role is not null)
+            {
+                updateStatsTask = Task.Run(async () =>
+                {
+                    var roles = context.RolesData.AllRoles.Values.ToDictionary(p => p.Player.Id);
+
+                    var stats = await Context.Db.MafiaStats
+                        .Where(ms => ms.GuildSettingsId == Context.Guild.Id && roles.Keys.Any(id => id == ms.UserId))
+                        .ToDictionaryAsync(s => s.UserId);
+
+                    if (stats.Count < roles.Count)
+                    {
+                        var existingUsersIds = await Context.Db.Users
+                            .AsNoTracking()
+                            .Where(u => roles.Keys.Any(id => id == u.Id))
+                            .Select(u => u.Id)
+                            .ToListAsync();
+
+                        var newUsersIds = roles.Keys.Except(existingUsersIds);
+
+                        Context.Db.Users.AddRange(newUsersIds.Select(id => new User
+                        {
+                            Id = id
+                        }).ToList());
+
+                        var newUsersStats = newUsersIds
+                        .Concat(existingUsersIds.Except(stats.Keys))
+                        .Select(id => new MafiaStats
+                        {
+                            UserId = id,
+                            GuildSettingsId = Context.Guild.Id
+                        }).ToList();
+
+                        Context.Db.MafiaStats.AddRange(newUsersStats);
+
+                        stats.AddRange(newUsersStats.ToDictionary(s => s.UserId));
+                    }
+
+                    foreach (var role in roles.Values)
+                        role.UpdateStats(stats[role.Player.Id], winner);
+
+                    await Context.Db.SaveChangesAsync();
+                });
+
+
                 await ReplyEmbedAsync($"Победителем оказался: {winner.Role.Name}!");
+            }
             else
                 await ReplyEmbedAsync("Город опустел... Никто не победил");
 
-            var str = "Голоса игроков:\n";
-            foreach (var role in context.RolesData.AllRoles.Values)
-            {
-                str += $"\n{role.Player.Mention}\n";
-                for (int i = 0; i < role.Votes.Count; i++)
-                    str += $"{i + 1}: {role.Votes[i].Option?.GetFullName() ?? "None"} [{role.Votes[i].IsSkip}]\n";
-            }
-
-            await ReplyAsync(str);
-
             await ReplyEmbedStampAsync($"{data.Name} успешно завершена", EmbedStyle.Successfull);
+
+            if (updateStatsTask is not null)
+                await updateStatsTask;
         }
         finally
         {
@@ -279,7 +324,7 @@ public class MafiaModule : GameModule<MafiaData>
             };
 
 
-            await Context.Db.MafiaSettingsTemplates.AddAsync(newTemplate);
+            Context.Db.MafiaSettingsTemplates.Add(newTemplate);
 
             await Context.Db.SaveChangesAsync();
 
@@ -786,7 +831,7 @@ public class MafiaModule : GameModule<MafiaData>
 
                                 displayName = settingsDisplay.DisplayName;
 
-                                wasSettingsModified = true;
+                                wasSettingsModified = currentValue != previousValue;
                             }
 
                             isModified = success;
@@ -1040,8 +1085,12 @@ public class MafiaModule : GameModule<MafiaData>
 
     public class MafiaHelpModule : HelpModule
     {
-        public MafiaHelpModule(InteractiveService interactiveService, IConfiguration config) : base(interactiveService, config)
+        private readonly IOptionsSnapshot<GameRoleData> _conf;
+
+
+        public MafiaHelpModule(InteractiveService interactiveService, IConfiguration config, IOptionsSnapshot<GameRoleData> conf) : base(interactiveService, config)
         {
+            _conf = conf;
         }
 
 
@@ -1072,7 +1121,7 @@ public class MafiaModule : GameModule<MafiaData>
                 var roleFields = section.GetSectionFields();
 
 
-                if (!roleFields.TryGetValue("Key", out var name) || !roleFields.TryGetValue("Value", out var value))
+                if (!roleFields.TryGetValue("Name", out var name) || !roleFields.TryGetValue("Description", out var value))
                     continue;
 
                 var pageBuilder = new PageBuilder()
@@ -1089,6 +1138,31 @@ public class MafiaModule : GameModule<MafiaData>
                 await Interactive.SendPaginatorAsync(paginatorBuilder.Build(), await Context.User.CreateDMChannelAsync(), TimeSpan.FromMinutes(10));
             else
                 await Interactive.SendPaginatorAsync(paginatorBuilder.Build(), Context.Channel, TimeSpan.FromMinutes(10));
+        }
+
+
+
+        [RequireOwner]
+        [Command("к")]
+        public async Task Test()
+        {
+            var roles = new List<GameRole>
+            {
+                new Innocent((IGuildUser)Context.User, _conf),
+                new Doctor((IGuildUser)Context.User, _conf, 1),
+                new Sheriff((IGuildUser)Context.User, _conf, 1, Enumerable.Empty<Murder>()),
+                new Murder((IGuildUser)Context.User, _conf),
+                new Don((IGuildUser)Context.User, _conf, Enumerable.Empty<Sheriff>()),
+                new Hooker((IGuildUser)Context.User, _conf),
+                new Maniac((IGuildUser)Context.User, _conf)
+            };
+
+            var embeds = new List<Embed>();
+
+            foreach (var role in roles)
+                embeds.Add(MafiaHelper.GetEmbed(role, Config));
+
+            await ReplyAsync(embeds: embeds.ToArray());
         }
     }
 }

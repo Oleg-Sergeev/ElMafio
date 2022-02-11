@@ -3,6 +3,7 @@ using System.Linq;
 using Core.Common;
 using Core.Extensions;
 using Discord;
+using Infrastructure.Data.Models.Games.Stats;
 using Microsoft.Extensions.Options;
 using Modules.Games.Mafia.Common.GameRoles.Data;
 
@@ -10,6 +11,8 @@ namespace Modules.Games.Mafia.Common.GameRoles;
 
 public class Don : Murder, IChecker
 {
+    public int RevealsCount { get; set; }
+
     public GameRole? CheckedRole { get; protected set; }
 
     public IEnumerable<GameRole> CheckableRoles { get; }
@@ -66,14 +69,28 @@ public class Don : Murder, IChecker
             base.HandleChoice(choice);
         else
         {
+            MovesCount++;
+
             HandleChoiceInternal(this, choice);
 
             CheckedRole = choice is null ? null : CheckableRoles.FirstOrDefault(r => r.Player.Id == choice.Id);
+
+            if (CheckedRole is not null)
+                RevealsCount++;
         }
 
         if (IsNight && !IsChecking)
         {
             IsChecking = true;
         }
+    }
+
+
+    public override void UpdateStats(MafiaStats stats, Winner winner)
+    {
+        base.UpdateStats(stats, winner);
+
+        stats.DonMovesCount += MovesCount;
+        stats.DonRevealsCount += RevealsCount;
     }
 }

@@ -7,6 +7,7 @@ using Core.Extensions;
 using Discord;
 using Fergun.Interactive;
 using Fergun.Interactive.Selection;
+using Infrastructure.Data.Models.Games.Stats;
 using Microsoft.Extensions.Options;
 using Modules.Games.Mafia.Common.Data;
 using Modules.Games.Mafia.Common.GameRoles.Data;
@@ -16,6 +17,14 @@ namespace Modules.Games.Mafia.Common.GameRoles;
 
 public class Sheriff : Innocent, IKiller, IChecker
 {
+    public int RevealsCount { get; set; }
+
+
+    public int KillsCount { get; set; }
+
+    public int MovesCount { get; set; }
+
+
     public IGuildUser? KilledPlayer { get; protected set; }
 
     public GameRole? CheckedRole { get; protected set; }
@@ -89,10 +98,26 @@ public class Sheriff : Innocent, IKiller, IChecker
         }
         else
         {
+            MovesCount++;
+
             KilledPlayer = null;
 
             CheckedRole = choice is null ? null : CheckableRoles.FirstOrDefault(r => r.Player.Id == choice.Id);
+
+            if (CheckedRole is not null)
+                RevealsCount++;
         }
+    }
+
+
+    public override void UpdateStats(MafiaStats stats, Winner winner)
+    {
+        base.UpdateStats(stats, winner);
+
+
+        stats.SheriffMovesCount += MovesCount;
+        stats.SheriffRevealsCount += RevealsCount;
+        stats.SheriffKillsCount += KillsCount;
     }
 
 

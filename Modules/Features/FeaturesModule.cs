@@ -1,14 +1,20 @@
 ﻿using System;
+using System.Data;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Core.Common;
 using Discord;
 using Discord.Commands;
 using Fergun.Interactive;
+using Microsoft.Extensions.Options;
+using Microsoft.VisualBasic;
 using Modules.Common.MultiSelect;
+using Modules.Games.Mafia.Common.Data;
+using Newtonsoft.Json.Linq;
 
 namespace Modules.Features;
-#nullable disable
+
 [Group("Фичи")]
 public class FeaturesModule : GuildModuleBase
 {
@@ -16,87 +22,80 @@ public class FeaturesModule : GuildModuleBase
     {
     }
 
-    public CommandService CommandService { get; set; }
-
-    // Sends a multi selection (a message with multiple select menus with options)
-    [Command("select", RunMode = RunMode.Async)]
-    public async Task MultiSelectionAsync()
+    [Command("тест")]
+    public async Task EphemeralTestAsync()
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+        var entryVoteComponent = new ComponentBuilder()
+               .WithButton("Голосовать", "vote")
+               .Build();
 
-        var modules = CommandService.Modules.ToArray();
-        var color = Color.Gold;
+        var entryVoteMsg = await ReplyAsync(embed: EmbedHelper.CreateEmbed("Для участия в голосовании нажмите на кнопку ниже"),
+            components: entryVoteComponent);
 
-        string selectedModule = null;
+        var res = await Interactive.NextMessageComponentAsync(m => m.Message.Id == entryVoteMsg.Id);
 
-        IUserMessage message = null;
-        InteractiveMessageResult<MultiSelectionOption<string>> result = null;
-
-        var timeoutPage = new PageBuilder()
-            .WithDescription("Timeout!")
-            .WithColor(color);
-
-        while (result is null || result.IsSuccess && result.Value?.Row != 1)
+        if (res.IsSuccess)
         {
-            var options = modules
-                .Select(x => new MultiSelectionOption<string>(option: x.Name, row: 0, isDefault: x.Name == selectedModule))
-                .DistinctBy(o => o.Option);
+            var interaction = res.Value;
 
-            string description = "Select a module";
+            await interaction.DeferAsync(true);
 
 
-            if (result != null)
+            IUserMessage? msg = null;
+            int n = 0;
+            while (true)
             {
-                description = "Select a command\nNote: You can also update your selected module.";
-                var commands = modules
-                    .First(x => x.Name == result.Value!.Option)
-                    .Commands
-                    .Select(x => new MultiSelectionOption<string>(x.Name, 1))
-                    .DistinctBy(o => o.Option);
+                var component = new ComponentBuilder()
+                       .WithButton("Проголосовать", "vote")
+                       .WithButton("Пропустить", "skip", ButtonStyle.Danger)
+                       .Build();
 
-                options = options.Concat(commands);
-            }
+                var embed = new EmbedBuilder()
+                    .WithDescription($"Выберите игрока из списка {n}")
+                    .WithColor(Color.Gold)
+                    .Build();
 
-            var pageBuilder = new PageBuilder()
-                .WithDescription(description)
-                .WithColor(color);
 
-            var multiSelection = new MultiSelectionBuilder<string>()
-                .WithSelectionPage(pageBuilder)
-                .WithTimeoutPage(timeoutPage)
-                .WithCanceledPage(timeoutPage)
-                .WithActionOnTimeout(ActionOnStop.ModifyMessage | ActionOnStop.DeleteInput)
-                .WithActionOnCancellation(ActionOnStop.ModifyMessage | ActionOnStop.DeleteInput)
-                .WithOptions(options.ToArray())
-                .WithStringConverter(x => x.Option)
-                .AddUser(Context.User)
-                .Build();
+                if (msg is null)
+                    msg = await interaction.FollowupAsync(embed: embed, components: component, ephemeral: true);
+                else
+                {
+                    try
+                    {
+                        await msg.ModifyAsync(x =>
+                        {
+                            x.Embed = embed;
+                            x.Components = component;
+                        });
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine($"************************\n{e.Message}{e.StackTrace}\n****************************");
 
-            result = message is null
-            ? await Interactive.SendSelectionAsync(multiSelection, Context.Channel, TimeSpan.FromMinutes(2), null, cts.Token)
-            : await Interactive.SendSelectionAsync(multiSelection, message, TimeSpan.FromMinutes(2), null, cts.Token);
+                        return;
+                    }
+                }
 
-            message = result.Message;
+                var result = await Interactive.NextMessageComponentAsync(
+                    x => x.Message.Id == msg.Id && x.User.Id == Context.Guild.OwnerId);
 
-            if (result.IsSuccess && result.Value!.Row == 0)
-            {
-                // We need to track the selected module so we can set it as the default option.
-                selectedModule = result.Value!.Option;
+                if (result.IsSuccess)
+                {
+                    var data = result.Value.Data;
+
+                    await result.Value.DeferAsync(true);
+
+                    n++;
+
+                    if (data.Type == ComponentType.Button)
+                    {
+                        if (data.CustomId == "skip")
+                        {
+                            break;
+                        }
+                    }
+                }
             }
         }
-
-        if (!result.IsSuccess)
-            return;
-
-        var embed = new EmbedBuilder()
-            .WithDescription($"You selected:\n**Module**: {selectedModule}\n**Command**: {result.Value!.Option}")
-            .WithColor(color)
-            .Build();
-
-        await message.ModifyAsync(x =>
-        {
-            x.Embed = embed;
-            x.Components = new ComponentBuilder().Build(); // Remove components
-        });
     }
 }

@@ -219,13 +219,6 @@ public abstract class GroupRole : GameRole
 
                 if (msg is null)
                     msg = await interaction.FollowupAsync(embed: embed, components: component, ephemeral: true);
-                else
-                    await msg.ModifyAsync(x =>
-                    {
-                        x.Embed = embed;
-                        x.Components = component;
-                        x.Embeds = Array.Empty<Embed>();
-                    });
 
                 var result = await context.Interactive.NextMessageComponentAsync(
                     x => x.Message.Id == msg.Id && (x.User.Id == role.Player.Id || x.User.Id == context.CommandContext.Guild.OwnerId),

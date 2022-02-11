@@ -28,4 +28,20 @@ public static class EmbedHelper
 
         return innerEmbedBuilder.Build();
     }
+
+    public static Embed CreateEmbedStamp(string description, EmbedStyle embedStyle, string? title = null, IUser? userAuthor = null, IUser? userFooter = null, EmbedBuilder? innerEmbedBuilder = null)
+    {
+        innerEmbedBuilder ??= new EmbedBuilder()
+            .WithCurrentTimestamp();
+
+        if (userAuthor is not null)
+            innerEmbedBuilder.WithUserAuthor(userAuthor);
+
+        if (userFooter is not null)
+            innerEmbedBuilder.WithUserAuthor(userFooter);
+
+        var embed = CreateEmbed(description, embedStyle, title, innerEmbedBuilder);
+
+        return embed;
+    }
 }

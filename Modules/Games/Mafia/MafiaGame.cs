@@ -230,7 +230,7 @@ public class MafiaGame
 
         await ChangeCitizenPermsAsync(_denyWrite, _denyView);
 
-
+        _isZeroDay = false;
         if (_isZeroDay)
         {
             _isZeroDay = false;
@@ -414,6 +414,25 @@ public class MafiaGame
             .Distinct()
             .ToList();
 
+        if (!_template.GameSubSettings.IsCustomGame && _template.GameSubSettings.IsRatingGame)
+        {
+            foreach (var killer in killers.Where(k => !k.IsSkip))
+            {
+                killer.MovesCount++;
+
+                if (killer.KilledPlayer is not null && corpses.Contains(killer.KilledPlayer))
+                    killer.KillsCount++;
+            }
+
+            foreach (var healer in healers.Where(h => !h.IsSkip))
+            {
+                healer.MovesCount++;
+
+                if (healer.HealedPlayer is not null && kills.Any(k => k.Id == healer.HealedPlayer.Id))
+                    healer.HealsCount++;
+            }
+        }
+
 
         var maniacKills = _rolesData.Maniacs.Values
             .Where(m => m.IsAlive && m.KilledPlayer is not null)
@@ -528,7 +547,6 @@ public class MafiaGame
         await Task.Delay(3000);
     }
 
-
     private async Task ChangeMurdersPermsAsync(OverwritePermissions textPerms, OverwritePermissions? voicePerms)
     {
         foreach (var murder in _rolesData.Murders.Values)
@@ -572,8 +590,6 @@ public class MafiaGame
             }
     }
 
-
-
     private async Task ReturnPlayersDataAsync()
     {
         foreach (var role in _rolesData.AllRoles.Values)
@@ -588,8 +604,6 @@ public class MafiaGame
             foreach (var player in _guildData.KilledPlayers)
                 await player.RemoveRoleAsync(_guildData.SpectatorRole);
     }
-
-
 
     public async Task WaitForTimerAsync(int seconds, params IMessageChannel[] channels)
     {
@@ -709,8 +723,8 @@ public class MafiaGame
 
 
 
-        Winner GetCitizen() => new(_rolesData.GroupRoles[nameof(CitizenGroup)], _rolesData.Innocents.Keys);
-        Winner GetMurders() => new(_rolesData.GroupRoles[nameof(MurdersGroup)]);
+        Winner GetCitizen() => new(_rolesData.GroupRoles[nameof(CitizenGroup)], _rolesData.Innocents.Keys.Select(p => p.Id).ToList());
+        Winner GetMurders() => new(_rolesData.GroupRoles[nameof(MurdersGroup)], _rolesData.Murders.Keys.Select(p => p.Id).ToList());
     }
 
 
@@ -735,21 +749,4 @@ public class MafiaGame
         .AddField("Игрок", string.Join("\n", _rolesData.Murders.Keys.Select(u => u.GetFullMention())), true)
         .AddField("Роль", string.Join("\n", _rolesData.Murders.Values.Select(m => m.Name)), true)
         .Build();
-}
-
-
-public class Winner
-{
-    public static readonly Winner None = new(null);
-
-
-    public GameRole? Role { get; }
-
-    public IEnumerable<IGuildUser>? Players;
-
-    public Winner(GameRole? role, IEnumerable<IGuildUser>? players = null)
-    {
-        Role = role;
-        Players = players;
-    }
 }

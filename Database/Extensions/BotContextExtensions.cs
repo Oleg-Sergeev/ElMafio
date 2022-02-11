@@ -9,20 +9,20 @@ namespace Infrastructure.Extensions;
 
 public static class BotContextExtensions
 {
-    public static async Task SeedDatabaseAsync(this BotContext context)
+    public static void SeedDatabase(this BotContext context)
     {
         if (context.Users.Any())
             return;
 
 
-        await context.SeedUsersAsync();
+        context.SeedUsers();
     }
 
-    private static async Task SeedUsersAsync(this BotContext context)
+    private static void SeedUsers(this BotContext context)
     {
         var users = GetUsers();
 
-        await context.Users.AddRangeAsync(users);
+        context.Users.AddRange(users);
     }
 
 

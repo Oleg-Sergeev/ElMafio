@@ -16,7 +16,7 @@ public static class IServiceProviderExtensions
             await context.Database.MigrateAsync();
 
 
-        await context.SeedDatabaseAsync();
+        context.SeedDatabase();
 
         await context.SaveChangesAsync();
     }

@@ -352,11 +352,6 @@ public abstract class GameModule<TData> : GuildModuleBase where TData : GameData
 
 
 
-
-
-
-
-
     [Group("Помощь")]
     public abstract class HelpModule : GuildModuleBase
     {
@@ -471,5 +466,4 @@ public abstract class GameModule<TData> : GuildModuleBase where TData : GameData
                 await Interactive.SendPaginatorAsync(paginatorBuilder.Build(), Context.Channel, TimeSpan.FromMinutes(10));
         }
     }
-
 }

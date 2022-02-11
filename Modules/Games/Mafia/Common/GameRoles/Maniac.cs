@@ -6,6 +6,10 @@ namespace Modules.Games.Mafia.Common.GameRoles;
 
 public class Maniac : Neutral, IKiller
 {
+    public int KillsCount { get; set; }
+
+    public int MovesCount { get; set; }
+
     public IGuildUser? KilledPlayer { get; protected set; }
 
 

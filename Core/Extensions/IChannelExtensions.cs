@@ -32,6 +32,14 @@ public static class IChannelExtensions
         return await channel.SendMessageAsync(embed: embed);
     }
 
+    public static async Task<IUserMessage> SendEmbedStampAsync(this IMessageChannel channel, string description, EmbedStyle embedStyle, string? title = null,
+         IUser? userAuthor = null, IUser? userFooter = null, EmbedBuilder? embedBuilder = null)
+    {
+        var embed = EmbedHelper.CreateEmbedStamp(description, embedStyle, title, userAuthor, userFooter, embedBuilder);
+
+        return await channel.SendMessageAsync(embed: embed);
+    }
+
 
 
     public static Task<IEnumerable<IUserMessage>> BroadcastMessagesAsync(this IMessageChannel sourceChannel, IEnumerable<IMessageChannel> channels, string? text = null, Embed? embed = null)

@@ -42,7 +42,7 @@ public class AdminModule : GuildModuleBase
 
         await textChannel.ModifyAsync(props => props.SlowModeInterval = secs);
 
-        await textChannel.SendEmbedAsync($"Слоумод успешно установлен на {secs}с", EmbedStyle.Successfull);
+        await ReplyEmbedStampAsync($"Слоумод успешно установлен на {secs}с", EmbedStyle.Successfull);
     }
 
 
@@ -124,31 +124,32 @@ public class AdminModule : GuildModuleBase
     [Command("РольЦвет")]
     [Alias("Рц")]
     [RequireBotPermission(GuildPermission.ManageRoles)]
+    [RequireUserPermission(GuildPermission.ManageRoles)]
     public async Task UpdateRoleColor(IRole role, Color color)
     {
-        var user = (SocketGuildUser)Context.User;
+        var guildUser = (IGuildUser)Context.User;
 
-        var highestRole = user.Roles.OrderByDescending(r => r.Position).First();
-
-        await ReplyEmbedAsync($"user hierarchy: {user.Hierarchy}\nuser role position: {highestRole.Position}\nrole position: {role.Position}", EmbedStyle.Debug);
-
-        if (role.Position > highestRole.Position)
+        if (guildUser.Hierarchy < role.Position)
         {
-            await ReplyEmbedAsync("Иерерахия", EmbedStyle.Error);
-                
+            await ReplyEmbedAsync("Невозможно управлять ролью: недостаточно полномочий", EmbedStyle.Error);
+
             return;
         }
 
         if (role.Color == color)
         {
-            await ReplyEmbedStampAsync("Роль уже имеет такой цвет", EmbedStyle.Warning);
+            await ReplyEmbedAsync("Роль уже имеет такой цвет", EmbedStyle.Warning);
 
             return;
         }
 
+        var oldColor = role.Color;
+
         await role.ModifyAsync(r => r.Color = color);
 
-        await ReplyEmbedStampAsync("Цвет роли успешно изменен", EmbedStyle.Successfull);
+        await ReplyEmbedStampAsync($"Старый цвет: {oldColor} ({oldColor.R}, {oldColor.G}, {oldColor.B})",
+            EmbedStyle.Successfull,
+            "Цвет роли успешно изменен");
     }
 
 
@@ -264,20 +265,6 @@ public class AdminModule : GuildModuleBase
 
         return str;
     }
-
-
-    private async Task<bool> CanManageWithNotifyAsync(IUser user1, IUser user2)
-    {
-        if (user1.CompareHierarchy(user2) <= 0)
-        {
-            await ReplyEmbedAsync("Невозможно управлять пользователем: недостаточно полномочий", EmbedStyle.Error);
-
-            return false;
-        }
-
-        return true;
-    }
-
 
 
     [Group("Смайл")]

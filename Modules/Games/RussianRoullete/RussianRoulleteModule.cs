@@ -218,7 +218,7 @@ public class RussianRouletteModule : GameModule
             })
             .ToList();
 
-            await Context.Db.RussianRouletteStats.AddRangeAsync(newPlayersStats);
+            Context.Db.RussianRouletteStats.AddRange(newPlayersStats);
 
             playersStat.AddRange(newPlayersStats);
         }

@@ -7,13 +7,12 @@ using System.Threading.Tasks;
 using Core.Common;
 using Core.Extensions;
 using Discord;
+using Infrastructure.Data.Models.Games.Stats;
 using Microsoft.Extensions.Options;
 using Modules.Games.Mafia.Common.Data;
 using Modules.Games.Mafia.Common.GameRoles.Data;
 
 namespace Modules.Games.Mafia.Common.GameRoles;
-
-
 
 public abstract class GameRole
 {
@@ -46,7 +45,7 @@ public abstract class GameRole
 
 
     public IReadOnlyList<Vote> Votes => _votes;
-    public readonly List<Vote> _votes; // public!
+    public readonly List<Vote> _votes; // public!!!
 
     public int Priority { get; }
 
@@ -147,7 +146,7 @@ public abstract class GameRole
         role.LastMove = choice;
     }
 
-    // public ???
+    // public!!!
     public virtual void HandleChoice(IGuildUser? choice)
         => HandleChoiceInternal(this, choice);
 
@@ -363,6 +362,13 @@ public abstract class GameRole
         => VoteInternalAsync(this, context, voteChannel, voteResultChannel, waitAfterVote);
 
 
+    public virtual void UpdateStats(MafiaStats stats, Winner winner)
+    {
+        stats.GamesCount++;
+
+        if (winner.PlayersIds?.Contains(Player.Id) ?? false)
+            stats.WinsCount++;
+    }
 
 
 

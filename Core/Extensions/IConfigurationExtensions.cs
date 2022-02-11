@@ -18,12 +18,7 @@ public static class IConfigurationExtensions
     public static string? GetImageUrl(this IConfiguration config)
         => config["ImageUrl"];
 
-    public static (string, string)? GetEmbedFieldInfo(this IConfiguration config, string sectionName, string key = "Key", string value = "Value")
-    {
-        var section = config.GetSection(sectionName);
 
-        return section.GetEmbedFieldInfo(key, value);
-    }
     public static (string, string)? GetEmbedFieldInfo(this IConfigurationSection section, string key = "Key", string value = "Value")
     {
         var fieldInfo = section.GetChildren().ToDictionary(k => k.Key);
@@ -35,6 +30,14 @@ public static class IConfigurationExtensions
             return (fieldKey.Value, fieldValue.Value);
 
         return null;
+    }
+
+
+    public static IReadOnlyDictionary<string, string> GetSectionFields(this IConfiguration config, string sectionName)
+    {
+        var section = config.GetSection(sectionName);
+
+        return section.GetSectionFields();
     }
 
     public static IReadOnlyDictionary<string, string> GetSectionFields(this IConfigurationSection section)

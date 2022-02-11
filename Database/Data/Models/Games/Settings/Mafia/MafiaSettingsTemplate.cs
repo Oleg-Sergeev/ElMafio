@@ -31,12 +31,12 @@ public class MafiaSettingsTemplate
         Name = DefaultTemplateName;
 
 
-        GameSubSettings = new();
+        GameSubSettings = null!;
 
-        ServerSubSettings = new();
+        ServerSubSettings = null!;
 
-        RoleAmountSubSettings = new();
+        RoleAmountSubSettings = null!;
 
-        RolesExtraInfoSubSettings = new();
+        RolesExtraInfoSubSettings = null!;
     }
 }

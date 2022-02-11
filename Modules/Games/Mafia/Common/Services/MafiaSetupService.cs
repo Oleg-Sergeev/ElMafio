@@ -177,8 +177,10 @@ public class MafiaSetupService : IMafiaSetupService
             innocentsCount = roleAmount.InnocentsCount;
 
             var rolesCount = donsCount + doctorsCount + murdersCount + sheriffsCount + innocentsCount + (isCustomGame ? roleAmount.NeutralRolesCount : 0);
+
             if (rolesCount > mafiaData.Players.Count)
                 throw new WrongPlayersCountException("Inconsistency in the number of roles and players", mafiaData.Players.Count, rolesCount);
+
 
             if (!gameSettings.IsFillWithMurders)
                 innocentsCount = mafiaData.Players.Count - doctorsCount - sheriffsCount - roleAmount.BlackRolesCount - roleAmount.NeutralRolesCount;

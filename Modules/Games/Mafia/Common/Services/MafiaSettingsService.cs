@@ -15,19 +15,18 @@ public class MafiaSettingsService : GameSettingsService<MafiaSettings>
             ? context.Db.MafiaSettings.AsTracking()
             : context.Db.MafiaSettings.AsNoTracking();
 
-        settingsQuery
-            .Include(m => m.CurrentTemplate!)
-                .ThenInclude(c => c.GameSubSettings)
-            .Include(m => m.CurrentTemplate!)
-                .ThenInclude(c => c.ServerSubSettings)
-            .Include(m => m.CurrentTemplate!)
-                .ThenInclude(c => c.RoleAmountSubSettings)
-            .Include(m => m.CurrentTemplate!)
-                .ThenInclude(c => c.RolesExtraInfoSubSettings);
+        settingsQuery = settingsQuery
+                .Include(ms => ms.CurrentTemplate!)
+                    .ThenInclude(c => c.GameSubSettings)
+                .Include(ms => ms.CurrentTemplate!)
+                    .ThenInclude(c => c.ServerSubSettings)
+                .Include(ms => ms.CurrentTemplate!)
+                    .ThenInclude(c => c.RoleAmountSubSettings)
+                .Include(ms => ms.CurrentTemplate!)
+                    .ThenInclude(c => c.RolesExtraInfoSubSettings);
 
 
         var settings = await settingsQuery
-            .Include(s => s.CurrentTemplate)
             .FirstOrDefaultAsync(m => m.GuildSettingsId == context.Guild.Id);
 
         settings ??= await CreateSettingsAsync(context);
@@ -39,7 +38,7 @@ public class MafiaSettingsService : GameSettingsService<MafiaSettings>
                 MafiaSettingsId = settings.Id
             };
 
-            await context.Db.MafiaSettingsTemplates.AddAsync(template);
+            context.Db.MafiaSettingsTemplates.Add(template);
 
             await context.Db.SaveChangesAsync();
 

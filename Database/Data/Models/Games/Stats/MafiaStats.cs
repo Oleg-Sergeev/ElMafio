@@ -13,32 +13,32 @@ public class MafiaStats : GameStats
 
 
     public int DoctorMovesCount { get; set; }
-    public int DoctorSuccessfullMovesCount { get; set; }
+    public int DoctorHealsCount { get; set; }
 
     public float DoctorEfficiency
     {
-        get => DoctorMovesCount != 0 ? (float)DoctorSuccessfullMovesCount / DoctorMovesCount : 0;
+        get => DoctorMovesCount != 0 ? (float)DoctorHealsCount / DoctorMovesCount : 0;
         private set { }
     }
 
 
-    public int CommissionerMovesCount { get; set; }
-    public int CommissionerSuccessfullFoundsCount { get; set; }
-    public int CommissionerSuccessfullShotsCount { get; set; }
+    public int SheriffMovesCount { get; set; }
+    public int SheriffRevealsCount { get; set; }
+    public int SheriffKillsCount { get; set; }
 
-    public float CommissionerEfficiency
+    public float SheriffEfficiency
     {
-        get => CommissionerMovesCount != 0 ? (float)(CommissionerSuccessfullFoundsCount + CommissionerSuccessfullShotsCount) / CommissionerMovesCount : 0;
+        get => SheriffMovesCount != 0 ? (float)(SheriffRevealsCount + SheriffKillsCount) / SheriffMovesCount : 0;
         private set { }
     }
 
 
     public int DonMovesCount { get; set; }
-    public int DonSuccessfullMovesCount { get; set; }
+    public int DonRevealsCount { get; set; }
 
     public float DonEfficiency
     {
-        get => DonMovesCount != 0 ? (float)DonSuccessfullMovesCount / DonMovesCount : 0;
+        get => DonMovesCount != 0 ? (float)DonRevealsCount / DonMovesCount : 0;
         private set { }
     }
 
@@ -51,7 +51,7 @@ public class MafiaStats : GameStats
 
     public float Scores
     {
-        get => WinsCount + BlacksWinsCount + DoctorSuccessfullMovesCount + CommissionerSuccessfullFoundsCount + CommissionerSuccessfullShotsCount + DonSuccessfullMovesCount;
+        get => WinsCount + BlacksWinsCount + DoctorHealsCount + SheriffRevealsCount + SheriffKillsCount + DonRevealsCount;
         private set { }
     }
 
@@ -76,13 +76,13 @@ public class MafiaStats : GameStats
         BlacksWinsCount = 0;
 
         DoctorMovesCount = 0;
-        DoctorSuccessfullMovesCount = 0;
+        DoctorHealsCount = 0;
 
-        CommissionerMovesCount = 0;
-        CommissionerSuccessfullFoundsCount = 0;
-        CommissionerSuccessfullShotsCount = 0;
+        SheriffMovesCount = 0;
+        SheriffRevealsCount = 0;
+        SheriffKillsCount = 0;
 
         DonMovesCount = 0;
-        DonSuccessfullMovesCount = 0;
+        DonRevealsCount = 0;
     }
 }

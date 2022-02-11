@@ -9,6 +9,10 @@ namespace Modules.Games.Mafia.Common.GameRoles;
 
 public class Hooker : Neutral, IHooker
 {
+    public int HealsCount  { get; set; }
+
+    public int MovesCount { get; set; }
+
     public IGuildUser? HealedPlayer { get; protected set; }
 
     public IGuildUser? BlockedPlayer { get; protected set; }

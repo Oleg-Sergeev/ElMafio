@@ -1,4 +1,5 @@
-﻿using Core.Extensions;
+﻿using System.Globalization;
+using Core.Extensions;
 using Discord;
 using Microsoft.Extensions.Configuration;
 using Modules.Games.Mafia.Common.GameRoles;
@@ -36,23 +37,41 @@ public static class MafiaHelper
     {
         var type = role.GetType();
 
-        var pair = config.GetEmbedFieldInfo($"{RolesSection}:{type.Name}");
+        var roleInfo = config.GetSectionFields($"{RolesSection}:{type.Name}");
+
+        var description = "*Описание отсутствует*";
+        var color = Color.LightGrey;
+
+        if (roleInfo is not null)
+        {
+            if (roleInfo.ContainsKey("Description"))
+                description = roleInfo["Description"];
+
+            if (roleInfo.TryGetValue("Color", out var colorStr) && uint.TryParse(colorStr, NumberStyles.HexNumber, null, out var rawColor))
+                color = new Color(rawColor);
+        }
 
         var embedBuilder = new EmbedBuilder()
             .WithTitle($"Ваша роль - {role.Name}")
-            .WithDescription(pair?.Item2 ?? "*Описание отсутствует*");
-        //.WithImageUrl($"url/{type}.png");
+            .WithDescription(description)
+            .WithColor(color);
 
-        return role switch
+
+        var imageUrl = role switch
         {
-            Doctor => embedBuilder.WithColor(Color.DarkBlue).Build(),
-            Sheriff => embedBuilder.WithColor(Color.Blue).Build(),
-            Innocent => embedBuilder.WithColor(Color.Green).Build(),
-            Don => embedBuilder.WithColor(Color.DarkRed).Build(),
-            Murder => embedBuilder.WithColor(Color.Red).Build(),
-            Maniac => embedBuilder.WithColor(Color.LighterGrey).Build(),
-            Hooker => embedBuilder.WithColor(Color.Purple).Build(),
-            _ => embedBuilder.Build()
+            Doctor => "https://i.ibb.co/q06pwRw/Doctor.png",
+            Sheriff => "https://i.ibb.co/6nW0Tg9/Sheriff.png",
+            Innocent => "https://i.ibb.co/VBrcYJ4/Citizen.png",
+            Don => "https://i.ibb.co/YXz3ScH/Don.png",
+            Murder => "https://i.ibb.co/Xbdpxr0/Murder.png",
+            Hooker => "https://i.ibb.co/fNvvFwc/Hooker.png",
+            Maniac => "https://i.ibb.co/k9PsZMJ/Maniac.png",
+            _ => null
         };
+
+        if (imageUrl is not null)
+            embedBuilder.WithImageUrl(imageUrl);
+
+        return embedBuilder.Build();
     }
 }

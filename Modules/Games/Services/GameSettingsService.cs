@@ -33,7 +33,7 @@ public class GameSettingsService<TSettings> : IGameSettingsService<TSettings> wh
             GuildSettingsId = context.Guild.Id
         };
 
-        await context.Db.Set<TSettings>().AddAsync(settings);
+        context.Db.Set<TSettings>().Add(settings);
 
         await context.Db.SaveChangesAsync();
 
