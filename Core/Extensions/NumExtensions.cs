@@ -2,8 +2,9 @@
 
 public static class NumExtensions
 {
-    public static string ToPercent(this float num) => $"{num * 100:F2}%";
-
-
     public static TimeSpan ToTimeSpanSeconds(this double num) => TimeSpan.FromSeconds(num);
+
+    public static TimeSpan ToTimeSpanMinutes(this double num) => TimeSpan.FromMinutes(num);
+
+    public static TimeSpan ToTimeSpanHours(this double num) => TimeSpan.FromHours(num);
 }

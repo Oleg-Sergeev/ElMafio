@@ -1,4 +1,6 @@
-﻿using Infrastructure.Data.Models;
+﻿using System.Reflection;
+using Infrastructure.Data.Configurations;
+using Infrastructure.Data.Models;
 using Infrastructure.Data.Models.Games.Settings;
 using Infrastructure.Data.Models.Games.Settings.Mafia;
 using Infrastructure.Data.Models.Games.Stats;
@@ -19,6 +21,8 @@ public class BotContext : DbContext
     public DbSet<RussianRouletteStats> RussianRouletteStats => Set<RussianRouletteStats>();
     public DbSet<RussianRouletteSettings> RussianRouletteSettings => Set<RussianRouletteSettings>();
 
+    public DbSet<QuizStats> QuizStats => Set<QuizStats>();
+
 
     public BotContext(DbContextOptions<BotContext> options) : base(options)
     {
@@ -37,20 +41,18 @@ public class BotContext : DbContext
         modelBuilder.Entity<RussianRouletteSettings>()
             .Property(s => s.UnicodeSmileSurvived)
                 .HasDefaultValue("😎");
-
-
+        
         modelBuilder.Entity<GuildSettings>()
             .Property(g => g.Prefix)
             .HasDefaultValue("/");
 
-        modelBuilder.Entity<RussianRouletteStats>()
-            .HasKey(nameof(GameStats.UserId), nameof(GameStats.GuildSettingsId));
-
-        modelBuilder.Entity<MafiaStats>()
-            .HasKey(nameof(GameStats.UserId), nameof(GameStats.GuildSettingsId));
-
         modelBuilder.Entity<MafiaSettingsTemplate>()
             .HasIndex(t => t.Name)
             .IsUnique();
+
+        modelBuilder.ApplyConfiguration(new GameStatsConfiguration<QuizStats>());
+        modelBuilder.ApplyConfiguration(new GameStatsConfiguration<RussianRouletteStats>());
+
+        modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
     }
 }

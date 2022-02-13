@@ -12,21 +12,40 @@ public class VoteGroup
     public IReadOnlyDictionary<IGuildUser, Vote> PlayersVote { get; }
 
 
-    private readonly GameRole _votedRole;
-
-
-    public VoteGroup(GameRole votedRole, IReadOnlyDictionary<IGuildUser, Vote> playersVote)
+    public VoteGroup(GameRole votedRole, IReadOnlyDictionary<IGuildUser, Vote> playersVote, bool isUnanimousVote = false)
     {
         PlayersVote = playersVote;
 
-        _votedRole = votedRole;
-
-        Choice = CalculateChoice();
+        Choice = CalculateChoice(votedRole, isUnanimousVote);
     }
 
 
-    private Vote CalculateChoice()
+    private Vote CalculateChoice(GameRole votedRole, bool isUnanimousVote)
     {
+        if (isUnanimousVote)
+        {
+            var activeVotes = PlayersVote.Values.Where(v => v.IsSkip || v.Option is not null);
+
+            if (!activeVotes.Any())
+                return new Vote(votedRole, null, false);
+
+
+            var allSkipped = activeVotes.All(v => v.IsSkip);
+
+            if (allSkipped)
+                return new Vote(votedRole, null, true);
+
+
+            var killedPlayer = activeVotes.FirstOrDefault()?.Option;
+
+            var allVotedForOne = activeVotes.All(v => v.Option == killedPlayer);
+
+            if (allVotedForOne)
+                return new Vote(votedRole, killedPlayer, false);
+            else
+                return new Vote(votedRole, null, false);
+        }
+
         var skipCount = 0;
 
         var votes = new Dictionary<IGuildUser, int>();
@@ -50,15 +69,15 @@ public class VoteGroup
 
         if (votes.Count == 0)
         {
-            result = new Vote(_votedRole, null, skipCount > 0);
+            result = new Vote(votedRole, null, skipCount > 0);
         }
         else if (votes.Count == 1)
         {
             var vote = votes.First();
 
             result = vote.Value > skipCount
-                ? new Vote(_votedRole, vote.Key, false)
-                : new Vote(_votedRole, null, skipCount > vote.Value);
+                ? new Vote(votedRole, vote.Key, false)
+                : new Vote(votedRole, null, skipCount > vote.Value);
         }
         else
         {
@@ -67,9 +86,9 @@ public class VoteGroup
             votesList.Sort((v1, v2) => v2.Value - v1.Value);
 
             if (votesList[0].Value > votesList[1].Value && votesList[0].Value > skipCount)
-                result = new Vote(_votedRole, votesList[0].Key, false);
+                result = new Vote(votedRole, votesList[0].Key, false);
             else
-                result = new Vote(_votedRole, null, skipCount > votesList[0].Value);
+                result = new Vote(votedRole, null, skipCount > votesList[0].Value);
         }
 
         return result;

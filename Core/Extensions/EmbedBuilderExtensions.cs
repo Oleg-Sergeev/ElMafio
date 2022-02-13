@@ -1,4 +1,5 @@
-﻿using Discord;
+﻿using Core.Common;
+using Discord;
 
 namespace Core.Extensions;
 
@@ -59,5 +60,5 @@ public static class EmbedBuilderExtensions
 
 
     public static EmbedBuilder WithRandomColor(this EmbedBuilder builder)
-        => builder.WithColor(Random.Shared.Next(0, 256), Random.Shared.Next(0, 256), Random.Shared.Next(0, 256));
+        => builder.WithColor(Utils.GetRandomColor());
 }

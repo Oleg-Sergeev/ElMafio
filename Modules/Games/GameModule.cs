@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Threading.Tasks;
 using Core.Common;
 using Core.Common.Data;
@@ -9,12 +11,15 @@ using Discord;
 using Discord.Commands;
 using Fergun.Interactive;
 using Fergun.Interactive.Pagination;
+using Infrastructure.Data.Models;
+using Infrastructure.Data.Models.Games.Stats;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 
 namespace Modules.Games;
 
 
-public abstract class GameModule : GameModule<GameData>
+public abstract class GameModule<TStats> : GameModule<GameData, TStats> where TStats : GameStats, new()
 {
     protected GameModule(InteractiveService interactiveService) : base(interactiveService)
     {
@@ -23,7 +28,9 @@ public abstract class GameModule : GameModule<GameData>
 
 
 [RequireContext(ContextType.Guild)]
-public abstract class GameModule<TData> : GuildModuleBase where TData : GameData
+public abstract class GameModule<TData, TStats> : GuildModuleBase
+    where TData : GameData
+    where TStats : GameStats, new()
 {
     protected static Dictionary<ulong, Dictionary<Type, TData>> GamesData { get; } = new();
 
@@ -276,6 +283,40 @@ public abstract class GameModule<TData> : GuildModuleBase where TData : GameData
     }
 
 
+    [Command("Статистика")]
+    [Alias("Стат")]
+    [Priority(-1)]
+    public virtual Task ShowStatsAsync()
+        => ShowStatsAsync(Context.User);
+
+    [Command("Статистика")]
+    [Alias("Стат")]
+    public virtual async Task ShowStatsAsync(IUser user)
+    {
+        var userStats = await Context.Db.Set<TStats>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.GuildSettingsId == Context.Guild.Id && s.UserId == user.Id);
+
+        if (userStats is null)
+        {
+            return;
+        }
+
+        var embedBuilder = GetStatsEmbedBuilder(userStats, user);
+
+        await ReplyAsync(embed: embedBuilder.Build());
+    }
+
+    protected virtual EmbedBuilder GetStatsEmbedBuilder(TStats stats, IUser user)
+        => new EmbedBuilder()
+        .WithTitle($"Статистика игрока {user.GetFullName()}")
+        .WithUserAuthor(user)
+        .WithUserFooter(Context.Client.CurrentUser)
+        .WithCurrentTimestamp()
+        .WithColor(new Color(230, 151, 16))
+        .AddField("Общий % побед", $"{stats.WinRate:P2} ({stats.WinsCount}/{stats.GamesCount})", true);
+
+
 
     protected abstract TData CreateGameData(IGuildUser host);
 
@@ -306,6 +347,42 @@ public abstract class GameModule<TData> : GuildModuleBase where TData : GameData
         return Task.FromResult(PreconditionResult.FromSuccess());
     }
 
+    protected virtual async Task<int> AddNewStatsAsync(IEnumerable<ulong> playersIds, IDictionary<ulong, TStats> stats)
+    {
+        var existingUsersIds = await Context.Db.Users
+                            .AsNoTracking()
+                            .Where(u => playersIds.Any(id => id == u.Id))
+                            .Select(u => u.Id)
+                            .ToListAsync();
+
+        var newUsersIds = playersIds.Except(existingUsersIds);
+
+        if (newUsersIds.Any())
+            AddNewUsers(newUsersIds);
+
+        var newUsersStats = newUsersIds
+        .Concat(existingUsersIds.Except(stats.Keys))
+        .Select(id => new TStats
+        {
+            UserId = id,
+            GuildSettingsId = Context.Guild.Id
+        }).ToList();
+
+        Context.Db.AddRange(newUsersStats);
+
+        stats.AddRange(newUsersStats.ToDictionary(s => s.UserId));
+
+        return newUsersStats.Count;
+    }
+
+    // Mb replace
+    protected void AddNewUsers(IEnumerable<ulong> usersIds)
+    {
+        Context.Db.Users.AddRange(usersIds.Select(id => new User
+        {
+            Id = id
+        }).ToList());
+    }
 
     protected void AddGameDataToGamesList(TData gameData)
     {

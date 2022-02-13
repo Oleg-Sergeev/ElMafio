@@ -5,13 +5,10 @@ namespace Infrastructure.Data.Models.Games.Stats;
 public abstract class GameStats : IResetable
 {
     public int GamesCount { get; set; }
+
     public int WinsCount { get; set; }
 
-    public float WinRate
-    {
-        get => GamesCount != 0 ? (float)WinsCount / GamesCount : 0;
-        private set { }
-    }
+    public float WinRate { get; private set; }
 
     public ulong UserId { get; set; }
     public User User { get; set; } = null!;

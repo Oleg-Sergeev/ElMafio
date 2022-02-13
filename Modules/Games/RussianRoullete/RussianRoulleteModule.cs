@@ -20,7 +20,7 @@ namespace Modules.Games.RussianRoullete;
 [Name("Русская рулетка")]
 [Group("Рулетка")]
 [Alias("р")]
-public class RussianRouletteModule : GameModule
+public class RussianRouletteModule : GameModule<RussianRouletteStats>
 {
     private readonly IGameSettingsService<RussianRouletteSettings> _settingsService;
 

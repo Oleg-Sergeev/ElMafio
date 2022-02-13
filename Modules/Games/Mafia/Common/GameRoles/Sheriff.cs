@@ -117,7 +117,6 @@ public class Sheriff : Innocent, IKiller, IChecker
 
         stats.SheriffMovesCount += MovesCount;
         stats.SheriffRevealsCount += RevealsCount;
-        stats.SheriffKillsCount += KillsCount;
     }
 
 

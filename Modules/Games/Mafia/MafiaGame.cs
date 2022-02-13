@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime;
 using System.Threading;
 using System.Threading.Tasks;
 using Core.Common;
+using Core.Common.Data;
 using Core.Extensions;
 using Discord;
 using Fergun.Interactive;
@@ -65,7 +67,7 @@ public class MafiaGame
         }
 
 
-        await _guildData.GeneralTextChannel.SendMessageAsync(embed: GenerateRolesInfoEmbed());
+        await _guildData.GeneralTextChannel.SendMessageAsync(embed: GenerateRolesAmountEmbed());
 
         await Task.Delay(5000);
 
@@ -403,6 +405,11 @@ public class MafiaGame
             .Select(k => k.KilledPlayer!)
             .Distinct();
 
+        var innocentsKill = GetInnocentsKill();
+
+        if (innocentsKill is not null)
+            kills = kills.Append(innocentsKill);
+
         var heals = healers
             .Where(h => h.HealedPlayer is not null)
             .Select(k => k.HealedPlayer!)
@@ -415,15 +422,6 @@ public class MafiaGame
             .ToList();
 
         if (!_template.GameSubSettings.IsCustomGame && _template.GameSubSettings.IsRatingGame)
-        {
-            foreach (var killer in killers.Where(k => !k.IsSkip))
-            {
-                killer.MovesCount++;
-
-                if (killer.KilledPlayer is not null && corpses.Contains(killer.KilledPlayer))
-                    killer.KillsCount++;
-            }
-
             foreach (var healer in healers.Where(h => !h.IsSkip))
             {
                 healer.MovesCount++;
@@ -431,7 +429,6 @@ public class MafiaGame
                 if (healer.HealedPlayer is not null && kills.Any(k => k.Id == healer.HealedPlayer.Id))
                     healer.HealsCount++;
             }
-        }
 
 
         var maniacKills = _rolesData.Maniacs.Values
@@ -468,7 +465,22 @@ public class MafiaGame
             .ToList();
     }
 
+    private IGuildUser? GetInnocentsKill()
+    {
+        if (!_template.GameSubSettings.IsCustomGame || !_template.RolesExtraInfoSubSettings.CanInnocentsKillAtNight)
+            return null;
 
+        var innocents = _rolesData.Innocents.Values.Where(i => i.IsAlive && i.GetType() == typeof(Innocent));
+
+        if (!innocents.Any())
+            return null;
+
+        var playersVotes = innocents.ToDictionary(i => i.Player, i => new Vote(i, i.LastMove, i.IsSkip));
+
+        var voteGroup = new VoteGroup(_rolesData.GroupRoles[nameof(CitizenGroup)], playersVotes, _template.RolesExtraInfoSubSettings.InnocentsMustVoteForOnePlayer);
+
+        return voteGroup.Choice.Option;
+    }
 
 
     private async Task<string> SendLastWordMessageAsync(IGuildUser player)
@@ -728,7 +740,7 @@ public class MafiaGame
     }
 
 
-    private Embed GenerateRolesInfoEmbed()
+    private Embed GenerateRolesAmountEmbed()
     {
         var roleGrouping = _context.RolesData.AliveRoles.Values.Select(r => r.Name).GroupBy(n => n, (n, group) => new { Name = n, Count = group.Count() });
 

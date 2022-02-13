@@ -4,6 +4,7 @@ using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,10 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations
 {
     [DbContext(typeof(BotContext))]
-    partial class GuildContextModelSnapshot : ModelSnapshot
+    [Migration("20220212115808_AddQuizStats")]
+    partial class AddQuizStats
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -313,17 +315,13 @@ namespace Infrastructure.Migrations
                         .HasColumnType("int");
 
                     b.Property<float>("BlacksWinRate")
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("real")
-                        .HasComputedColumnSql("IIF([BlacksGamesCount] != 0, CAST([BlacksWinsCount] AS REAL) / [BlacksGamesCount], 0.0)", true);
+                        .HasColumnType("real");
 
                     b.Property<int>("BlacksWinsCount")
                         .HasColumnType("int");
 
                     b.Property<float>("DoctorEfficiency")
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("real")
-                        .HasComputedColumnSql("IIF([DoctorMovesCount] != 0, CAST([DoctorHealsCount] AS REAL) / [DoctorMovesCount], 0.0)", true);
+                        .HasColumnType("real");
 
                     b.Property<int>("DoctorHealsCount")
                         .HasColumnType("int");
@@ -332,9 +330,7 @@ namespace Infrastructure.Migrations
                         .HasColumnType("int");
 
                     b.Property<float>("DonEfficiency")
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("real")
-                        .HasComputedColumnSql("IIF([DonMovesCount] != 0, CAST([DonRevealsCount] AS REAL) / [DonMovesCount], 0.0)", true);
+                        .HasColumnType("real");
 
                     b.Property<int>("DonMovesCount")
                         .HasColumnType("int");
@@ -352,19 +348,16 @@ namespace Infrastructure.Migrations
                         .HasColumnType("real");
 
                     b.Property<float>("Rating")
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("real")
-                        .HasComputedColumnSql("IIF([GamesCount] != 0, 100.0 * (CAST(([WinsCount] + [BlacksWinsCount] * 1.25 + [DoctorHealsCount] * 1.5 + [SheriffRevealsCount] * 1.3 + [DonRevealsCount] * 1.3) AS REAL) + [ExtraScores] - [PenaltyScores]) * (CAST([WinsCount] AS REAL) / [GamesCount]), 0.0)", true);
+                        .HasColumnType("real");
 
                     b.Property<float>("Scores")
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("real")
-                        .HasComputedColumnSql("CAST(([WinsCount] + [BlacksWinsCount] * 1.25 + [DoctorHealsCount] * 1.5 + [SheriffRevealsCount] * 1.3 + [DonRevealsCount] * 1.3) AS REAL)", true);
+                        .HasColumnType("real");
 
                     b.Property<float>("SheriffEfficiency")
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("real")
-                        .HasComputedColumnSql("IIF([SheriffMovesCount] != 0, CAST([SheriffRevealsCount] AS REAL) / [SheriffMovesCount], 0.0)", true);
+                        .HasColumnType("real");
+
+                    b.Property<int>("SheriffKillsCount")
+                        .HasColumnType("int");
 
                     b.Property<int>("SheriffMovesCount")
                         .HasColumnType("int");
@@ -373,9 +366,7 @@ namespace Infrastructure.Migrations
                         .HasColumnType("int");
 
                     b.Property<float>("WinRate")
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("real")
-                        .HasComputedColumnSql("IIF([GamesCount] != 0, CAST([WinsCount] AS REAL) / [GamesCount], 0.0)");
+                        .HasColumnType("real");
 
                     b.Property<int>("WinsCount")
                         .HasColumnType("int");
@@ -399,9 +390,7 @@ namespace Infrastructure.Migrations
                         .HasColumnType("int");
 
                     b.Property<float>("WinRate")
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("real")
-                        .HasComputedColumnSql("IIF([GamesCount] != 0, CAST([WinsCount] AS REAL) / [GamesCount], 0.0)");
+                        .HasColumnType("real");
 
                     b.Property<int>("WinsCount")
                         .HasColumnType("int");
@@ -425,9 +414,7 @@ namespace Infrastructure.Migrations
                         .HasColumnType("int");
 
                     b.Property<float>("WinRate")
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("real")
-                        .HasComputedColumnSql("IIF([GamesCount] != 0, CAST([WinsCount] AS REAL) / [GamesCount], 0.0)");
+                        .HasColumnType("real");
 
                     b.Property<int>("WinsCount")
                         .HasColumnType("int");

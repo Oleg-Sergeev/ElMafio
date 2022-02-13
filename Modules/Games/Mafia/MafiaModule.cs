@@ -30,13 +30,14 @@ using Modules.Games.Mafia.Common.GameRoles;
 using Modules.Games.Mafia.Common.GameRoles.Data;
 using Modules.Games.Mafia.Common.Services;
 using Modules.Games.Services;
+using Newtonsoft.Json.Linq;
 using Serilog;
 
 namespace Modules.Games.Mafia;
 
 [Group("Мафия")]
 [Alias("м")]
-public class MafiaModule : GameModule<MafiaData>
+public class MafiaModule : GameModule<MafiaData, MafiaStats>
 {
     private readonly IMafiaSetupService _mafiaService;
     private readonly IGameSettingsService<MafiaSettings> _settingsService;
@@ -45,6 +46,69 @@ public class MafiaModule : GameModule<MafiaData>
     {
         _mafiaService = mafiaService;
         _settingsService = settingsService;
+    }
+
+
+    [Command("Рейтинг")]
+    [Alias("Рейт")]
+    public async Task ShowRatingAsync(int playersPerPage = 10)
+    {
+        var allStats = await Context.Db.MafiaStats
+            .AsNoTracking()
+            .Where(s => s.GuildSettingsId == Context.Guild.Id)
+            .OrderByDescending(stat => stat.Rating)
+            .ThenByDescending(stat => stat.WinRate + stat.BlacksWinRate)
+            .ThenBy(stat => stat.GamesCount)
+            .ToListAsync();
+
+        if (allStats.Count == 0)
+        {
+            await ReplyEmbedAsync("Рейтинг отсутствует", EmbedStyle.Warning);
+
+            return;
+        }
+
+
+        var playersId = allStats
+            .Select(s => s.UserId)
+            .ToHashSet();
+
+        if (Context.Guild.Users.Count < Context.Guild.MemberCount)
+        {
+            await ReplyEmbedAsync($"Downloading users ({Context.Guild.MemberCount - Context.Guild.Users.Count})...", EmbedStyle.Debug);
+            await Context.Guild.DownloadUsersAsync();
+        }
+
+        var players = Context.Guild.Users
+            .Where(u => playersId.Contains(u.Id))
+            .ToDictionary(u => u.Id);
+
+        playersPerPage = Math.Clamp(playersPerPage, 1, 30);
+
+        var lazyPaginator = new LazyPaginatorBuilder()
+            .WithActionOnCancellation(ActionOnStop.DeleteMessage)
+            .WithActionOnTimeout(ActionOnStop.DeleteMessage)
+            .WithMaxPageIndex((allStats.Count - 1) / playersPerPage)
+            .WithCacheLoadedPages(true)
+            .WithPageFactory(page =>
+            {
+                int n = playersPerPage * page + 1;
+
+                var pageBuilder = new PageBuilder()
+                {
+                    Title = $"Рейтинг [{page * playersPerPage + 1} - {(page + 1) * playersPerPage}]",
+                    Color = Utils.GetRandomColor(),
+                    Description = string.Join('\n', allStats
+                    .Skip(page * playersPerPage)
+                    .Take(playersPerPage)
+                    .Select(ms => $"{n++}. **{players[ms.UserId].GetFullName()}** - {ms.Rating:0.##}"))
+                };
+
+                return pageBuilder;
+            })
+            .Build();
+
+        _ = Interactive.SendPaginatorAsync(lazyPaginator, Context.Channel, timeout: 10d.ToTimeSpanMinutes());
     }
 
 
@@ -96,53 +160,14 @@ public class MafiaModule : GameModule<MafiaData>
 
             var game = new MafiaGame(context);
 
-            var winner = await game.RunAsync();
+            var winner = Winner.None;// await game.RunAsync();
 
             Task? updateStatsTask = null;
 
+            updateStatsTask = UpdateStatsAsync(context.RolesData.AllRoles.Values, winner);
             if (winner.Role is not null)
             {
-                updateStatsTask = Task.Run(async () =>
-                {
-                    var roles = context.RolesData.AllRoles.Values.ToDictionary(p => p.Player.Id);
-
-                    var stats = await Context.Db.MafiaStats
-                        .Where(ms => ms.GuildSettingsId == Context.Guild.Id && roles.Keys.Any(id => id == ms.UserId))
-                        .ToDictionaryAsync(s => s.UserId);
-
-                    if (stats.Count < roles.Count)
-                    {
-                        var existingUsersIds = await Context.Db.Users
-                            .AsNoTracking()
-                            .Where(u => roles.Keys.Any(id => id == u.Id))
-                            .Select(u => u.Id)
-                            .ToListAsync();
-
-                        var newUsersIds = roles.Keys.Except(existingUsersIds);
-
-                        Context.Db.Users.AddRange(newUsersIds.Select(id => new User
-                        {
-                            Id = id
-                        }).ToList());
-
-                        var newUsersStats = newUsersIds
-                        .Concat(existingUsersIds.Except(stats.Keys))
-                        .Select(id => new MafiaStats
-                        {
-                            UserId = id,
-                            GuildSettingsId = Context.Guild.Id
-                        }).ToList();
-
-                        Context.Db.MafiaStats.AddRange(newUsersStats);
-
-                        stats.AddRange(newUsersStats.ToDictionary(s => s.UserId));
-                    }
-
-                    foreach (var role in roles.Values)
-                        role.UpdateStats(stats[role.Player.Id], winner);
-
-                    await Context.Db.SaveChangesAsync();
-                });
+                updateStatsTask = UpdateStatsAsync(context.RolesData.AllRoles.Values, winner);
 
 
                 await ReplyEmbedAsync($"Победителем оказался: {winner.Role.Name}!");
@@ -219,6 +244,22 @@ public class MafiaModule : GameModule<MafiaData>
     }
 
 
+    protected override EmbedBuilder GetStatsEmbedBuilder(MafiaStats stats, IUser user)
+    {
+        var embedBuilder = base.GetStatsEmbedBuilder(stats, user);
+
+        return embedBuilder
+            .AddField("% побед за мафию", $"{stats.BlacksWinRate:P2} ({stats.BlacksWinsCount}/{stats.BlacksGamesCount})", true)
+            .AddField("Эффективность доктора", $"{stats.DoctorEfficiency:P2} ({stats.DoctorHealsCount}/{stats.DoctorMovesCount})", true)
+            .AddField("Эффективность шерифа", $"{stats.SheriffEfficiency:P2} ({stats.SheriffRevealsCount}/{stats.SheriffMovesCount})", true)
+            .AddField("Эффективность дона", $"{stats.DonEfficiency:P2} ({stats.DonRevealsCount}/{stats.DonMovesCount})", true)
+            .AddField("Кол-во основных очков", stats.Scores.ToString("0.##"), true)
+            .AddField("Кол-во доп. очков", stats.ExtraScores.ToString("0.##"), true)
+            .AddField("Кол-во штрафных очков", stats.PenaltyScores.ToString("0.##"), true)
+            .AddEmptyField(true)
+            .AddField("Рейтинг", stats.Rating.ToString("0.##"));
+    }
+
 
     private async Task<MafiaContext> CreateMafiaContextAsync(MafiaSettings settings, MafiaData data)
     {
@@ -264,6 +305,34 @@ public class MafiaModule : GameModule<MafiaData>
             props.PermissionOverwrites = overwrites;
         }
     }
+
+
+
+    private async Task<int> UpdateStatsAsync(IEnumerable<GameRole> roles, Winner winner)
+    {
+        var rolesDict = roles.ToDictionary(p => p.Player.Id);
+
+        var stats = await Context.Db.MafiaStats
+            .Where(ms => ms.GuildSettingsId == Context.Guild.Id && rolesDict.Keys.Any(id => id == ms.UserId))
+            .ToDictionaryAsync(s => s.UserId);
+
+        int n = 0;
+
+        if (stats.Count < rolesDict.Count)
+            n = await AddNewStatsAsync(rolesDict.Keys, stats);
+
+        if (n > 0)
+            await ReplyEmbedAsync($"Добавлено новых статистик: {n}", EmbedStyle.Debug);
+
+        if (n != stats.Count - rolesDict.Count)
+            await ReplyEmbedAsync($"Ожидалось {stats.Count - rolesDict.Count} новых записей. Актуальное значение: {n}", EmbedStyle.Debug);
+
+        foreach (var role in rolesDict.Values)
+            role.UpdateStats(stats[role.Player.Id], winner);
+
+        return await Context.Db.SaveChangesAsync();
+    }
+
 
 
 
@@ -391,7 +460,7 @@ public class MafiaModule : GameModule<MafiaData>
             var str = "";
 
             foreach (var template in templates)
-                str += settings.CurrentTemplateId == template.Id 
+                str += settings.CurrentTemplateId == template.Id
                     ? $"**{template.Name}**\n"
                     : $"{template.Name}\n";
 
@@ -507,13 +576,13 @@ public class MafiaModule : GameModule<MafiaData>
         [Command]
         [Priority(-2)]
         public Task SetSettingsAsync()
-            => ShowSettingsAsync(true);
+            => DisplaySettingsAsync(true);
 
 
         [Command("Текущие")]
         [Alias("тек", "т")]
-        public Task ShowAllSettingsAsync()
-            => ShowSettingsAsync(false);
+        public Task ShowSettingsAsync()
+            => DisplaySettingsAsync(false);
 
 
 
@@ -554,7 +623,7 @@ public class MafiaModule : GameModule<MafiaData>
             };
 
 
-            SetParameters(settings, settigsVM);
+            SetDataParameters(settings, settigsVM);
 
             await Context.Db.SaveChangesAsync();
 
@@ -657,7 +726,7 @@ public class MafiaModule : GameModule<MafiaData>
         }
 
 
-        private async Task ShowSettingsAsync(bool withSetSettings)
+        private async Task DisplaySettingsAsync(bool withSetSettings)
         {
             const string CloseOption = "Закрыть";
             //const string CancelOption = "Отменить";
@@ -667,7 +736,7 @@ public class MafiaModule : GameModule<MafiaData>
             string? selectedBlock = null;
             string? selectedSetting = null;
 
-            (string? displayName, string? previousValue, string? currentValue, bool isModified) = (null, null, null, false);
+            (string? displayName, object? previousValue, object? currentValue, bool isModified) = (null, null, null, false);
 
             var isClosed = false;
             var wasSettingsModified = false;
@@ -791,80 +860,127 @@ public class MafiaModule : GameModule<MafiaData>
 
                 message = result.Message;
 
-                if (result.IsSuccess)
+                if (!result.IsSuccess)
+                    continue;
+
+                if (result.Value.Option == CloseOption)
                 {
-                    if (result.Value.Option == CloseOption)
-                    {
-                        isClosed = true;
+                    isClosed = true;
 
-                        await message.DeleteAsync();
+                    await message.DeleteAsync();
 
+                    break;
+                }
+
+                switch (result.Value.Row)
+                {
+                    case 0:
+                        selectedBlock = result.Value.Option;
                         break;
-                    }
 
-                    switch (result.Value.Row)
-                    {
-                        case 0:
-                            selectedBlock = result.Value.Option;
+                    case 1:
+                        selectedSetting = result.Value.Option;
+
+                        if (selectedBlock is null)
+                            throw new InvalidOperationException("selectedBlock cannot be null when a row 1 is selected");
+
+                        var settingsDisplay = settingsBlocks[selectedBlock][selectedSetting];
+
+                        previousValue = settingsDisplay.ModelValue;
+
+                        displayName = settingsDisplay.DisplayName;
+
+
+                        var vmParam = settingsDisplay.ViewModel.GetType().GetProperty(selectedSetting)
+                            ?? throw new InvalidOperationException($"Property \"{selectedSetting}\" was not found in \'vmParam\'");
+
+                        var dataParam = settingsDisplay.ModelParameter;
+
+
+                        var fullDisplayName = vmParam.GetFullDisplayName();
+
+                        var rawValue = await NextValueAsync(fullDisplayName);
+
+                        if (rawValue is null)
+                        {
+                            isModified = false;
+
                             break;
+                        }
 
-                        case 1:
-                            selectedSetting = result.Value.Option;
+                        var success = await TrySetParameterAsync(vmParam, settingsDisplay.ViewModel, rawValue, fullDisplayName);
 
-                            if (selectedBlock is null)
-                                throw new InvalidOperationException("selectedBlock cannot be null when a row 1 is selected");
+                        if (success)
+                        {
+                            var vmValue = vmParam.GetValue(settingsDisplay.ViewModel);
 
-                            var settingsDisplay = settingsBlocks[selectedBlock][selectedSetting];
+                            SetDataParameter(dataParam, vmParam, settingsDisplay.Model, vmValue);
 
-                            var prop = settingsDisplay.ViewModel.GetType().GetProperty(selectedSetting)
-                                ?? throw new InvalidOperationException($"Property \"{selectedSetting}\" was not found");
+                            currentValue = settingsDisplay.ModelValue;
 
-                            previousValue = settingsDisplay.ModelValue?.ToString();
+                            wasSettingsModified = currentValue != previousValue;
 
-                            var success = await TrySetParameterAsync(prop, settingsDisplay.ViewModel);
-
-                            if (success)
+                            if (wasSettingsModified)
                             {
-                                SetParameters(settingsDisplay.Model, settingsDisplay.ViewModel);
+                                var check = CheckSettings(settings);
 
-                                currentValue = settingsDisplay.ModelValue?.ToString();
+                                if (!check.IsSuccess)
+                                {
+                                    var errorEmbed = EmbedHelper.CreateEmbed(check.ErrorReason, EmbedStyle.Error, "Ошибка настроек");
 
-                                displayName = settingsDisplay.DisplayName;
+                                    _ = Interactive.DelayedSendMessageAndDeleteAsync(Context.Channel,
+                                    embed: errorEmbed,
+                                    deleteDelay: TimeSpan.FromSeconds(15),
+                                    messageReference: new(Context.Message.Id));
 
-                                wasSettingsModified = currentValue != previousValue;
+                                    SetDataParameter(dataParam, vmParam, settingsDisplay.Model, previousValue);
+
+                                    currentValue = previousValue;
+
+                                    success = false;
+                                }
                             }
 
-                            isModified = success;
+                            wasSettingsModified = currentValue != previousValue;
+                        }
 
-                            break;
+                        isModified = success;
 
-                        default:
-                            throw new InvalidOperationException($"Unknown select row. Value: {result.Value.Row}");
-                    }
+                        break;
+
+                    default:
+                        throw new InvalidOperationException($"Unknown select row. Value: {result.Value.Row}");
                 }
             }
             while (result is null || result.IsSuccess && !isClosed);
 
 
-            if (!withSetSettings)
+            if (!withSetSettings || !wasSettingsModified)
                 return;
 
             Embed embed;
 
-            if (wasSettingsModified)
+            var checkSettings = CheckSettings(settings);
+
+            if (!checkSettings.IsSuccess)
             {
-                var n = await Context.Db.SaveChangesAsync();
+                embed = EmbedHelper.CreateEmbed(checkSettings.ErrorReason, EmbedStyle.Error, "Ошибка настроек");
 
-                if (n > 0)
-                    embed = EmbedHelper.CreateEmbed("Настройки успешно сохранены", EmbedStyle.Successfull);
-                else
-                    embed = EmbedHelper.CreateEmbed("Изменения не найдены", EmbedStyle.Warning);
+                _ = Interactive.DelayedSendMessageAndDeleteAsync(Context.Channel,
+                embed: embed,
+                deleteDelay: TimeSpan.FromSeconds(15),
+                messageReference: new(Context.Message.Id));
 
+                return;
             }
+
+            var n = await Context.Db.SaveChangesAsync();
+
+            if (n > 0)
+                embed = EmbedHelper.CreateEmbed("Настройки успешно сохранены", EmbedStyle.Successfull);
             else
-            {
-                embed = EmbedHelper.CreateEmbed("Настройки не были сохранены", EmbedStyle.Warning);
-            }
+                embed = EmbedHelper.CreateEmbed("Изменения не найдены", EmbedStyle.Warning);
+
 
             _ = Interactive.DelayedSendMessageAndDeleteAsync(Context.Channel,
                 embed: embed,
@@ -883,10 +999,8 @@ public class MafiaModule : GameModule<MafiaData>
                     p => new SettingsDisplay(p.Name, p.GetShortDisplayName(), model, viewModel));
         }
 
-        private async Task<bool> TrySetParameterAsync(PropertyInfo parameter, object obj, string? description = null, string? displayName = null)
+        private async Task<string?> NextValueAsync(string displayName, string? description = null)
         {
-            displayName ??= parameter.GetFullDisplayName();
-
             var cancelComponent = new ComponentBuilder()
                 .WithButton("Отмена", "cancel", ButtonStyle.Danger)
                 .Build();
@@ -917,7 +1031,7 @@ public class MafiaModule : GameModule<MafiaData>
             await msg.DeleteAsync();
 
             if (task == cancelTask)
-                return false;
+                return null;
 
 
             var valueMessageResult = await valueTask;
@@ -926,7 +1040,7 @@ public class MafiaModule : GameModule<MafiaData>
             {
                 await ReplyEmbedAndDeleteAsync($"Вы не указали значение параметра **{displayName}**", EmbedStyle.Warning);
 
-                return false;
+                return null;
             }
 
             await valueMessageResult.Value.DeleteAsync();
@@ -935,11 +1049,19 @@ public class MafiaModule : GameModule<MafiaData>
             {
                 await ReplyEmbedAndDeleteAsync("Неверное значение параметра", EmbedStyle.Error);
 
-                return false;
+                return null;
             }
+
+            return valueMessage.Content;
+        }
+
+        private async Task<bool> TrySetParameterAsync(PropertyInfo parameter, object obj, string content, string? displayName = null)
+        {
+            displayName ??= parameter.GetFullDisplayName();
+
             if (parameter.PropertyType == typeof(bool?) || parameter.PropertyType == typeof(bool))
             {
-                var result = await new BooleanTypeReader().ReadAsync(Context, valueMessage.Content);
+                var result = await new BooleanTypeReader().ReadAsync(Context, content);
 
                 if (result.IsSuccess)
                     parameter.SetValue(obj, result.Values is not null ? result.BestMatch : null);
@@ -952,20 +1074,18 @@ public class MafiaModule : GameModule<MafiaData>
             }
             else
             {
-                var rawValue = valueMessage.Content;
-
                 if (parameter.PropertyType == typeof(ulong) || parameter.PropertyType == typeof(ulong?))
                 {
-                    if (rawValue.Contains('<'))
+                    if (content.Contains('<'))
                     {
-                        rawValue = Regex.Replace(rawValue, @"[\D]", string.Empty);
+                        content = Regex.Replace(content, @"[\D]", string.Empty);
                     }
                 }
 
                 var converter = TypeDescriptor.GetConverter(parameter.PropertyType);
-                if (converter.IsValid(rawValue))
+                if (converter.IsValid(content))
                 {
-                    var value = converter.ConvertFrom(rawValue);
+                    var value = converter.ConvertFrom(content);
 
                     parameter.SetValue(obj, value);
                 }
@@ -980,9 +1100,41 @@ public class MafiaModule : GameModule<MafiaData>
             return true;
         }
 
-        private void SetParameters<TData, TViewModel>(TData data, TViewModel viewModel)
-            where TData : notnull
-            where TViewModel : notnull
+
+        private static void SetDataParameter(PropertyInfo dataParam, PropertyInfo vmParam, object data, object? vmValue)
+        {
+            if (vmParam.PropertyType == typeof(bool?) || vmParam.PropertyType == typeof(bool))
+            {
+                if (vmValue is not null)
+                    dataParam.SetValue(data, vmValue);
+            }
+            else if (vmParam.PropertyType == typeof(int?) || vmParam.PropertyType == typeof(int))
+            {
+                if (vmValue is not null)
+                {
+                    if (vmValue.Equals(-1))
+                        dataParam.SetValue(data, default);
+                    else
+                        dataParam.SetValue(data, vmValue);
+                }
+            }
+            else if (vmParam.PropertyType == typeof(ulong?) || vmParam.PropertyType == typeof(ulong))
+            {
+                if (vmValue is not null)
+                {
+                    if (vmValue.Equals(0ul))
+                        dataParam.SetValue(data, default);
+                    else
+                        dataParam.SetValue(data, vmValue);
+                }
+            }
+            else
+            {
+                dataParam.SetValue(data, vmValue);
+            }
+        }
+
+        private void SetDataParameters(object data, object viewModel)
         {
             var dataParameters = data.GetType().GetProperties().Where(p => p.CanWrite).ToDictionary(p => p.Name);
             var vmParameters = viewModel.GetType().GetProperties().Where(p => p.CanWrite);
@@ -991,7 +1143,7 @@ public class MafiaModule : GameModule<MafiaData>
             {
                 if (!dataParameters.TryGetValue(vmParam.Name, out var dataParam))
                 {
-                    GuildLogger.Warning(LogTemplate, nameof(SetParameters),
+                    GuildLogger.Warning(LogTemplate, nameof(SetDataParameters),
                         $"View Model parameter {vmParam.Name} was not found in Data parameters");
 
                     continue;
@@ -1001,69 +1153,64 @@ public class MafiaModule : GameModule<MafiaData>
                 {
                     var msg = $"Param {dataParam.Name}: Data param type ({dataParam.PropertyType}) is not equals to ViewModel param type ({vmParam.PropertyType})";
 
-                    GuildLogger.Warning(LogTemplate, nameof(SetParameters), msg);
+                    GuildLogger.Warning(LogTemplate, nameof(SetDataParameters), msg);
 
-                    Log.Warning(LogTemplate, nameof(SetParameters), $"[{Context.Guild.Name} {Context.Guild.Id}] {msg}");
+                    Log.Warning(LogTemplate, nameof(SetDataParameters), $"[{Context.Guild.Name} {Context.Guild.Id}] {msg}");
 
                     continue;
                 }
 
+                var vmValue = vmParam.GetValue(viewModel);
 
-                if (vmParam.PropertyType == typeof(bool?) || vmParam.PropertyType == typeof(bool))
-                {
-                    var vmValue = vmParam.GetValue(viewModel);
-
-                    if (vmValue is not null)
-                        dataParam.SetValue(data, vmValue);
-                }
-                else if (vmParam.PropertyType == typeof(int?) || vmParam.PropertyType == typeof(int))
-                {
-                    var vmValue = vmParam.GetValue(viewModel);
-
-                    if (vmValue is not null)
-                    {
-                        if (vmValue.Equals(-1))
-                            dataParam.SetValue(data, default);
-                        else
-                            dataParam.SetValue(data, vmValue);
-                    }
-                }
-                else if (vmParam.PropertyType == typeof(ulong?) || vmParam.PropertyType == typeof(ulong))
-                {
-                    var vmValue = vmParam.GetValue(viewModel);
-
-                    if (vmValue is not null)
-                    {
-                        if (vmValue.Equals(0ul))
-                            dataParam.SetValue(data, default);
-                        else
-                            dataParam.SetValue(data, vmValue);
-                    }
-                }
-                else
-                {
-                    var vmValue = vmParam.GetValue(viewModel);
-
-                    dataParam.SetValue(data, vmValue);
-                }
+                SetDataParameter(dataParam, vmParam, data, vmValue);
             }
         }
 
+        private static PreconditionResult CheckSettings(MafiaSettings settings)
+        {
+            ArgumentNullException.ThrowIfNull(settings.CurrentTemplate);
+
+
+            var gameSettings = settings.CurrentTemplate.GameSubSettings;
+
+            if (gameSettings.IsRatingGame && gameSettings.IsCustomGame)
+                return PreconditionResult.FromError($"Конфликт настроек. " +
+                    $"Параметры {nameof(gameSettings.IsRatingGame)} ({gameSettings.IsRatingGame}) " +
+                    $"и {nameof(gameSettings.IsCustomGame)} ({gameSettings.IsCustomGame}) взаимоисключают друг друга. " +
+                    $"Измените значение одного или двух параметров для устранения конфликта");
+
+            if (gameSettings.MafiaCoefficient < 2)
+                return PreconditionResult.FromError("Коэффициент мафии не может быть меньше 2");
+
+            if (gameSettings.VoteTime < 10)
+                return PreconditionResult.FromError("Время голосования не может быть меньше 10 секунд");
+
+
+            var extraInfoSettings = settings.CurrentTemplate.RolesExtraInfoSubSettings;
+
+            if (!extraInfoSettings.MurdersKnowEachOther && extraInfoSettings.MurdersVoteTogether)
+                return PreconditionResult.FromError($"Конфликт настроек. " +
+                    $"Параметры {nameof(extraInfoSettings.MurdersKnowEachOther)} ({extraInfoSettings.MurdersKnowEachOther}) " +
+                    $"и {nameof(extraInfoSettings.MurdersVoteTogether)} ({extraInfoSettings.MurdersVoteTogether}) взаимоисключают друг друга. " +
+                    $"Измените значение одного или двух параметров для устранения конфликта");
+
+            return PreconditionResult.FromSuccess();
+        }
 
 
         private class SettingsDisplay
         {
             private readonly string _propName;
 
-            private readonly PropertyInfo _prop;
 
+            public PropertyInfo ModelParameter { get; }
 
             public string DisplayName { get; }
             public object Model { get; }
             public object ViewModel { get; }
 
 
-            public object? ModelValue => _prop.GetValue(Model);
+            public object? ModelValue => ModelParameter.GetValue(Model);
 
 
             public SettingsDisplay(string propName, string displayName, object model, object viewModel)
@@ -1074,7 +1221,7 @@ public class MafiaModule : GameModule<MafiaData>
 
                 _propName = propName;
 
-                _prop = Model.GetType().GetProperty(_propName) ?? throw new InvalidOperationException($"Property \"{_propName}\" was not found");
+                ModelParameter = Model.GetType().GetProperty(_propName) ?? throw new InvalidOperationException($"Property \"{_propName}\" was not found");
             }
         }
     }

@@ -101,6 +101,7 @@ public static class Application
             {
                 options.UseSqlServer(context.Configuration.GetConnectionStringDebugDb());
                 options.EnableSensitiveDataLogging();
+                options.EnableDetailedErrors();
             })
             .AddHostedService<CommandHandlerService>()
             .AddSingleton<InteractiveService>()

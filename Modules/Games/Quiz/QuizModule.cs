@@ -9,13 +9,14 @@ using Discord;
 using Discord.Commands;
 using Fergun.Interactive;
 using Fergun.Interactive.Selection;
+using Infrastructure.Data.Models.Games.Stats;
 using Trivia4NET;
 using Trivia4NET.Entities;
 
 namespace Modules.Games.Quiz;
 
 [RequireOwner]
-public class QuizModule : GameModule
+public class QuizModule : GameModule<QuizStats>
 {
     public QuizModule(InteractiveService interactiveService) : base(interactiveService)
     {
