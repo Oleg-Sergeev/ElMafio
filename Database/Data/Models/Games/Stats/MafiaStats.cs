@@ -46,21 +46,28 @@ public class MafiaStats : GameStats
     {
         base.Reset();
 
+        BlacksGamesCount = 0;
+        BlacksWinsCount = 0;
+        BlacksWinRate = 0;
+
+        DoctorMovesCount = 0;
+        DoctorHealsCount = 0;
+        DoctorEfficiency = 0;
+
+        SheriffMovesCount = 0;
+        SheriffRevealsCount = 0;
+        SheriffEfficiency = 0;
+
+        DonMovesCount = 0;
+        DonRevealsCount = 0;
+        DonEfficiency = 0;
+
         ExtraScores = 0;
 
         PenaltyScores = 0;
 
+        Scores = 0;
 
-        BlacksGamesCount = 0;
-        BlacksWinsCount = 0;
-
-        DoctorMovesCount = 0;
-        DoctorHealsCount = 0;
-
-        SheriffMovesCount = 0;
-        SheriffRevealsCount = 0;
-
-        DonMovesCount = 0;
-        DonRevealsCount = 0;
+        Rating = 0;
     }
 }

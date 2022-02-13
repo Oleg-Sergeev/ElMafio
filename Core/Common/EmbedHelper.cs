@@ -38,7 +38,7 @@ public static class EmbedHelper
             innerEmbedBuilder.WithUserAuthor(userAuthor);
 
         if (userFooter is not null)
-            innerEmbedBuilder.WithUserAuthor(userFooter);
+            innerEmbedBuilder.WithUserFooter(userFooter);
 
         var embed = CreateEmbed(description, embedStyle, title, innerEmbedBuilder);
 

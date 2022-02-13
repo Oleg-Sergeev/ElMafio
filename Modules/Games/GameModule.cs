@@ -283,41 +283,6 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
     }
 
 
-    [Command("Статистика")]
-    [Alias("Стат")]
-    [Priority(-1)]
-    public virtual Task ShowStatsAsync()
-        => ShowStatsAsync(Context.User);
-
-    [Command("Статистика")]
-    [Alias("Стат")]
-    public virtual async Task ShowStatsAsync(IUser user)
-    {
-        var userStats = await Context.Db.Set<TStats>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.GuildSettingsId == Context.Guild.Id && s.UserId == user.Id);
-
-        if (userStats is null)
-        {
-            return;
-        }
-
-        var embedBuilder = GetStatsEmbedBuilder(userStats, user);
-
-        await ReplyAsync(embed: embedBuilder.Build());
-    }
-
-    protected virtual EmbedBuilder GetStatsEmbedBuilder(TStats stats, IUser user)
-        => new EmbedBuilder()
-        .WithTitle($"Статистика игрока {user.GetFullName()}")
-        .WithUserAuthor(user)
-        .WithUserFooter(Context.Client.CurrentUser)
-        .WithCurrentTimestamp()
-        .WithColor(new Color(230, 151, 16))
-        .AddField("Общий % побед", $"{stats.WinRate:P2} ({stats.WinsCount}/{stats.GamesCount})", true);
-
-
-
     protected abstract TData CreateGameData(IGuildUser host);
 
 
@@ -542,5 +507,48 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
             else
                 await Interactive.SendPaginatorAsync(paginatorBuilder.Build(), Context.Channel, TimeSpan.FromMinutes(10));
         }
+    }
+
+
+    [Group("Статистика")]
+    [Alias("Стат", "С")]
+    public abstract class GameStatsModule : GuildModuleBase
+    {
+        protected GameStatsModule(InteractiveService interactiveService) : base(interactiveService)
+        {
+        }
+
+
+        [Command("Личная")]
+        [Alias("Л")]
+        [Priority(-10)]
+        public virtual async Task ShowStatsAsync(IUser? user = null)
+        {
+            user ??= Context.User;
+
+            var userStats = await Context.Db.Set<TStats>()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.GuildSettingsId == Context.Guild.Id && s.UserId == user.Id);
+
+            if (userStats is null)
+            {
+                return;
+            }
+
+            var embedBuilder = GetStatsEmbedBuilder(userStats, user);
+
+            await ReplyAsync(embed: embedBuilder.Build());
+        }
+
+
+        protected virtual EmbedBuilder GetStatsEmbedBuilder(TStats stats, IUser user)
+            => new EmbedBuilder()
+            .WithTitle($"Статистика игрока {user.GetFullName()}")
+            .WithUserAuthor(user)
+            .WithUserFooter(Context.Client.CurrentUser)
+            .WithCurrentTimestamp()
+            .WithColor(new Color(230, 151, 16))
+            .AddField("Общий % побед", $"{stats.WinRate:P2} ({stats.WinsCount}/{stats.GamesCount})", true);
+
     }
 }

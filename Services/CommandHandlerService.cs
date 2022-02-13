@@ -62,23 +62,24 @@ public class CommandHandlerService : DiscordClientService
     }
 
 
-
-    private async Task OnMessageReceivedAsync(SocketMessage socketMessage)
+    private Task OnMessageReceivedAsync(SocketMessage socketMessage)
     {
         if (socketMessage.Author.IsBot)
-            return;
+            return Task.CompletedTask;
 
         if (socketMessage is not SocketUserMessage userMessage)
-            return;
+            return Task.CompletedTask;
 
         if (userMessage.Channel is not IGuildChannel)
-            return;
+            return Task.CompletedTask;
 
         var context = new DbSocketCommandContext(Client, userMessage, _db);
 
         int argPos = 0;
         if (userMessage.HasStringPrefix(_prefixes[context.Guild.Id], ref argPos) || userMessage.HasMentionPrefix(Client.CurrentUser, ref argPos))
-            await _commandService.ExecuteAsync(context, argPos, _provider, MultiMatchHandling.Best);
+            _ = Task.Run(async () => await _commandService.ExecuteAsync(context, argPos, _provider, MultiMatchHandling.Best));
+
+        return Task.CompletedTask;
     }
 
 

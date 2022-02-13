@@ -67,9 +67,12 @@ public class HelpModule : GuildModuleBase
             {
                 if (!string.IsNullOrEmpty(tab))
                     tab += '➥';
-                builder.AddField(tab + (GetParentModulesGroupsPath(module.Group, module) ?? module.Name), commandList, false);
+
+                var modulePath = module.GetModulePath();
+                builder.AddField(tab + (!string.IsNullOrEmpty(modulePath) ? modulePath : EmptySpace), commandList, false);
             }
         }
+
         try
         {
             await channel.SendMessageAsync(embed: builder.Build());
@@ -275,6 +278,9 @@ public class HelpModule : GuildModuleBase
         if (!module.IsSubmodule)
             return 0;
 
+        if (string.IsNullOrEmpty(module.Group))
+            return GetParentsCount(module.Parent);
+
         return 1 + GetParentsCount(module.Parent);
     }
 
@@ -295,15 +301,5 @@ public class HelpModule : GuildModuleBase
             return t.TrimEnd('.');
 
         return t;
-    }
-
-    private static string GetParentModulesNames(string subModuleName, ModuleInfo module)
-    {
-        if (!module.IsSubmodule)
-            return subModuleName;
-
-        subModuleName = $"{module.Parent.Name}.{subModuleName}";
-
-        return GetParentModulesNames(subModuleName, module.Parent);
     }
 }

@@ -24,13 +24,13 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Modules.Common.MultiSelect;
+using Modules.Common.Preconditions;
 using Modules.Games.Mafia.Common;
 using Modules.Games.Mafia.Common.Data;
 using Modules.Games.Mafia.Common.GameRoles;
 using Modules.Games.Mafia.Common.GameRoles.Data;
 using Modules.Games.Mafia.Common.Services;
 using Modules.Games.Services;
-using Newtonsoft.Json.Linq;
 using Serilog;
 
 namespace Modules.Games.Mafia;
@@ -48,68 +48,6 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
         _settingsService = settingsService;
     }
 
-
-    [Command("Рейтинг")]
-    [Alias("Рейт")]
-    public async Task ShowRatingAsync(int playersPerPage = 10)
-    {
-        var allStats = await Context.Db.MafiaStats
-            .AsNoTracking()
-            .Where(s => s.GuildSettingsId == Context.Guild.Id)
-            .OrderByDescending(stat => stat.Rating)
-            .ThenByDescending(stat => stat.WinRate + stat.BlacksWinRate)
-            .ThenBy(stat => stat.GamesCount)
-            .ToListAsync();
-
-        if (allStats.Count == 0)
-        {
-            await ReplyEmbedAsync("Рейтинг отсутствует", EmbedStyle.Warning);
-
-            return;
-        }
-
-
-        var playersId = allStats
-            .Select(s => s.UserId)
-            .ToHashSet();
-
-        if (Context.Guild.Users.Count < Context.Guild.MemberCount)
-        {
-            await ReplyEmbedAsync($"Downloading users ({Context.Guild.MemberCount - Context.Guild.Users.Count})...", EmbedStyle.Debug);
-            await Context.Guild.DownloadUsersAsync();
-        }
-
-        var players = Context.Guild.Users
-            .Where(u => playersId.Contains(u.Id))
-            .ToDictionary(u => u.Id);
-
-        playersPerPage = Math.Clamp(playersPerPage, 1, 30);
-
-        var lazyPaginator = new LazyPaginatorBuilder()
-            .WithActionOnCancellation(ActionOnStop.DeleteMessage)
-            .WithActionOnTimeout(ActionOnStop.DeleteMessage)
-            .WithMaxPageIndex((allStats.Count - 1) / playersPerPage)
-            .WithCacheLoadedPages(true)
-            .WithPageFactory(page =>
-            {
-                int n = playersPerPage * page + 1;
-
-                var pageBuilder = new PageBuilder()
-                {
-                    Title = $"Рейтинг [{page * playersPerPage + 1} - {(page + 1) * playersPerPage}]",
-                    Color = Utils.GetRandomColor(),
-                    Description = string.Join('\n', allStats
-                    .Skip(page * playersPerPage)
-                    .Take(playersPerPage)
-                    .Select(ms => $"{n++}. **{players[ms.UserId].GetFullName()}** - {ms.Rating:0.##}"))
-                };
-
-                return pageBuilder;
-            })
-            .Build();
-
-        _ = Interactive.SendPaginatorAsync(lazyPaginator, Context.Channel, timeout: 10d.ToTimeSpanMinutes());
-    }
 
 
     protected override MafiaData CreateGameData(IGuildUser host)
@@ -244,23 +182,6 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
     }
 
 
-    protected override EmbedBuilder GetStatsEmbedBuilder(MafiaStats stats, IUser user)
-    {
-        var embedBuilder = base.GetStatsEmbedBuilder(stats, user);
-
-        return embedBuilder
-            .AddField("% побед за мафию", $"{stats.BlacksWinRate:P2} ({stats.BlacksWinsCount}/{stats.BlacksGamesCount})", true)
-            .AddField("Эффективность доктора", $"{stats.DoctorEfficiency:P2} ({stats.DoctorHealsCount}/{stats.DoctorMovesCount})", true)
-            .AddField("Эффективность шерифа", $"{stats.SheriffEfficiency:P2} ({stats.SheriffRevealsCount}/{stats.SheriffMovesCount})", true)
-            .AddField("Эффективность дона", $"{stats.DonEfficiency:P2} ({stats.DonRevealsCount}/{stats.DonMovesCount})", true)
-            .AddField("Кол-во основных очков", stats.Scores.ToString("0.##"), true)
-            .AddField("Кол-во доп. очков", stats.ExtraScores.ToString("0.##"), true)
-            .AddField("Кол-во штрафных очков", stats.PenaltyScores.ToString("0.##"), true)
-            .AddEmptyField(true)
-            .AddField("Рейтинг", stats.Rating.ToString("0.##"));
-    }
-
-
     private async Task<MafiaContext> CreateMafiaContextAsync(MafiaSettings settings, MafiaData data)
     {
         settings.CategoryChannelId ??= (await Context.Guild.CreateCategoryChannelAsync("Мафия")).Id;
@@ -335,9 +256,125 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
 
 
+    public class MafiaStatsModule : GameStatsModule
+    {
+        public MafiaStatsModule(InteractiveService interactiveService) : base(interactiveService)
+        {
+        }
+
+        [Command("Рейтинг")]
+        [Alias("Рейт", "Р")]
+        [Priority(-2)]
+        public async Task ShowRatingAsync(int playersPerPage = 10)
+        {
+            var allStats = await Context.Db.MafiaStats
+                .AsNoTracking()
+                .Where(s => s.GuildSettingsId == Context.Guild.Id)
+                .OrderByDescending(stat => stat.Rating)
+                .ThenByDescending(stat => stat.WinRate + stat.BlacksWinRate)
+                .ThenBy(stat => stat.GamesCount)
+                .ToListAsync();
+
+            if (allStats.Count == 0)
+            {
+                await ReplyEmbedAsync("Рейтинг отсутствует", EmbedStyle.Warning);
+
+                return;
+            }
+
+
+            var playersId = allStats
+                .Select(s => s.UserId)
+                .ToHashSet();
+
+            if (Context.Guild.Users.Count < Context.Guild.MemberCount)
+            {
+                await ReplyEmbedAsync($"Downloading users ({Context.Guild.MemberCount - Context.Guild.Users.Count})...", EmbedStyle.Debug);
+                await Context.Guild.DownloadUsersAsync();
+            }
+
+            var players = Context.Guild.Users
+                .Where(u => playersId.Contains(u.Id))
+                .ToDictionary(u => u.Id);
+
+            playersPerPage = Math.Clamp(playersPerPage, 1, 30);
+
+            var lazyPaginator = new LazyPaginatorBuilder()
+                .WithActionOnCancellation(ActionOnStop.DeleteMessage)
+                .WithActionOnTimeout(ActionOnStop.DeleteMessage)
+                .WithMaxPageIndex((allStats.Count - 1) / playersPerPage)
+                .WithCacheLoadedPages(true)
+                .WithPageFactory(page =>
+                {
+                    int n = playersPerPage * page + 1;
+
+                    var pageBuilder = new PageBuilder()
+                    {
+                        Title = $"Рейтинг [{page * playersPerPage + 1} - {(page + 1) * playersPerPage}]",
+                        Color = Utils.GetRandomColor(),
+                        Description = string.Join('\n', allStats
+                        .Skip(page * playersPerPage)
+                        .Take(playersPerPage)
+                        .Select(ms => $"{n++}. **{players[ms.UserId].GetFullName()}** - {ms.Rating:0.##}"))
+                    };
+
+                    return pageBuilder;
+                })
+                .Build();
+
+            _ = Interactive.SendPaginatorAsync(lazyPaginator, Context.Channel, timeout: 10d.ToTimeSpanMinutes());
+        }
+
+
+
+        [Group]
+        [RequireUserPermission(GuildPermission.Administrator)]
+        public class AdminModule : GuildModuleBase
+        {
+            public AdminModule(InteractiveService interactiveService) : base(interactiveService)
+            {
+            }
+
+            [Command("Сброс")]
+            [Priority(1)]
+            [RequireConfirmAction]
+            public async Task ResetRatingAsync()
+            {
+                var allStats = await Context.Db.MafiaStats
+                    .Where(s => s.GuildSettingsId == Context.Guild.Id)
+                    .ToListAsync();
+
+                foreach (var stat in allStats)
+                    stat.Reset();
+
+                await Context.Db.SaveChangesAsync();
+
+                await ReplyEmbedStampAsync("Рейтинг Мафии успешно сброшен", EmbedStyle.Successfull);
+            }
+        }
+
+
+
+        protected override EmbedBuilder GetStatsEmbedBuilder(MafiaStats stats, IUser user)
+        {
+            var embedBuilder = base.GetStatsEmbedBuilder(stats, user);
+
+            return embedBuilder
+                .AddField("% побед за мафию", $"{stats.BlacksWinRate:P2} ({stats.BlacksWinsCount}/{stats.BlacksGamesCount})", true)
+                .AddField("Эффективность доктора", $"{stats.DoctorEfficiency:P2} ({stats.DoctorHealsCount}/{stats.DoctorMovesCount})", true)
+                .AddField("Эффективность шерифа", $"{stats.SheriffEfficiency:P2} ({stats.SheriffRevealsCount}/{stats.SheriffMovesCount})", true)
+                .AddField("Эффективность дона", $"{stats.DonEfficiency:P2} ({stats.DonRevealsCount}/{stats.DonMovesCount})", true)
+                .AddField("Кол-во основных очков", stats.Scores.ToString("0.##"), true)
+                .AddField("Кол-во доп. очков", stats.ExtraScores.ToString("0.##"), true)
+                .AddField("Кол-во штрафных очков", stats.PenaltyScores.ToString("0.##"), true)
+                .AddEmptyField(true)
+                .AddField("Рейтинг", stats.Rating.ToString("0.##"));
+        }
+    }
+
 
     [Group("Шаблоны")]
-    [Alias("ш")]
+    [Alias("Ш")]
     [RequireOwner(Group = "perm")]
     [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
     public class TemplatesModule : GuildModuleBase
@@ -558,7 +595,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
 
     [Group("Настройки")]
-    [Alias("н")]
+    [Alias("Н")]
     [RequireOwner(Group = "perm")]
     [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
     [Summary("Настройки для мафии включают в себя настройки сервера(используемые роли, каналы и категорию каналов) и настройки самой игры. " +
@@ -571,20 +608,6 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
         {
             _settingsService = settingsService;
         }
-
-
-        [Command]
-        [Priority(-2)]
-        public Task SetSettingsAsync()
-            => DisplaySettingsAsync(true);
-
-
-        [Command("Текущие")]
-        [Alias("тек", "т")]
-        public Task ShowSettingsAsync()
-            => DisplaySettingsAsync(false);
-
-
 
 
         [Command("Автонастройка")]
@@ -726,7 +749,9 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
         }
 
 
-        private async Task DisplaySettingsAsync(bool withSetSettings)
+        [Name("Текущие настройки")]
+        [Command]
+        public async Task DisplaySettingsAsync(bool withSetSettings = false)
         {
             const string CloseOption = "Закрыть";
             //const string CancelOption = "Отменить";

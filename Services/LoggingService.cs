@@ -1,6 +1,8 @@
 ﻿using System;
 using System.IO;
 using System.Threading.Tasks;
+using Core.Common;
+using Core.Extensions;
 using Discord;
 using Discord.Commands;
 using Discord.WebSocket;
@@ -84,21 +86,21 @@ public class LoggingService
 
                 var cmd = context.Message.Content.Split(' ')[0].Remove(0, 1);
 
-                await context.Channel.SendMessageAsync($"Неверные параметры команды. Введите команду **помощь {cmd}** для информации по данной команде");
+                await context.Channel.SendEmbedAsync($"Неверные параметры команды. Введите команду **помощь {cmd}** для информации по данной команде", EmbedStyle.Error);
 
                 break;
 
             case CommandError.UnknownCommand:
                 guildLog.Verbose(result.ToString());
 
-                await context.Channel.SendMessageAsync("Неизвестная команда. Введите команду **помощь** для получения списка команд");
+                await context.Channel.SendEmbedAsync("Неизвестная команда. Введите команду **помощь** для получения списка команд", EmbedStyle.Error);
 
                 break;
 
             case CommandError.UnmetPrecondition:
                 guildLog.Verbose(result.ToString());
 
-                await context.Channel.SendMessageAsync(result.ErrorReason);
+                await context.Channel.SendEmbedAsync(result.ErrorReason, EmbedStyle.Error);
 
                 break;
 
@@ -120,7 +122,7 @@ public class LoggingService
                                      result.ToString());
 
 
-                await context.Channel.SendMessageAsync($"Произошла непредвиденная ошибка: {result.ErrorReason}");
+                await context.Channel.SendEmbedAsync($"Произошла непредвиденная ошибка: {result.ErrorReason}", EmbedStyle.Error);
 
                 break;
         }
