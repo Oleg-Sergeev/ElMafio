@@ -15,6 +15,7 @@ using Infrastructure.Data.Models;
 using Infrastructure.Data.Models.Games.Stats;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Modules.Common.Preconditions;
 
 namespace Modules.Games;
 
@@ -520,8 +521,7 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
 
 
         [Command("Личная")]
-        [Alias("Л")]
-        [Priority(-10)]
+        [Alias("Лич", "Л")]
         public virtual async Task ShowStatsAsync(IUser? user = null)
         {
             user ??= Context.User;
@@ -539,6 +539,32 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
 
             await ReplyAsync(embed: embedBuilder.Build());
         }
+
+
+        [Command("Сброс")]
+        [RequireConfirmAction(false)]
+        [RequireUserPermission(GuildPermission.Administrator)]
+        public async Task ResetStatsAsync(IUser? user = null)
+        {
+            user ??= Context.User;
+
+            var userStat = await Context.Db.MafiaStats
+                   .FirstOrDefaultAsync(ms => ms.GuildSettingsId == Context.Guild.Id && ms.UserId == user.Id);
+
+            if (userStat is null)
+            {
+                await ReplyEmbedAsync($"Статистика игрока {user.GetFullMention()} не найдена", EmbedStyle.Error);
+
+                return;
+            }
+
+            userStat.Reset();
+
+            await Context.Db.SaveChangesAsync();
+
+            await ReplyEmbedStampAsync($"Статистика игрока {user.GetFullMention()} успешно сброшена", EmbedStyle.Successfull);
+        }
+
 
 
         protected virtual EmbedBuilder GetStatsEmbedBuilder(TStats stats, IUser user)

@@ -11,4 +11,9 @@ public static class ModuleInfoExtensions
 
         return $"{module.Parent.GetModulePath()}.{module.Group}".TrimEnd('.');
     }
+
+    public static ModuleInfo GetRootModule(this ModuleInfo module)
+        => module.IsSubmodule
+        ? module.Parent.GetRootModule()
+        : module;
 }

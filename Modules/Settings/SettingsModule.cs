@@ -30,42 +30,12 @@ public class SettingsModule : GuildModuleBase
         await Context.Db.SaveChangesAsync();
 
 
-        await ReplyEmbedAsync($"Префикс успешно изменен с **{oldPrefix}** на **{newPrefix}**", EmbedStyle.Successfull);
+        await ReplyEmbedAsync($"Префикс успешно изменен с `{oldPrefix}` на `{newPrefix}`", EmbedStyle.Successfull);
     }
 
 
-    [Command("рольмут")]
-    public async Task UpdateMuteRoleAsync([Summary("Роль для мута")] IRole newMuteRole)
-        => await UpdateMuteRoleAsync(newMuteRole.Id);
 
-    [Command("рольмут")]
-    public async Task UpdateMuteRoleAsync([Summary("ID роли для мута")] ulong newMuteRoleId)
-    {
-        var muteRole = Context.Guild.GetRole(newMuteRoleId);
-
-        if (muteRole is null)
-        {
-            await ReplyEmbedAsync("Роль с указанным ID не найдена", EmbedStyle.Error);
-
-            return;
-        }
-
-        var guildSettings = await Context.GetGuildSettingsAsync();
-
-        guildSettings.RoleMuteId = newMuteRoleId;
-
-        await Context.Db.SaveChangesAsync();
-
-
-        await ReplyEmbedStampAsync($"Роль [{muteRole.Mention}] успешна установлена", EmbedStyle.Successfull);
-    }
-
-
-    [Command("каналлог")]
-    public async Task UpdateLogChannelAsync([Summary("Канал для логов")] ITextChannel logChannel)
-        => await UpdateLogChannelAsync(logChannel.Id);
-
-    [Command("каналлог")]
+    [Command("КаналЛог")]
     public async Task UpdateLogChannelAsync([Summary("ID канала для логов")] ulong logChannelId)
     {
         var logChannel = Context.Guild.GetTextChannel(logChannelId);
@@ -77,9 +47,15 @@ public class SettingsModule : GuildModuleBase
             return;
         }
 
+        await UpdateLogChannelAsync(logChannel);
+    }
+
+    [Command("КаналЛог")]
+    public async Task UpdateLogChannelAsync([Summary("Канал для логов")] ITextChannel logChannel)
+    {
         var guildSettings = await Context.GetGuildSettingsAsync();
 
-        guildSettings.LogChannelId = logChannelId;
+        guildSettings.LogChannelId = logChannel.Id;
 
         await Context.Db.SaveChangesAsync();
 

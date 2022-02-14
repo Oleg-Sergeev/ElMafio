@@ -4,7 +4,7 @@ namespace Infrastructure.Data.Models.Games.Settings.Mafia;
 
 public class MafiaSettingsTemplate
 {
-    private const string DefaultTemplateName = "__Default";
+    public const string DefaultTemplateName = "__Default";
 
 
     public int Id { get; set; }

@@ -32,6 +32,7 @@ using Modules.Games.Mafia.Common.GameRoles.Data;
 using Modules.Games.Mafia.Common.Services;
 using Modules.Games.Services;
 using Serilog;
+using static System.Formats.Asn1.AsnWriter;
 
 namespace Modules.Games.Mafia;
 
@@ -98,11 +99,10 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
             var game = new MafiaGame(context);
 
-            var winner = Winner.None;// await game.RunAsync();
+            var winner = await game.RunAsync();
 
             Task? updateStatsTask = null;
 
-            updateStatsTask = UpdateStatsAsync(context.RolesData.AllRoles.Values, winner);
             if (winner.Role is not null)
             {
                 updateStatsTask = UpdateStatsAsync(context.RolesData.AllRoles.Values, winner);
@@ -245,9 +245,6 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
         if (n > 0)
             await ReplyEmbedAsync($"Добавлено новых статистик: {n}", EmbedStyle.Debug);
 
-        if (n != stats.Count - rolesDict.Count)
-            await ReplyEmbedAsync($"Ожидалось {stats.Count - rolesDict.Count} новых записей. Актуальное значение: {n}", EmbedStyle.Debug);
-
         foreach (var role in rolesDict.Values)
             role.UpdateStats(stats[role.Player.Id], winner);
 
@@ -264,7 +261,6 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
         [Command("Рейтинг")]
         [Alias("Рейт", "Р")]
-        [Priority(-2)]
         public async Task ShowRatingAsync(int playersPerPage = 10)
         {
             var allStats = await Context.Db.MafiaStats
@@ -327,33 +323,6 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
 
 
-        [Group]
-        [RequireUserPermission(GuildPermission.Administrator)]
-        public class AdminModule : GuildModuleBase
-        {
-            public AdminModule(InteractiveService interactiveService) : base(interactiveService)
-            {
-            }
-
-            [Command("Сброс")]
-            [Priority(1)]
-            [RequireConfirmAction]
-            public async Task ResetRatingAsync()
-            {
-                var allStats = await Context.Db.MafiaStats
-                    .Where(s => s.GuildSettingsId == Context.Guild.Id)
-                    .ToListAsync();
-
-                foreach (var stat in allStats)
-                    stat.Reset();
-
-                await Context.Db.SaveChangesAsync();
-
-                await ReplyEmbedStampAsync("Рейтинг Мафии успешно сброшен", EmbedStyle.Successfull);
-            }
-        }
-
-
 
         protected override EmbedBuilder GetStatsEmbedBuilder(MafiaStats stats, IUser user)
         {
@@ -369,6 +338,133 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
                 .AddField("Кол-во штрафных очков", stats.PenaltyScores.ToString("0.##"), true)
                 .AddEmptyField(true)
                 .AddField("Рейтинг", stats.Rating.ToString("0.##"));
+        }
+
+
+
+
+        [Group]
+        [RequireUserPermission(GuildPermission.Administrator)]
+        public class AdminModule : GuildModuleBase
+        {
+            public AdminModule(InteractiveService interactiveService) : base(interactiveService)
+            {
+            }
+
+            [Command("РейтСброс")]
+            [Alias("РСброс")]
+            [RequireConfirmAction]
+            public async Task ResetRatingAsync()
+            {
+                var allStats = await Context.Db.MafiaStats
+                    .Where(s => s.GuildSettingsId == Context.Guild.Id)
+                    .ToListAsync();
+
+                foreach (var stat in allStats)
+                    stat.Reset();
+
+                await Context.Db.SaveChangesAsync();
+
+                await ReplyEmbedStampAsync("Рейтинг Мафии успешно сброшен", EmbedStyle.Successfull);
+            }
+
+
+            [Group]
+            [RequireConfirmAction(false)]
+            public class ScoresModule : GuildModuleBase
+            {
+                public ScoresModule(InteractiveService interactiveService) : base(interactiveService)
+                {
+                }
+
+
+
+                [Command("ДопОчки+")]
+                [Alias("ДО+")]
+                public async Task AddExtraScoresAsync(float scores, IUser? user = null)
+                {
+                    if (!await TryUpdateScoresAsync(scores, user, true))
+                        return;
+
+                    await ReplyEmbedStampAsync("Дополнительные очки успешно начислены", EmbedStyle.Successfull);
+                }
+
+                [Command("ДопОчки-")]
+                [Alias("ДО-")]
+                public async Task RemoveExtraScoresAsync(float scores, IUser? user = null)
+                {
+                    if (!await TryUpdateScoresAsync(-scores, user, true))
+                        return;
+
+                    await ReplyEmbedStampAsync("Дополнительные очки успешно списаны", EmbedStyle.Successfull);
+                }
+
+                [Command("ДопОчкиСброс")]
+                [Alias("ДОС")]
+                public async Task ResetExtraScoresAsync(IUser? user = null)
+                {
+                    if (!await TryUpdateScoresAsync(null, user, true))
+                        return;
+
+                    await ReplyEmbedStampAsync("Дополнительные очки успешно сброшены", EmbedStyle.Successfull);
+                }
+
+
+                [Command("ШтрафОчки+")]
+                [Alias("ШО+")]
+                public async Task AddPenaltyScoresAsync(float scores, IUser? user = null)
+                {
+                    if (!await TryUpdateScoresAsync(scores, user, false))
+                        return;
+
+                    await ReplyEmbedStampAsync("Штрафные очки успешно начислены", EmbedStyle.Successfull);
+                }
+
+                [Command("ШтрафОчки-")]
+                [Alias("ШО-")]
+                public async Task RemovePenaltyScoresAsync(float scores, IUser? user = null)
+                {
+                    if (!await TryUpdateScoresAsync(-scores, user, false))
+                        return;
+
+                    await ReplyEmbedStampAsync("Штрафные очки успешно списаны", EmbedStyle.Successfull);
+                }
+
+                [Command("ШтрафОчкиСброс")]
+                [Alias("ШОС")]
+                public async Task ResetPenaltyScoresAsync(IUser? user = null)
+                {
+                    if (!await TryUpdateScoresAsync(null, user, false))
+                        return;
+
+                    await ReplyEmbedStampAsync("Штрафные очки успешно сброшены", EmbedStyle.Successfull);
+                }
+
+
+                private async Task<bool> TryUpdateScoresAsync(float? scores, IUser? user, bool extra)
+                {
+                    user ??= Context.User;
+
+                    var userStat = await Context.Db.MafiaStats
+                        .FirstOrDefaultAsync(ms => ms.GuildSettingsId == Context.Guild.Id && ms.UserId == user.Id);
+
+                    if (userStat is null)
+                    {
+                        await ReplyEmbedAsync($"Статистика игрока {user.GetFullMention()} не найдена", EmbedStyle.Error);
+
+                        return false;
+                    }
+
+                    if (extra)
+                        userStat.ExtraScores += scores ?? -userStat.ExtraScores;
+                    else
+                        userStat.PenaltyScores += scores ?? -userStat.PenaltyScores;
+
+                    await Context.Db.SaveChangesAsync();
+
+                    return true;
+                }
+            }
         }
     }
 
@@ -448,7 +544,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
         [Command("Загрузить")]
         [Alias("згр", "з")]
-        public async Task LoadTemplate([Remainder] string name)
+        public async Task LoadTemplate([Remainder] string name = MafiaSettingsTemplate.DefaultTemplateName)
         {
             var settings = await _settingsService.GetSettingsOrCreateAsync(Context);
 
@@ -751,7 +847,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
         [Name("Текущие настройки")]
         [Command]
-        public async Task DisplaySettingsAsync(bool withSetSettings = false)
+        public async Task SetSettingsAsync()
         {
             const string CloseOption = "Закрыть";
             //const string CancelOption = "Отменить";
@@ -769,7 +865,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
             IUserMessage? message = null;
             InteractiveMessageResult<MultiSelectionOption<string>?>? result = null;
 
-            var settings = await _settingsService.GetSettingsOrCreateAsync(Context, withSetSettings);
+            var settings = await _settingsService.GetSettingsOrCreateAsync(Context);
 
             ArgumentNullException.ThrowIfNull(settings.CurrentTemplate);
 
@@ -796,31 +892,21 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
                 var embedBuilder = new EmbedBuilder();
 
-                if (withSetSettings)
-                    embedBuilder.WithColor(new Color(49, 148, 146));
-                else
-                    embedBuilder.WithColor(new Color(116, 45, 173));
+                embedBuilder.WithColor(new Color(49, 148, 146));
 
 
                 if (result is not null && selectedBlock is not null)
                 {
                     title = $"Блок {selectedBlock}";
 
-                    if (withSetSettings)
-                    {
-                        var settingsBlockValues = settingsBlocks[selectedBlock].Keys
-                            .Select(n => new MultiSelectionOption<string>(n, 1, description: $"Добавить краткое описание параметра, 50 символов"));
+                    var settingsBlockValues = settingsBlocks[selectedBlock].Keys
+                        .Select(n => new MultiSelectionOption<string>(n, 1, description: $"Добавить краткое описание параметра, 50 символов"));
 
-                        options = options.Concat(settingsBlockValues);
+                    options = options.Concat(settingsBlockValues);
 
-                        description = isModified
-                        ? $"Значение **{displayName}** успешно изменено: {previousValue ?? "[Н/д]"} -> {currentValue ?? "[Н/д]"}"
-                        : "Выберите интересующий вас параметр";
-                    }
-                    else
-                    {
-                        description = null;
-                    }
+                    description = isModified
+                    ? $"Значение **{displayName}** успешно изменено: {previousValue ?? "[Н/д]"} -> {currentValue ?? "[Н/д]"}"
+                    : "Выберите интересующий вас параметр";
 
 
                     var displayNames = settingsBlocks[selectedBlock].Values.Select(x => x.DisplayName);
@@ -980,7 +1066,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
             while (result is null || result.IsSuccess && !isClosed);
 
 
-            if (!withSetSettings || !wasSettingsModified)
+            if (!wasSettingsModified)
                 return;
 
             Embed embed;

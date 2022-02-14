@@ -232,7 +232,6 @@ public class MafiaGame
 
         await ChangeCitizenPermsAsync(_denyWrite, _denyView);
 
-        _isZeroDay = false;
         if (_isZeroDay)
         {
             _isZeroDay = false;
