@@ -20,11 +20,13 @@ public class MafiaGame
 {
     private readonly MafiaContext _context;
 
-    private readonly InteractiveService _interactive;
-
     private readonly MafiaSettingsTemplate _template;
     private readonly MafiaGuildData _guildData;
     private readonly MafiaRolesData _rolesData;
+
+    private readonly InteractiveService _interactive;
+
+    private readonly MafiaChronology _chronology;
 
     private readonly OverwritePermissions _denyView;
     private readonly OverwritePermissions _denyWrite;
@@ -38,16 +40,15 @@ public class MafiaGame
 
     public MafiaGame(MafiaContext context)
     {
-        _isZeroDay = true;
-
         _context = context;
-
-        _token = context.MafiaData.TokenSource.Token;
 
         _template = context.SettingsTemplate;
         _guildData = context.GuildData;
         _rolesData = context.RolesData;
+
         _interactive = context.Interactive;
+
+        _chronology = new();
 
         _denyView = MafiaHelper.DenyView;
         _denyWrite = MafiaHelper.GetDenyWrite(_guildData.GeneralTextChannel);
@@ -55,43 +56,56 @@ public class MafiaGame
 
         if (_guildData.GeneralVoiceChannel is not null)
             _allowSpeak = MafiaHelper.GetAllowSpeak(_guildData.GeneralVoiceChannel);
+
+        _token = context.MafiaData.TokenSource.Token;
+
+        _isZeroDay = true;
     }
 
-    public async Task<Winner> RunAsync()
+    public async Task<MafiaInfo> RunAsync()
     {
-        if (_template.GameSubSettings.IsCustomGame && _template.PreGameMessage is not null)
-        {
-            await _guildData.GeneralTextChannel.SendEmbedAsync(_template.PreGameMessage, "Сообщение перед игрой");
-
-            await Task.Delay(5000);
-        }
-
-
-        await _guildData.GeneralTextChannel.SendMessageAsync(embed: GenerateRolesAmountEmbed());
-
-        await Task.Delay(5000);
-
-
-        if (_rolesData.Murders.Count > 1 && _template.RolesExtraInfoSubSettings.MurdersKnowEachOther)
-        {
-            var meetTime = _rolesData.Murders.Count * 10;
-
-            await _guildData.GeneralTextChannel.SendEmbedAsync($"Пока город спит, мафия знакомятся друг с другом. Через {meetTime}с город проснется", EmbedStyle.Waiting);
-
-            await IntroduceMurdersAsync(meetTime);
-        }
-
-
-        await _guildData.GeneralTextChannel.SendEmbedAsync($"Приятной игры", "Мафия");
-
-        await Task.Delay(5000);
-
-        Winner? winner;
-
-        var lastWordNightCount = _template.GameSubSettings.LastWordNightCount;
-
         try
         {
+            if (_template.GameSubSettings.IsCustomGame && _template.PreGameMessage is not null)
+            {
+                await _guildData.GeneralTextChannel.SendEmbedAsync(_template.PreGameMessage, "Сообщение перед игрой");
+
+                await Task.Delay(5000);
+            }
+
+
+            await _guildData.GeneralTextChannel.SendMessageAsync(embed: GenerateRolesAmountEmbed());
+
+            await Task.Delay(5000);
+
+
+            if (_rolesData.Murders.Count > 1 && _template.RolesExtraInfoSubSettings.MurdersKnowEachOther)
+            {
+                var meetTime = _rolesData.Murders.Count * 10;
+
+                await _guildData.GeneralTextChannel.SendEmbedAsync($"Пока город спит, мафия знакомятся друг с другом. Через {meetTime}с город проснется", EmbedStyle.Waiting);
+
+                await IntroduceMurdersAsync(meetTime);
+            }
+
+
+            await _guildData.GeneralTextChannel.SendEmbedAsync($"Приятной игры", "Мафия");
+
+            await Task.Delay(5000);
+
+            Winner? winner;
+
+            var lastWordNightCount = _template.GameSubSettings.LastWordNightCount + 1;
+
+            if (_guildData.SpectatorTextChannel is not null)
+            {
+                var playerRoles = string.Join("\n", _rolesData.AllRoles.Values.Select(r => $"{r.Name} - {r.Player.GetFullName()}"));
+
+                _chronology.AddAction(playerRoles);
+
+                _ = _guildData.SpectatorTextChannel.SendEmbedAsync(playerRoles, "Роли игроков");
+            }
+
             while (true)
             {
                 winner = await LoopAsync(lastWordNightCount--);
@@ -104,11 +118,11 @@ public class MafiaGame
 
             await Task.Delay(3000);
 
-            return winner;
+            return new(winner, _chronology);
         }
         catch (OperationCanceledException)
         {
-            return Winner.None;
+            return new(Winner.None, _chronology);
         }
         finally
         {
@@ -120,6 +134,8 @@ public class MafiaGame
 
     private async Task<Winner?> LoopAsync(int lastWordNightCount)
     {
+        _chronology.NextDay();
+
         await ChangeMurdersPermsAsync(_denyWrite, _denyView);
 
         await _guildData.GeneralTextChannel.SendMessageAsync($"{_guildData.MafiaRole.Mention} Доброе утро, жители города! Самое время пообщаться всем вместе.");
@@ -175,13 +191,17 @@ public class MafiaGame
             {
                 await EjectPlayerAsync(corpses[i]);
 
-
                 if (lastWordNightCount > 0)
                 {
                     var task = SendLastWordMessageAsync(corpses[i]);
 
                     lastWordTasks.Add(task);
                 }
+
+                var action = _chronology.AddAction("Труп", _rolesData.AllRoles[corpses[i]]);
+
+                if (_guildData.SpectatorTextChannel is not null)
+                    await _guildData.SpectatorTextChannel.SendEmbedAsync(action, "Утро");
             }
 
 
@@ -244,14 +264,23 @@ public class MafiaGame
             {
                 var role = _rolesData.AliveRoles[citizenVotingResult.Choice.Option];
 
+                string action;
+
                 if (!fooledPlayerIds.Contains(role.Player.Id))
                 {
                     await EjectPlayerAsync(role.Player);
+
+                    action = _chronology.AddAction("Труп", role);
                 }
                 else
                 {
                     await _guildData.GeneralTextChannel.SendEmbedAsync($"{role.Player.Mention} не покидает игру из-за наличия алиби", EmbedStyle.Warning);
+
+                    action = _chronology.AddAction("Использование алиби", role);
                 }
+
+                if (_guildData.SpectatorTextChannel is not null)
+                    await _guildData.SpectatorTextChannel.SendEmbedAsync(action, "Дневное голосование");
             }
             else
             {
@@ -353,10 +382,10 @@ public class MafiaGame
 
                     tasksSingle.Remove(task);
 
+                    var action = _chronology.AddAction($"Голосование - {(vote.IsSkip ? "Пропуск" : vote.Option?.GetFullName() ?? "Нет данных")}", vote.VotedRole);
+
                     if (_guildData.SpectatorTextChannel is not null)
-                        await _guildData.SpectatorTextChannel.SendEmbedAsync(
-                            $"{(vote.VotedRole.IsAlive ? "" : "**[Dead]** ")}{vote.VotedRole} [{vote.VotedRole.Player.GetFullName()}] - {(vote.IsSkip ? "Skip" : vote.Option?.GetFullName() ?? "None")}",
-                            "Голосование");
+                        await _guildData.SpectatorTextChannel.SendEmbedAsync(action, "Ночь");
                 }
             });
 
@@ -368,15 +397,21 @@ public class MafiaGame
 
                     var voteGroup = await task;
 
+                    var choice = voteGroup.Choice;
+
                     tasksGroup.Remove(task);
+
+                    _chronology.AddAction($"Групповое голосование - {(choice.IsSkip ? "Пропуск" : choice.Option?.GetFullName() ?? "Нет данных")}", choice.VotedRole);
 
                     if (_guildData.SpectatorTextChannel is not null)
                     {
                         var embed = new EmbedBuilder()
-                            .WithTitle($"Голосование [{voteGroup.Choice.VotedRole}]")
+                            .WithTitle("Ночь")
+                            .WithDescription($"Голосование [{voteGroup.Choice.VotedRole}]")
+                            .WithInformationMessage()
                             .AddField("Игрок", string.Join('\n', voteGroup.PlayersVote.Values.Select(vote => $"{vote.VotedRole} [{vote.VotedRole.Player.GetFullName()}]")), true)
-                            .AddField("Голос", string.Join('\n', voteGroup.PlayersVote.Values.Select(vote => $"{(vote.IsSkip ? "Skip" : vote.Option?.GetFullName() ?? "None")}")), true)
-                            .AddField("Результат", voteGroup.Choice.IsSkip ? "Skip" : voteGroup.Choice.Option?.GetFullName() ?? "None")
+                            .AddField("Голос", string.Join('\n', voteGroup.PlayersVote.Values.Select(vote => $"{(vote.IsSkip ? "Пропуск" : vote.Option?.GetFullName() ?? "Нет данных")}")), true)
+                            .AddField("Результат", voteGroup.Choice.IsSkip ? "Пропуск" : voteGroup.Choice.Option?.GetFullName() ?? "Нет данных")
                             .Build();
 
                         await _guildData.SpectatorTextChannel.SendMessageAsync(embed: embed);
@@ -440,7 +475,7 @@ public class MafiaGame
         corpses.AddRange(maniacKills);
 
 
-        var maniacs = new List<IGuildUser>();
+        var reveals = new List<IGuildUser>();
 
         foreach (var hooker in _rolesData.Hookers.Values)
         {
@@ -452,11 +487,15 @@ public class MafiaGame
                 corpses.Add(hooker.HealedPlayer);
 
             if (_rolesData.Maniacs.ContainsKey(hooker.HealedPlayer))
-                maniacs.Add(hooker.HealedPlayer);
+            {
+                reveals.Add(hooker.HealedPlayer);
+
+                _chronology.AddAction("Роль маньяка раскрыта", _rolesData.Maniacs[hooker.HealedPlayer]);
+            }
         }
 
 
-        revealedManiacs = maniacs;
+        revealedManiacs = reveals;
 
         return corpses
             .Distinct()
@@ -487,9 +526,9 @@ public class MafiaGame
         var dmChannel = await player.CreateDMChannelAsync();
 
         var msg = await dmChannel.SendMessageAsync(embed: EmbedHelper.CreateEmbed($"{player.Username}, у вас есть 30с для последнего слова, воспользуйтесь этим временем с умом." +
-            $" Напишите здесь сообщение, которое увидят все игроки Мафии"));
+            $"\n**Напишите здесь сообщение, которое увидят все игроки Мафии**"));
 
-        var result = await _interactive.NextMessageAsync(m => m.Channel.Id == msg.Channel.Id && m.Author.Id == msg.Author.Id,
+        var result = await _interactive.NextMessageAsync(m => m.Channel.Id == msg.Channel.Id && m.Author.Id == player.Id,
             timeout: TimeSpan.FromSeconds(30),
             cancellationToken: _token);
 

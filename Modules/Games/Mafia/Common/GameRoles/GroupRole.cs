@@ -7,6 +7,7 @@ using Core.Extensions;
 using Discord;
 using Discord.WebSocket;
 using Microsoft.Extensions.Options;
+using Microsoft.VisualBasic.FileIO;
 using Modules.Games.Mafia.Common.Data;
 using Modules.Games.Mafia.Common.GameRoles.Data;
 
@@ -62,6 +63,7 @@ public abstract class GroupRole : GameRole
 
 
         var roles = voters.ToDictionary(p => p.Player.Id);
+        var notVotedRoles = new Dictionary<ulong, GameRole>(roles);
 
         var timeout = TimeSpan.FromSeconds(context.VoteTime);
 
@@ -98,9 +100,9 @@ public abstract class GroupRole : GameRole
 
 
 
-        while (roles.Count > 0 && timeout.TotalSeconds > 0 && !token.IsCancellationRequested)
+        while (notVotedRoles.Count > 0 && timeout.TotalSeconds > 0 && !token.IsCancellationRequested)
         {
-            var res = await context.Interactive.NextMessageComponentAsync(m => m.Message.Id == entryVoteMsg.Id && roles.ContainsKey(m.User.Id),
+            var res = await context.Interactive.NextMessageComponentAsync(m => m.Message.Id == entryVoteMsg.Id && notVotedRoles.ContainsKey(m.User.Id),
                 timeout: timeout,
                 cancellationToken: token);
 
@@ -109,9 +111,9 @@ public abstract class GroupRole : GameRole
             {
                 var interaction = res.Value;
 
-                var role = roles[res.Value.User.Id];
+                var role = notVotedRoles[res.Value.User.Id];
 
-                roles.Remove(interaction.User.Id);
+                notVotedRoles.Remove(interaction.User.Id);
 
 
                 tasks.Add(Task.Run(async () =>
@@ -158,21 +160,31 @@ public abstract class GroupRole : GameRole
             throw;
         }
 
-        foreach (var role in roles.Values)
+        foreach (var role in notVotedRoles.Values)
         {
             role.HandleChoice(null);
 
             var vote = new Vote(role, null, false);
 
-            votes.Add(role.Player, vote);
-
             role._votes.Add(vote);
+
+            
+            votes.Add(role.Player, vote);
         }
 
         var voteGroup = new VoteGroup(this, votes);
 
+        var choice = voteGroup.Choice;
 
-        base.HandleChoice(voteGroup.Choice.Option);
+        base.HandleChoice(choice.Option);
+
+
+        foreach (var role in roles.Values)
+        {
+            role.HandleChoice(choice.Option);
+
+            role._votes.Add(choice);
+        }
 
         if (voteResultChannel is not null)
             await SendVotingResultsAsync(voteResultChannel);
@@ -272,11 +284,6 @@ public abstract class GroupRole : GameRole
             }
 
             vote ??= new Vote(role, null, false);
-
-            role.HandleChoice(vote.Option);
-
-
-            role._votes.Add(vote);
 
             return vote;
         }

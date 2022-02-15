@@ -99,13 +99,14 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
             var game = new MafiaGame(context);
 
-            var winner = await game.RunAsync();
+            var (winner, chronology) = await game.RunAsync();
 
             Task? updateStatsTask = null;
 
             if (winner.Role is not null)
             {
-                updateStatsTask = UpdateStatsAsync(context.RolesData.AllRoles.Values, winner);
+                if (settings.CurrentTemplate.GameSubSettings.IsRatingGame)
+                    updateStatsTask = UpdateStatsAsync(context.RolesData.AllRoles.Values, winner);
 
 
                 await ReplyEmbedAsync($"Победителем оказался: {winner.Role.Name}!");
@@ -113,10 +114,20 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
             else
                 await ReplyEmbedAsync("Город опустел... Никто не победил");
 
+            await ReplyEmbedAsync("Хронология игры");
+
+            var paginator = chronology.BuildActionsHistoryPaginator(context.RolesData.AllRoles.Keys);
+
+            _ = Interactive.SendPaginatorAsync(paginator, Context.Channel, TimeSpan.FromMinutes(15), resetTimeoutOnInput: true);
+
             await ReplyEmbedStampAsync($"{data.Name} успешно завершена", EmbedStyle.Successfull);
 
             if (updateStatsTask is not null)
+            {
                 await updateStatsTask;
+
+                await ReplyEmbedAsync("Статистика успешно обновлена", EmbedStyle.Successfull);
+            }
         }
         finally
         {

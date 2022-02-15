@@ -2,7 +2,7 @@
 
 namespace Core.Common.Chronology;
 
-public class Chronology<T> : IEnumerable<T>
+public class Chronology<T>
 {
     protected List<T> Actions { get; }
 
@@ -12,18 +12,8 @@ public class Chronology<T> : IEnumerable<T>
     }
 
 
+    public IReadOnlyList<T> GetActionHistory() => Actions;
+
+
     public void AddAction(T action) => Actions.Add(action);
-
-
-    public IReadOnlyList<T> GetActionsHistory() => Actions;
-
-
-    public IEnumerator<T> GetEnumerator()
-    {
-        for (int i = 0; i < Actions.Count; i++)
-            yield return Actions[i];
-    }
-
-    IEnumerator IEnumerable.GetEnumerator()
-        => GetEnumerator();
 }

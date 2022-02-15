@@ -73,17 +73,9 @@ public class RussianRouletteModule : GameModule<RussianRouletteStats>
 
             delay = Task.Delay(1000);
 
-            //await AddNewUsersAsync(playersId);
-
             await delay;
 
-            var updateStatsTask = UpdatePlayersStatAsync(winner, playersId);
-
-
             await ReplyEmbedAsync("Игра завершена!", EmbedStyle.Successfull);
-
-
-            await updateStatsTask;
         }
 
 
@@ -100,6 +92,8 @@ public class RussianRouletteModule : GameModule<RussianRouletteStats>
 
         var data = GetGameData();
         data.Players.Shuffle();
+
+        data.IsPlaying = true;
 
         await delay;
 
@@ -195,43 +189,6 @@ public class RussianRouletteModule : GameModule<RussianRouletteStats>
 
 
         return alivePlayers[0];
-    }
-
-
-    private async Task UpdatePlayersStatAsync(IGuildUser winner, HashSet<ulong> playersId)
-    {
-        var playersStat = await Context.Db.RussianRouletteStats
-                  .AsTracking()
-                  .Where(stat => playersId.Contains(stat.UserId) && stat.GuildSettingsId == Context.Guild.Id)
-                  .ToListAsync();
-
-        var newPlayersId = playersId
-            .Except(playersStat.Select(s => s.UserId))
-            .ToList();
-
-        if (newPlayersId.Count > 0)
-        {
-            var newPlayersStats = newPlayersId.Select(id => new RussianRouletteStats
-            {
-                UserId = id,
-                GuildSettingsId = Context.Guild.Id
-            })
-            .ToList();
-
-            Context.Db.RussianRouletteStats.AddRange(newPlayersStats);
-
-            playersStat.AddRange(newPlayersStats);
-        }
-
-        foreach (var stat in playersStat)
-            stat.GamesCount++;
-
-        var winnerStat = playersStat.First(u => u.UserId == winner.Id);
-
-        winnerStat.WinsCount++;
-
-
-        await Context.Db.SaveChangesAsync();
     }
 
 
