@@ -86,7 +86,7 @@ public abstract class GameRole
         else
         {
             if (IsSkip)
-                sequence.Add((EmbedStyle.Error, "Вы пропустили голосование"));
+                sequence.Add((EmbedStyle.Warning, "Вы пропустили голосование"));
             else
             {
                 sequence.Add((EmbedStyle.Error, "Вы не смогли сделать выбор"));
@@ -284,22 +284,14 @@ public abstract class GameRole
 
                 if (data.Type == ComponentType.Button)
                 {
-                    if (data.CustomId == "skip")
+                    vote = data.CustomId switch
                     {
-                        vote = new Vote(role, null, true);
+                        "vote" => new Vote(role, selectedPlayer, false),
+                        "skip" => new Vote(role, null, true),
+                        _ => throw new InvalidOperationException("so bad")
+                    };
 
-                        break;
-                    }
-                    else if (data.CustomId == "vote")
-                    {
-                        vote = new Vote(role, selectedPlayer, false);
-
-                        break;
-                    }
-                    else
-                    {
-                        throw new Exception("so bad");
-                    }
+                    break;
                 }
                 else if (data.Values.Count > 0)
                 {
@@ -343,6 +335,7 @@ public abstract class GameRole
         vote ??= new Vote(role, null, false);
 
         role.HandleChoice(vote.Option);
+        role.IsSkip = vote.IsSkip;
 
 
         if (voteResultChannel is not null)

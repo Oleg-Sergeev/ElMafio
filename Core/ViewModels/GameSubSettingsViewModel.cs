@@ -34,4 +34,8 @@ public class GameSubSettingsViewModel
 
     [DisplayName("Время голосования")]
     public int? VoteTime { get; init; }
+
+
+    [DisplayName("Преамбула")]
+    public string? PreGameMessage { get; init; }
 }

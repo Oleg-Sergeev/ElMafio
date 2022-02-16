@@ -25,6 +25,8 @@ public class GameSubSettings
     public int VoteTime { get; set; }
 
 
+    public string? PreGameMessage { get; set; }
+
 
 
     public GameSubSettings()
@@ -44,5 +46,7 @@ public class GameSubSettings
         IsFillWithMurders = false;
 
         VoteTime = 40;
+
+        PreGameMessage = null;
     }
 }

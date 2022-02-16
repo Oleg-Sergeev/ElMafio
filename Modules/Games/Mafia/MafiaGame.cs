@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Runtime;
 using System.Threading;
@@ -66,9 +67,9 @@ public class MafiaGame
     {
         try
         {
-            if (_template.GameSubSettings.IsCustomGame && _template.PreGameMessage is not null)
+            if (_template.GameSubSettings.IsCustomGame && _template.GameSubSettings.PreGameMessage is not null)
             {
-                await _guildData.GeneralTextChannel.SendEmbedAsync(_template.PreGameMessage, "Сообщение перед игрой");
+                await _guildData.GeneralTextChannel.SendEmbedAsync(_template.GameSubSettings.PreGameMessage, "Сообщение перед игрой");
 
                 await Task.Delay(5000);
             }
@@ -285,9 +286,9 @@ public class MafiaGame
             else
             {
                 if (citizenVotingResult.Choice.IsSkip)
-                    await _guildData.GeneralTextChannel.SendEmbedAsync("Пропуск", EmbedStyle.Successfull);
+                    _chronology.AddAction("Пропуск", citizenVotingResult.Choice.VotedRole);
                 else
-                    await _guildData.GeneralTextChannel.SendEmbedAsync("Не удалось выбрать", EmbedStyle.Error);
+                    _chronology.AddAction("Не удалось выбрать", citizenVotingResult.Choice.VotedRole);
             }
 
 
@@ -382,6 +383,9 @@ public class MafiaGame
 
                     tasksSingle.Remove(task);
 
+                    if (!vote.VotedRole.IsAlive)
+                        continue;
+
                     var action = _chronology.AddAction($"Голосование - {(vote.IsSkip ? "Пропуск" : vote.Option?.GetFullName() ?? "Нет данных")}", vote.VotedRole);
 
                     if (_guildData.SpectatorTextChannel is not null)
@@ -400,6 +404,9 @@ public class MafiaGame
                     var choice = voteGroup.Choice;
 
                     tasksGroup.Remove(task);
+
+                    if (!voteGroup.Choice.VotedRole.IsAlive)
+                        continue;
 
                     _chronology.AddAction($"Групповое голосование - {(choice.IsSkip ? "Пропуск" : choice.Option?.GetFullName() ?? "Нет данных")}", choice.VotedRole);
 
@@ -431,13 +438,28 @@ public class MafiaGame
 
     private IReadOnlyList<IGuildUser> GetCorpses(out IReadOnlyList<IGuildUser> revealedManiacs)
     {
-        var killers = _rolesData.AliveRoles.Values.Where(r => r is IKiller and not Maniac).Cast<IKiller>();
+        IEnumerable<IKiller> killers;
+        IGuildUser? murdersKill = null;
+
+        if (!_template.GameSubSettings.IsCustomGame || _template.RolesExtraInfoSubSettings.MurdersKnowEachOther)
+            killers = _rolesData.AliveRoles.Values.Where(r => r is IKiller and not Maniac).Cast<IKiller>();
+        else
+        {
+            killers = _rolesData.AliveRoles.Values.Where(r => r is IKiller and not Maniac and not Murder).Cast<IKiller>();
+
+            murdersKill = GetMurdersKill();
+        }
+
         var healers = _rolesData.AliveRoles.Values.Where(r => r is IHealer).Cast<IHealer>();
 
         var kills = killers
             .Where(k => k.KilledPlayer is not null)
             .Select(k => k.KilledPlayer!)
             .Distinct();
+
+        if (murdersKill is not null)
+            kills = kills.Append(murdersKill);
+
 
         var innocentsKill = GetInnocentsKill();
 
@@ -520,6 +542,22 @@ public class MafiaGame
         return voteGroup.Choice.Option;
     }
 
+    private IGuildUser? GetMurdersKill()
+    {
+        if (!_template.GameSubSettings.IsCustomGame || !_template.RolesExtraInfoSubSettings.MurdersKnowEachOther)
+            return null;
+
+        var murders = _rolesData.Murders.Values.Where(i => i.IsAlive);
+
+        if (!murders.Any())
+            return null;
+
+        var playersVotes = murders.ToDictionary(i => i.Player, i => new Vote(i, i.LastMove, i.IsSkip));
+
+        var voteGroup = new VoteGroup(_rolesData.GroupRoles[nameof(MurdersGroup)], playersVotes, _template.RolesExtraInfoSubSettings.MurdersMustVoteForOnePlayer);
+
+        return voteGroup.Choice.Option;
+    }
 
     private async Task<string> SendLastWordMessageAsync(IGuildUser player)
     {

@@ -16,7 +16,6 @@ public class GameData
     public List<IGuildUser> Players { get; }
 
 
-
     public GameData(string name, int minPlayersCount, IGuildUser host)
     {
         Name = name;

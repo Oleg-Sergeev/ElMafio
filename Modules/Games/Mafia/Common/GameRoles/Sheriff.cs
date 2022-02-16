@@ -128,10 +128,10 @@ public class Sheriff : Innocent, IKiller, IChecker
 
         ShotSelected = false;
 
-        if (ShotsCount > 0)
+        if (ShotsCount > 0 && IsAlive)
         {
             var pageBuilder = new PageBuilder()
-                .WithTitle("Выберите ваше действие");
+                .WithTitle($"Выберите ваше действие ({context.VoteTime / 2}с)");
 
 
             var selection = new SelectionBuilder<bool>()

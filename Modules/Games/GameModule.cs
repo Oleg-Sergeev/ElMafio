@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Core.Common;
 using Core.Common.Data;
@@ -33,8 +34,11 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
     where TData : GameData
     where TStats : GameStats, new()
 {
+    private const int AfkTimeout = 30 * 60 * 1000;
+
     protected static Dictionary<ulong, Dictionary<Type, TData>> GamesData { get; } = new();
 
+    private static readonly Dictionary<ulong, Dictionary<Type, Timer>> _afkTimers = new();
 
 
     public GameModule(InteractiveService interactiveService) : base(interactiveService)
@@ -64,11 +68,14 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
 
             AddGameDataToGamesList(gameData);
 
-            //AutoStop();
-
             gameData.Players.Add(player);
 
             await ReplyEmbedAsync($"{gameData.Name} создана! Хост игры - {player.Mention}", EmbedStyle.Successfull, gameData.Name);
+
+            var isStarted = StartAfkWaiting(gameData);
+
+            if (!isStarted)
+                await ReplyEmbedAsync("Не удалось запустить автоматическую остановку игры", EmbedStyle.Warning);
 
             return;
         }
@@ -87,6 +94,7 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
             return;
         }
 
+        UpdateAfk();
 
         gameData.Players.Add(player);
 
@@ -161,7 +169,7 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
 
     [Command("Упомянуть")]
     [Alias("Квот", "Пинг")]
-    public virtual async Task MentionPlayers()
+    public virtual async Task MentionPlayersAsync()
     {
         if (!TryGetGameData(out var gameData))
         {
@@ -192,7 +200,7 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
     [Command("Хост")]
     [Summary("Показать хоста игры")]
     [Remarks("Только хост может запустить игру")]
-    public virtual async Task ShowCreator()
+    public virtual async Task ShowCreatorAsync()
     {
         if (!TryGetGameData(out var gameData))
         {
@@ -207,7 +215,7 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
 
     [Command("Список")]
     [Summary("Показать список игроков")]
-    public virtual async Task ShowPlayerList()
+    public virtual async Task ShowPlayerListAsync()
     {
         if (!TryGetGameData(out var gameData))
         {
@@ -368,7 +376,16 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
         if (!GamesData.TryGetValue(Context.Guild.Id, out var games))
             return false;
 
-        return games?.Remove(GetType()) ?? false;
+        var type = GetType();
+
+        if (_afkTimers.TryGetValue(Context.Guild.Id, out var timers) && timers.TryGetValue(type, out var timer))
+        {
+            timer.Dispose();
+
+            timers.Remove(type);
+        }
+
+        return games?.Remove(type) ?? false;
     }
 
 
@@ -391,6 +408,50 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
 
         return games.TryGetValue(type, out gameData);
     }
+
+
+
+    private bool StartAfkWaiting(TData data)
+    {
+        var type = GetType();
+
+        if (!_afkTimers.TryGetValue(Context.Guild.Id, out var timers))
+        {
+            timers = new()
+            {
+                { type, StartTimer() }
+            };
+
+            _afkTimers[Context.Guild.Id] = timers;
+
+            return true;
+        }
+
+        if (!_afkTimers[Context.Guild.Id].TryGetValue(type, out var timer))
+        {
+            _afkTimers[Context.Guild.Id][type] = StartTimer();
+
+            return true;
+        }
+
+        return false;
+
+
+        Timer StartTimer() => new(async (o) =>
+        {
+            if (!data.IsPlaying)
+            {
+                await ReplyEmbedAsync("Остановка игры из-за низкой активности...", EmbedStyle.Waiting);
+
+                await StopAsync();
+            }
+        }, null, AfkTimeout, -1);
+    }
+
+    private bool UpdateAfk() => _afkTimers.TryGetValue(Context.Guild.Id, out var timers)
+        && timers.TryGetValue(GetType(), out var timer)
+        && timer.Change(AfkTimeout, -1);
+
 
 
 

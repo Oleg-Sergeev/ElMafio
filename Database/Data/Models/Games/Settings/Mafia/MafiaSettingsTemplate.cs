@@ -14,8 +14,6 @@ public class MafiaSettingsTemplate
 
     public string Name { get; set; }
 
-    public string? PreGameMessage { get; set; }
-
 
     public GameSubSettings GameSubSettings { get; set; }
 

@@ -7,7 +7,6 @@ using Core.Extensions;
 using Discord;
 using Discord.WebSocket;
 using Microsoft.Extensions.Options;
-using Microsoft.VisualBasic.FileIO;
 using Modules.Games.Mafia.Common.Data;
 using Modules.Games.Mafia.Common.GameRoles.Data;
 
@@ -19,6 +18,8 @@ public abstract class GroupRole : GameRole
     protected IReadOnlyList<GameRole> Roles { get; }
 
     protected IEnumerable<GameRole> AliveRoles => Roles.Where(r => r.IsAlive);
+
+    public override bool IsAlive => AliveRoles.Any();
 
 
     public GroupRole(IReadOnlyList<GameRole> roles, IOptionsSnapshot<GameRoleData> options) : base(roles[0].Player, options)
@@ -133,13 +134,13 @@ public abstract class GroupRole : GameRole
                     });
 
                     if (vote.IsSkip)
-                        await interaction.FollowupAsync(embed: EmbedHelper.CreateEmbed("Вы пропустили голосование", EmbedStyle.Successfull),
+                        await interaction.FollowupAsync(embed: EmbedHelper.CreateEmbed("Вы пропустили голосование", EmbedStyle.Warning),
                             ephemeral: true);
                     else if (vote.Option is not null)
                         await interaction.FollowupAsync(embed: EmbedHelper.CreateEmbed($"Вы проголосовали за {vote.Option.GetFullMention()}", EmbedStyle.Successfull),
                             ephemeral: true);
                     else
-                        await interaction.FollowupAsync(embed: EmbedHelper.CreateEmbed("Вы не смогли принять решение", EmbedStyle.Warning),
+                        await interaction.FollowupAsync(embed: EmbedHelper.CreateEmbed("Вы не смогли принять решение", EmbedStyle.Error),
                             ephemeral: true);
                 }));
             }
@@ -244,22 +245,14 @@ public abstract class GroupRole : GameRole
 
                     if (data.Type == ComponentType.Button)
                     {
-                        if (data.CustomId == "skip")
+                        vote = data.CustomId switch
                         {
-                            vote = new Vote(role, null, true);
+                            "vote" => new Vote(role, selectedPlayer, false),
+                            "skip" => new Vote(role, null, true),
+                            _ => throw new InvalidOperationException("so bad")
+                        };
 
-                            break;
-                        }
-                        else if (data.CustomId == "vote")
-                        {
-                            vote = new Vote(role, selectedPlayer, false);
-
-                            break;
-                        }
-                        else
-                        {
-                            throw new Exception("so bad");
-                        }
+                        break;
                     }
                     else if (data.Values.Count > 0)
                     {

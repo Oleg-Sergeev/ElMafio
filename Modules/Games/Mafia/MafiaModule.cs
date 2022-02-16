@@ -3,17 +3,20 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
+using System.Net;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Core.Common;
+using Core.Common.Chronology;
 using Core.Common.Data;
 using Core.Extensions;
 using Core.TypeReaders;
 using Core.ViewModels;
 using Discord;
 using Discord.Commands;
+using Discord.Net;
 using Discord.WebSocket;
 using Fergun.Interactive;
 using Fergun.Interactive.Pagination;
@@ -68,6 +71,8 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
         var data = GetGameData();
         data.Players.Shuffle(3);
 
+        data.IsPlaying = true;
+
         await ReplyEmbedStampAsync($"{data.Name} успешно запущена", EmbedStyle.Successfull);
 
 
@@ -77,13 +82,16 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
             ArgumentNullException.ThrowIfNull(settings.CurrentTemplate);
 
+            if (settings.CurrentTemplate.ServerSubSettings.MentionPlayersOnGameStart)
+                await MentionPlayersAsync();
+
             var context = await CreateMafiaContextAsync(settings, data);
 
             var tasks = new List<Task>
-        {
-            _mafiaService.SetupGuildAsync(context),
-            _mafiaService.SetupUsersAsync(context)
-        };
+            {
+                _mafiaService.SetupGuildAsync(context),
+                _mafiaService.SetupUsersAsync(context)
+            };
 
             await Task.WhenAll(tasks);
 
@@ -116,9 +124,10 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
             await ReplyEmbedAsync("Хронология игры");
 
-            var paginator = chronology.BuildActionsHistoryPaginator(context.RolesData.AllRoles.Keys);
 
-            _ = Interactive.SendPaginatorAsync(paginator, Context.Channel, TimeSpan.FromMinutes(15), resetTimeoutOnInput: true);
+
+            _ = ShowChronology(context.RolesData.AllRoles.Keys, chronology);
+
 
             await ReplyEmbedStampAsync($"{data.Name} успешно завершена", EmbedStyle.Successfull);
 
@@ -262,6 +271,75 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
         return await Context.Db.SaveChangesAsync();
     }
 
+
+    private async Task ShowChronology(IEnumerable<IGuildUser> players, MafiaChronology chronology)
+    {
+        try
+        {
+            var entryEmbed = EmbedHelper.CreateEmbed("Просмотреть хронологию игры");
+
+            var entryComponent = new ComponentBuilder()
+                .WithButton("Открыть", "showChronology")
+                .Build();
+
+            var entryMsg = await ReplyAsync(embed: entryEmbed, components: entryComponent);
+
+
+            var paginator = chronology.BuildActionsHistoryPaginator(players);
+
+
+            var timeout = TimeSpan.FromMinutes(3);
+
+            var cts = new CancellationTokenSource(timeout);
+
+            var playersIds = new HashSet<ulong>();
+
+            while (!cts.IsCancellationRequested)
+            {
+                var res = await Interactive.NextMessageComponentAsync(
+                    x =>
+                    x.Message.Id == entryMsg.Id && !playersIds.Contains(x.User.Id),
+                    timeout: timeout, cancellationToken: cts.Token);
+
+                if (res.IsSuccess)
+                {
+                    try
+                    {
+                        var value = res.Value;
+
+                        await value.DeferAsync(true);
+
+                        playersIds.Add(value.User.Id);
+
+                        _ = Interactive.SendPaginatorAsync(paginator, value, timeout, InteractionResponseType.DeferredChannelMessageWithSource, ephemeral: true, resetTimeoutOnInput: true);
+                    }
+                    catch (Exception e)
+                    {
+                        GuildLogger.Error(e, LogTemplate, nameof(ShowChronology),
+                            "Error occured when send paginator");
+
+                        var embed = EmbedHelper.CreateEmbed("Произошла ошибка во время отправки хронологии", EmbedStyle.Error);
+
+                        await res.Value.FollowupAsync(embed: embed, ephemeral: true);
+                    }
+                }
+            }
+
+            try
+            {
+                await entryMsg.DeleteAsync();
+            }
+            catch (HttpException e) when (e.HttpCode == HttpStatusCode.NotFound)
+            { }
+        }
+        catch (Exception e)
+        {
+            GuildLogger.Error(e, LogTemplate, nameof(ShowChronology),
+                "Error occured when show chronology");
+
+            await ReplyEmbedAsync("Произошла ошибка во время показа хронологии", EmbedStyle.Error);
+        }
+    }
 
 
     public class MafiaStatsModule : GameStatsModule
@@ -532,8 +610,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
                 ServerSubSettings = settings.CurrentTemplate.ServerSubSettings,
                 GameSubSettings = settings.CurrentTemplate.GameSubSettings,
                 RoleAmountSubSettings = settings.CurrentTemplate.RoleAmountSubSettings,
-                RolesExtraInfoSubSettings = settings.CurrentTemplate.RolesExtraInfoSubSettings,
-                PreGameMessage = settings.CurrentTemplate.PreGameMessage
+                RolesExtraInfoSubSettings = settings.CurrentTemplate.RolesExtraInfoSubSettings
             };
 
 
@@ -615,7 +692,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
         [Command("Имя")]
         public async Task UpdateTemplateName([Remainder] string newName)
         {
-            var settings = await _settingsService.GetSettingsOrCreateAsync(Context, false);
+            var settings = await _settingsService.GetSettingsOrCreateAsync(Context);
 
             ArgumentNullException.ThrowIfNull(settings.CurrentTemplate);
 
@@ -655,7 +732,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
             settings.CurrentTemplate.ServerSubSettings = new();
             settings.CurrentTemplate.RolesExtraInfoSubSettings = new();
             settings.CurrentTemplate.RoleAmountSubSettings = new();
-            settings.CurrentTemplate.PreGameMessage = null;
+            settings.CurrentTemplate.GameSubSettings.PreGameMessage = null;
 
             await Context.Db.SaveChangesAsync();
 
@@ -689,6 +766,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
                 return;
             }
 
+            settings.CurrentTemplateId = null;
 
             Context.Db.MafiaSettingsTemplates.Remove(template);
 
@@ -916,7 +994,8 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
                     options = options.Concat(settingsBlockValues);
 
                     description = isModified
-                    ? $"Значение **{displayName}** успешно изменено: {previousValue ?? "[Н/д]"} -> {currentValue ?? "[Н/д]"}"
+                    ? $"Значение **{displayName}** успешно изменено:" +
+                        $" {previousValue ?? "[Н/д]"} -> {currentValue ?? "[Н/д]"}".Truncate(100)
                     : "Выберите интересующий вас параметр";
 
 
@@ -940,7 +1019,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
                                 if (ulong.TryParse(v?.ToString(), out var id))
                                     return Context.Guild.GetMentionFromId(id);
 
-                                return v?.ToString() ?? "[Н/д]";
+                                return v?.ToString()?.Truncate(300) ?? "[Н/д]";
                             })),
                             IsInline = true
                         }
@@ -1036,34 +1115,48 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
                         {
                             var vmValue = vmParam.GetValue(settingsDisplay.ViewModel);
 
-                            SetDataParameter(dataParam, vmParam, settingsDisplay.Model, vmValue);
-
-                            currentValue = settingsDisplay.ModelValue;
-
-                            wasSettingsModified = currentValue != previousValue;
-
-                            if (wasSettingsModified)
+                            if (vmValue?.ToString() != previousValue?.ToString())
                             {
-                                var check = CheckSettings(settings);
+                                SetDataParameter(dataParam, vmParam, settingsDisplay.Model, vmValue);
 
-                                if (!check.IsSuccess)
+                                currentValue = settingsDisplay.ModelValue;
+
+                                wasSettingsModified = currentValue?.ToString() != previousValue?.ToString();
+
+                                if (wasSettingsModified)
                                 {
-                                    var errorEmbed = EmbedHelper.CreateEmbed(check.ErrorReason, EmbedStyle.Error, "Ошибка настроек");
+                                    var check = CheckSettings(settings);
 
-                                    _ = Interactive.DelayedSendMessageAndDeleteAsync(Context.Channel,
-                                    embed: errorEmbed,
-                                    deleteDelay: TimeSpan.FromSeconds(15),
-                                    messageReference: new(Context.Message.Id));
+                                    if (!check.IsSuccess)
+                                    {
+                                        var errorEmbed = EmbedHelper.CreateEmbed(check.ErrorReason, EmbedStyle.Error, "Ошибка настроек");
 
-                                    SetDataParameter(dataParam, vmParam, settingsDisplay.Model, previousValue);
+                                        _ = Interactive.DelayedSendMessageAndDeleteAsync(Context.Channel,
+                                        embed: errorEmbed,
+                                        deleteDelay: TimeSpan.FromSeconds(15),
+                                        messageReference: new(Context.Message.Id));
 
-                                    currentValue = previousValue;
+                                        SetDataParameter(dataParam, vmParam, settingsDisplay.Model, previousValue);
 
-                                    success = false;
+                                        currentValue = previousValue;
+
+                                        success = false;
+
+                                        wasSettingsModified = false;
+                                    }
                                 }
                             }
+                            else
+                            {
+                                var errorEmbed = EmbedHelper.CreateEmbed("Значения совпадают", EmbedStyle.Warning);
 
-                            wasSettingsModified = currentValue != previousValue;
+                                _ = Interactive.DelayedSendMessageAndDeleteAsync(Context.Channel,
+                                embed: errorEmbed,
+                                deleteDelay: TimeSpan.FromSeconds(15),
+                                messageReference: new(Context.Message.Id));
+
+                                wasSettingsModified = false;
+                            }
                         }
 
                         isModified = success;
@@ -1143,10 +1236,10 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
 
             var valueTask = Interactive.NextMessageAsync(x => x.Channel.Id == msg.Channel.Id && x.Author.Id == Context.User.Id,
-                timeout: 30d.ToTimeSpanSeconds());
+                timeout: TimeSpan.FromSeconds(120));
 
             var cancelTask = Interactive.NextMessageComponentAsync(x => x.Message.Id == msg.Id && x.User.Id == Context.User.Id,
-                timeout: 35d.ToTimeSpanSeconds());
+                timeout: TimeSpan.FromSeconds(125));
 
             var task = await Task.WhenAny(valueTask, cancelTask);
 
