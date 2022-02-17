@@ -45,9 +45,10 @@ public class MafiaSettingsService : GameSettingsService<MafiaSettings>
 
             settings.CurrentTemplateId = template.Id;
 
+            settings.CurrentTemplate = template;
+
             await context.Db.SaveChangesAsync();
         }
-
 
         return settings;
     }

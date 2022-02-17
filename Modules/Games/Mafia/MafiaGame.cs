@@ -477,19 +477,47 @@ public class MafiaGame
             .Distinct()
             .ToList();
 
-        if (!_template.GameSubSettings.IsCustomGame && _template.GameSubSettings.IsRatingGame)
-            foreach (var healer in healers.Where(h => !h.IsSkip))
-            {
+        var isRating = !_template.GameSubSettings.IsCustomGame && _template.GameSubSettings.IsRatingGame;
+
+        foreach (var healer in healers.Where(h => !h.IsSkip))
+        {
+            if (isRating)
                 healer.MovesCount++;
 
-                if (healer.HealedPlayer is not null && kills.Any(k => k.Id == healer.HealedPlayer.Id))
+            if (healer.HealedPlayer is not null && kills.Any(k => k.Id == healer.HealedPlayer.Id))
+            {
+                _chronology.AddAction($"Игрок {healer.HealedPlayer.GetFullMention()} спасен", _rolesData.AliveRoles[((GameRole)healer).Player]);
+
+                if (isRating)
                     healer.HealsCount++;
+            }
+        }
+
+        foreach (var killer in killers.Where(k => !k.IsSkip))
+            if (killer.KilledPlayer is not null && corpses.Any(k => k.Id == killer.KilledPlayer.Id))
+            {
+                _chronology.AddAction($"Игрок {killer.KilledPlayer.GetFullMention()} убит", _rolesData.AliveRoles[((GameRole)killer).Player]);
             }
 
 
         var maniacKills = _rolesData.Maniacs.Values
             .Where(m => m.IsAlive && m.KilledPlayer is not null)
-            .Select(m => m.KilledPlayer!)
+            .Select(m => m.KilledPlayer!);
+
+
+        foreach (var maniac in _rolesData.Maniacs.Values.Where(k => !k.IsSkip))
+            if (maniac.KilledPlayer is not null && maniacKills.Any(k => k.Id == maniac.KilledPlayer.Id))
+            {
+                _chronology.AddAction($"Игрок {maniac.KilledPlayer.GetFullMention()} убит", _rolesData.Maniacs[maniac.Player]);
+            }
+        
+        foreach (var hooker in _rolesData.Hookers.Values.Where(k => !k.IsSkip))
+            if (hooker.HealedPlayer is not null && maniacKills.Any(k => k.Id == hooker.HealedPlayer.Id))
+            {
+                _chronology.AddAction($"Игрок {hooker.HealedPlayer.GetFullMention()} спасен от маньяка", _rolesData.Hookers[hooker.Player]);
+            }
+
+        maniacKills = maniacKills
             .Except(_rolesData.Hookers.Values
                 .Where(h => h.IsAlive && h.HealedPlayer is not null)
                 .Select(h => h.HealedPlayer!));

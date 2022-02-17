@@ -1,7 +1,7 @@
 ﻿namespace Infrastructure.Data.Models.Games.Settings.Mafia.SubSettings;
 
 
-public class RoleAmountSubSettings
+public record RoleAmountSubSettings
 {
     public int Id { get; set; }
 

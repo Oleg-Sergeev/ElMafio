@@ -607,10 +607,10 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
             {
                 Name = newTemplateName,
                 MafiaSettingsId = settings.Id,
-                ServerSubSettings = settings.CurrentTemplate.ServerSubSettings,
-                GameSubSettings = settings.CurrentTemplate.GameSubSettings,
-                RoleAmountSubSettings = settings.CurrentTemplate.RoleAmountSubSettings,
-                RolesExtraInfoSubSettings = settings.CurrentTemplate.RolesExtraInfoSubSettings
+                ServerSubSettings = settings.CurrentTemplate.ServerSubSettings with { Id = 0, MafiaSettingsTemplateId = 0 },
+                GameSubSettings = settings.CurrentTemplate.GameSubSettings with { Id = 0, MafiaSettingsTemplateId = 0 },
+                RoleAmountSubSettings = settings.CurrentTemplate.RoleAmountSubSettings with { Id = 0, MafiaSettingsTemplateId = 0 },
+                RolesExtraInfoSubSettings = settings.CurrentTemplate.RolesExtraInfoSubSettings with { Id = 0, MafiaSettingsTemplateId = 0 }
             };
 
 
@@ -1019,7 +1019,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
                                 if (ulong.TryParse(v?.ToString(), out var id))
                                     return Context.Guild.GetMentionFromId(id);
 
-                                return v?.ToString()?.Truncate(300) ?? "[Н/д]";
+                                return v?.ToString() ?? "[Н/д]";
                             })),
                             IsInline = true
                         }

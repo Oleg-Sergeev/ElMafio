@@ -1,6 +1,6 @@
 ﻿namespace Infrastructure.Data.Models.Games.Settings.Mafia.SubSettings;
 
-public class GameSubSettings
+public record GameSubSettings
 {
     public int Id { get; set; }
 
