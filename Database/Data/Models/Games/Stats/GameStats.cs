@@ -8,7 +8,11 @@ public abstract class GameStats : IResetable
 
     public int WinsCount { get; set; }
 
-    public float WinRate { get; private set; }
+    public float WinRate { get; protected set; }
+
+
+    public float Rating { get; protected set; }
+
 
     public ulong UserId { get; set; }
     public User User { get; set; } = null!;
@@ -21,5 +25,6 @@ public abstract class GameStats : IResetable
     {
         GamesCount = 0;
         WinsCount = 0;
+        Rating = 0;
     }
 }

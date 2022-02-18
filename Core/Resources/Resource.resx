@@ -1,0 +1,420 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <!-- 
+    Microsoft ResX Schema 
+    
+    Version 2.0
+    
+    The primary goals of this format is to allow a simple XML format 
+    that is mostly human readable. The generation and parsing of the 
+    various data types are done through the TypeConverter classes 
+    associated with the data types.
+    
+    Example:
+    
+    ... ado.net/XML headers & schema ...
+    <resheader name="resmimetype">text/microsoft-resx</resheader>
+    <resheader name="version">2.0</resheader>
+    <resheader name="reader">System.Resources.ResXResourceReader, System.Windows.Forms, ...</resheader>
+    <resheader name="writer">System.Resources.ResXResourceWriter, System.Windows.Forms, ...</resheader>
+    <data name="Name1"><value>this is my long string</value><comment>this is a comment</comment></data>
+    <data name="Color1" type="System.Drawing.Color, System.Drawing">Blue</data>
+    <data name="Bitmap1" mimetype="application/x-microsoft.net.object.binary.base64">
+        <value>[base64 mime encoded serialized .NET Framework object]</value>
+    </data>
+    <data name="Icon1" type="System.Drawing.Icon, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+        <value>[base64 mime encoded string representing a byte array form of the .NET Framework object]</value>
+        <comment>This is a comment</comment>
+    </data>
+                
+    There are any number of "resheader" rows that contain simple 
+    name/value pairs.
+    
+    Each data row contains a name, and value. The row also contains a 
+    type or mimetype. Type corresponds to a .NET class that support 
+    text/value conversion through the TypeConverter architecture. 
+    Classes that don't support this are serialized and stored with the 
+    mimetype set.
+    
+    The mimetype is used for serialized objects, and tells the 
+    ResXResourceReader how to depersist the object. This is currently not 
+    extensible. For a given mimetype the value must be set accordingly:
+    
+    Note - application/x-microsoft.net.object.binary.base64 is the format 
+    that the ResXResourceWriter will generate, however the reader can 
+    read any of the formats listed below.
+    
+    mimetype: application/x-microsoft.net.object.binary.base64
+    value   : The object must be serialized with 
+            : System.Runtime.Serialization.Formatters.Binary.BinaryFormatter
+            : and then encoded with base64 encoding.
+    
+    mimetype: application/x-microsoft.net.object.soap.base64
+    value   : The object must be serialized with 
+            : System.Runtime.Serialization.Formatters.Soap.SoapFormatter
+            : and then encoded with base64 encoding.
+
+    mimetype: application/x-microsoft.net.object.bytearray.base64
+    value   : The object must be serialized into a byte array 
+            : using a System.ComponentModel.TypeConverter
+            : and then encoded with base64 encoding.
+    -->
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="AbortGameWhenError_Description" xml:space="preserve">
+    <value>If an error occurs during game preparation, the game will crash</value>
+  </data>
+  <data name="AbortGameWhenError_Name" xml:space="preserve">
+    <value>Abort game when setup error</value>
+  </data>
+  <data name="Block" xml:space="preserve">
+    <value>Block</value>
+  </data>
+  <data name="Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="CanInnocentsKillAtNight_Description" xml:space="preserve">
+    <value>Civilians get the opportunity to kill any player by voting</value>
+  </data>
+  <data name="CanInnocentsKillAtNight_Name" xml:space="preserve">
+    <value>Civilians can kill at night</value>
+  </data>
+  <data name="CategoryChannelId_Description" xml:space="preserve">
+    <value>The category will allow you to group all game channels</value>
+  </data>
+  <data name="CategoryChannelId_Name" xml:space="preserve">
+    <value>Category ID</value>
+  </data>
+  <data name="ChangeParameterValueForConflictSolve" xml:space="preserve">
+    <value>Change the value of one or two parameters to resolve the conflict</value>
+  </data>
+  <data name="ChangesNotFound" xml:space="preserve">
+    <value>Changes not found</value>
+  </data>
+  <data name="ClearChannelsOnStart_Description" xml:space="preserve">
+    <value>Before the start of the game, the bot will clear all channels from past discussions</value>
+  </data>
+  <data name="ClearChannelsOnStart_Name" xml:space="preserve">
+    <value>Clear channels before starting the game</value>
+  </data>
+  <data name="Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="ConditionAliveAtLeast1Innocent_Description" xml:space="preserve">
+    <value>If this option is enabled, the game will end only when the last peaceful card dies</value>
+  </data>
+  <data name="ConditionAliveAtLeast1Innocent_Name" xml:space="preserve">
+    <value>Continue the game until the last peaceful</value>
+  </data>
+  <data name="ConditionContinueGameWithNeutrals_Description" xml:space="preserve">
+    <value>If the option is enabled, the game will not end after the death of all the mafia</value>
+  </data>
+  <data name="ConditionContinueGameWithNeutrals_Name" xml:space="preserve">
+    <value>Continue playing with neutrals</value>
+  </data>
+  <data name="DoctorsCount_Name" xml:space="preserve">
+    <value>Doctors count</value>
+  </data>
+  <data name="DoctorSelfHealsCount_Description" xml:space="preserve">
+    <value>Sets number of self-healing. *Doctor cannot heal any player 2 times in a row*</value>
+  </data>
+  <data name="DoctorSelfHealsCount_Name" xml:space="preserve">
+    <value>Doctor self heals count</value>
+  </data>
+  <data name="DonsCount_Name" xml:space="preserve">
+    <value>Dons count</value>
+  </data>
+  <data name="FailedSetParameterValue" xml:space="preserve">
+    <value>Failed to set parameter value **{0}**</value>
+  </data>
+  <data name="GameBlock" xml:space="preserve">
+    <value>Game</value>
+  </data>
+  <data name="GeneralBlock" xml:space="preserve">
+    <value>General</value>
+  </data>
+  <data name="GeneralTextChannelId_Description" xml:space="preserve">
+    <value>In this channel there is a daily discussion and voting</value>
+  </data>
+  <data name="GeneralTextChannelId_Name" xml:space="preserve">
+    <value>General text channel ID</value>
+  </data>
+  <data name="GeneralVoiceChannelId_Description" xml:space="preserve">
+    <value>Voice channel open during afternoon discussion</value>
+  </data>
+  <data name="GeneralVoiceChannelId_Name" xml:space="preserve">
+    <value>General voice channel ID</value>
+  </data>
+  <data name="HookersCount_Name" xml:space="preserve">
+    <value>Hookers count</value>
+  </data>
+  <data name="InnocentsCount_Name" xml:space="preserve">
+    <value>Innocents count</value>
+  </data>
+  <data name="InnocentsMustVoteForOnePlayer_Description" xml:space="preserve">
+    <value>All civilians are required to vote in one player. *Votes without a clear choice do not count*</value>
+  </data>
+  <data name="InnocentsMustVoteForOnePlayer_Name" xml:space="preserve">
+    <value>Civilians must vote unanimously</value>
+  </data>
+  <data name="InvalidParameterValue" xml:space="preserve">
+    <value>Invalid parameter value</value>
+  </data>
+  <data name="IsCustomGame_Description" xml:space="preserve">
+    <value>Apply custom game settings. **Not compatible with ranked play**</value>
+  </data>
+  <data name="IsCustomGame_Name" xml:space="preserve">
+    <value>Custom game</value>
+  </data>
+  <data name="IsFillWithMurders_Description" xml:space="preserve">
+    <value>By default, the table is filled with civilians. This option fills the table with mafia</value>
+  </data>
+  <data name="IsFillWithMurders_Name" xml:space="preserve">
+    <value>Fill table with mafia</value>
+  </data>
+  <data name="IsRatingGame_Description" xml:space="preserve">
+    <value>Determines whether to take into account the next game in the statistics and rating of players</value>
+  </data>
+  <data name="IsRatingGame_Name" xml:space="preserve">
+    <value>Rating game</value>
+  </data>
+  <data name="LastWordNightCount_Description" xml:space="preserve">
+    <value>Number of nights after which a killed player can send a posthumous message</value>
+  </data>
+  <data name="LastWordNightCount_Name" xml:space="preserve">
+    <value>Number of last words</value>
+  </data>
+  <data name="MafiaCoefError" xml:space="preserve">
+    <value>Mafia coefficient cannot be less than {0}</value>
+  </data>
+  <data name="MafiaCoefficient_Description" xml:space="preserve">
+    <value>Determines ratio of civilians to the mafia by the formula: maf = players / coef. Example: 2 = 8 / 3</value>
+  </data>
+  <data name="MafiaCoefficient_Name" xml:space="preserve">
+    <value>Mafia coefficient</value>
+  </data>
+  <data name="MafiaRoleId_Description" xml:space="preserve">
+    <value>The main role required for the correct operation of the game</value>
+  </data>
+  <data name="MafiaRoleId_Name" xml:space="preserve">
+    <value>Mafia Role ID</value>
+  </data>
+  <data name="MafiaSettingsBlockSelect" xml:space="preserve">
+    <value>Select the block of settings you are interested in</value>
+  </data>
+  <data name="ManiacsCount_Name" xml:space="preserve">
+    <value>Maniacs count</value>
+  </data>
+  <data name="MentionPlayersOnGameStart_Description" xml:space="preserve">
+    <value>At the start of the game, the bot will send a message mentioning all the participants in the game</value>
+  </data>
+  <data name="MentionPlayersOnGameStart_Name" xml:space="preserve">
+    <value>Mention players on game start</value>
+  </data>
+  <data name="MurdersCount_Name" xml:space="preserve">
+    <value>Murders count</value>
+  </data>
+  <data name="MurdersKnowEachOther_Description" xml:space="preserve">
+    <value>Mafia will have a another chat available, where members of mafia can to know their teammates</value>
+  </data>
+  <data name="MurdersKnowEachOther_Name" xml:space="preserve">
+    <value>Murders know each other</value>
+  </data>
+  <data name="MurdersMustVoteForOnePlayer_Description" xml:space="preserve">
+    <value>The entire mafia is required to vote in one player. *Votes without a clear choice do not count*</value>
+  </data>
+  <data name="MurdersMustVoteForOnePlayer_Name" xml:space="preserve">
+    <value>Mafia must vote unanimously</value>
+  </data>
+  <data name="MurdersTextChannelId_Description" xml:space="preserve">
+    <value>Here the mafia decides who to kill</value>
+  </data>
+  <data name="MurdersTextChannelId_Name" xml:space="preserve">
+    <value>Mafia Text Channel ID</value>
+  </data>
+  <data name="MurdersVoiceChannelId_Description" xml:space="preserve">
+    <value>Mafia can discuss their night plans in this channel</value>
+  </data>
+  <data name="MurdersVoiceChannelId_Name" xml:space="preserve">
+    <value>Mafia Voice Channel ID</value>
+  </data>
+  <data name="MurdersVoteTogether_Description" xml:space="preserve">
+    <value>If option is disabled the mafia will vote individually through bot's DM and result will be summed up</value>
+  </data>
+  <data name="MurdersVoteTogether_Name" xml:space="preserve">
+    <value>Murders vote together</value>
+  </data>
+  <data name="NoDescription" xml:space="preserve">
+    <value>*No description*</value>
+  </data>
+  <data name="NotAssigned" xml:space="preserve">
+    <value>N/A</value>
+  </data>
+  <data name="Parameter" xml:space="preserve">
+    <value>Parameter</value>
+  </data>
+  <data name="ParameterSelect" xml:space="preserve">
+    <value>Select the parameter you are interested in</value>
+  </data>
+  <data name="PreGameMessage_Description" xml:space="preserve">
+    <value>A message that will be shown before the game. Useful for a brief description of the settings used</value>
+  </data>
+  <data name="PreGameMessage_Name" xml:space="preserve">
+    <value>Preamble</value>
+  </data>
+  <data name="RemoveRolesFromUsers_Description" xml:space="preserve">
+    <value>The absence of roles for the player ensures that he will only see game chats</value>
+  </data>
+  <data name="RemoveRolesFromUsers_Name" xml:space="preserve">
+    <value>Remove roles from users</value>
+  </data>
+  <data name="RenameUsers_Description" xml:space="preserve">
+    <value>Используется для предотвращения ситуаций с сменой ника во время игры</value>
+  </data>
+  <data name="RenameUsers_Name" xml:space="preserve">
+    <value>Rename users without server nickname</value>
+  </data>
+  <data name="ReplyMessagesOnSetupError_Description" xml:space="preserve">
+    <value>Used to prevent situations with nickname changes during the game</value>
+  </data>
+  <data name="ReplyMessagesOnSetupError_Name" xml:space="preserve">
+    <value>Reply messages on setup error</value>
+  </data>
+  <data name="RolesAmountBlock" xml:space="preserve">
+    <value>Roles amount</value>
+  </data>
+  <data name="RolesExtraInfoBlock" xml:space="preserve">
+    <value>Roles extra settings</value>
+  </data>
+  <data name="SendWelcomeMessage_Description" xml:space="preserve">
+    <value>Immediately after the start of the game, the bot will send a welcome message</value>
+  </data>
+  <data name="SendWelcomeMessage_Name" xml:space="preserve">
+    <value>Send welcome message</value>
+  </data>
+  <data name="ServerBlock" xml:space="preserve">
+    <value>Server</value>
+  </data>
+  <data name="Settings" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="SettingsConflict" xml:space="preserve">
+    <value>Settings conflict</value>
+  </data>
+  <data name="SettingsError" xml:space="preserve">
+    <value>Settings error</value>
+  </data>
+  <data name="SettingsSuccessfullySaved" xml:space="preserve">
+    <value>Settings successfully saved</value>
+  </data>
+  <data name="SheriffsCount_Name" xml:space="preserve">
+    <value>Sheriffs count</value>
+  </data>
+  <data name="SheriffShotsCount_Description" xml:space="preserve">
+    <value>If sheriff is available to shot, before voting, player will have a choice of action: shoot or check</value>
+  </data>
+  <data name="SheriffShotsCount_Name" xml:space="preserve">
+    <value>Sheriff shots count</value>
+  </data>
+  <data name="SpecifyValue" xml:space="preserve">
+    <value>Specify the value of the selected parameter **{0}**</value>
+  </data>
+  <data name="SpectatorsTextChannelId_Description" xml:space="preserve">
+    <value>Killed players can watch the game progress and try to guess the roles</value>
+  </data>
+  <data name="SpectatorsTextChannelId_Name" xml:space="preserve">
+    <value>Spectator Text Channel ID</value>
+  </data>
+  <data name="SpectatorsVoiceChannelId_Description" xml:space="preserve">
+    <value>Observers can discuss the game by voice</value>
+  </data>
+  <data name="SpectatorsVoiceChannelId_Name" xml:space="preserve">
+    <value>Spectator Voice Channel ID</value>
+  </data>
+  <data name="TheOptionsMutuallyExclusive" xml:space="preserve">
+    <value>Options {0} and {1} are mutually exclusive</value>
+  </data>
+  <data name="Value" xml:space="preserve">
+    <value>Value</value>
+  </data>
+  <data name="ValueChanged" xml:space="preserve">
+    <value>The value of **{0}** was successfully changed:</value>
+  </data>
+  <data name="ValueNotSpecified" xml:space="preserve">
+    <value>You did not specify a value for the parameter **{0}**</value>
+  </data>
+  <data name="ValuesMatch" xml:space="preserve">
+    <value>Values match</value>
+  </data>
+  <data name="VoteTimeError" xml:space="preserve">
+    <value>Voting time cannot be less than {0} seconds</value>
+  </data>
+  <data name="VoteTime_Description" xml:space="preserve">
+    <value>The time that is given to a person for night and day voting</value>
+  </data>
+  <data name="VoteTime_Name" xml:space="preserve">
+    <value>Vote time</value>
+  </data>
+  <data name="WatcherRoleId_Description" xml:space="preserve">
+    <value>Role for spectators</value>
+  </data>
+  <data name="WatcherRoleId_Name" xml:space="preserve">
+    <value>Mafia Spectator Role ID</value>
+  </data>
+</root>

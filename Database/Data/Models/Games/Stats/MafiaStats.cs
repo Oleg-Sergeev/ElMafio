@@ -38,9 +38,6 @@ public class MafiaStats : GameStats
 
     public float Scores { get; private set; }
 
-    public float Rating { get; private set; }
-
-
 
     public override void Reset()
     {
@@ -67,7 +64,5 @@ public class MafiaStats : GameStats
         PenaltyScores = 0;
 
         Scores = 0;
-
-        Rating = 0;
     }
 }

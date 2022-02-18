@@ -49,7 +49,7 @@ public class RussianRouletteModule : GameModule<RussianRouletteStats>
 
         var data = GetGameData();
 
-        var playersId = new HashSet<ulong>(data.Players.Select(p => p.Id));
+        var playersIds = new HashSet<ulong>(data.Players.Select(p => p.Id));
 
 
         await ReplyEmbedStampAsync($"{data.Name} начинается!");
@@ -71,16 +71,17 @@ public class RussianRouletteModule : GameModule<RussianRouletteStats>
             await ReplyAsync($"И абсолютным чемпионом русской рулетки становится {winner.Mention}! Поздравляем!");
 
 
-            delay = Task.Delay(1000);
-
-            await delay;
+            await Task.Delay(1000);
 
             await ReplyEmbedAsync("Игра завершена!", EmbedStyle.Successfull);
+
+            await UpdateStatsAsync(playersIds, winner.Id);
         }
 
 
         DeleteGameData();
     }
+
 
     private async Task<IGuildUser?> PlayAsync(RussianRoulleteData rrData)
     {
@@ -206,6 +207,20 @@ public class RussianRouletteModule : GameModule<RussianRouletteStats>
     }
 
 
+    private async Task<int> UpdateStatsAsync(IEnumerable<ulong> playersIds, ulong winnerId)
+    {
+        var stats = await GetStatsWithAddingNewAsync(playersIds);
+
+        stats[winnerId].WinsCount++;
+
+        foreach (var stat in stats.Values)
+            stat.GamesCount++;
+
+        return await Context.Db.SaveChangesAsync();
+    }
+
+
+
     private class RussianRoulleteData
     {
         public Emoji UnicodeEmojiKilled { get; }
@@ -223,6 +238,22 @@ public class RussianRouletteModule : GameModule<RussianRouletteStats>
     }
 
 
+
+
+    public class RussianRoulleteStatsModule : GameStatsModule
+    {
+        public RussianRoulleteStatsModule(InteractiveService interactiveService) : base(interactiveService)
+        {
+        }
+
+
+        public class RussianRoulleteAdminModule : GameAdminModule
+        {
+            public RussianRoulleteAdminModule(InteractiveService interactiveService) : base(interactiveService)
+            {
+            }
+        }
+    }
 
 
     // Maybe add complex adding

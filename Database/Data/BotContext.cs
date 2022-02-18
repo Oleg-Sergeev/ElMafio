@@ -24,6 +24,11 @@ public class BotContext : DbContext
     public DbSet<QuizStats> QuizStats => Set<QuizStats>();
 
 
+    public BotContext()
+    {
+        Database.EnsureCreated();
+    }
+
     public BotContext(DbContextOptions<BotContext> options) : base(options)
     {
         Database.EnsureCreated();

@@ -19,7 +19,6 @@ using Modules.Games.Mafia.Common.GameRoles.Data;
 using Modules.Games.Mafia.Common.Services;
 using Modules.Games.Services;
 using Serilog;
-using Serilog.Events;
 using Serilog.Filters;
 using Services;
 using CmdRunMode = Discord.Commands.RunMode;
@@ -35,31 +34,27 @@ public static class Application
         {
             Serilog.Debugging.SelfLog.Enable(Console.Error);
 
-            Directory.CreateDirectory(@"Data\Logs\Guilds");
-
-            const string PropertyGuildName = "GuildName";
-            const string LogsDirectory = @"Data\Logs";
-            const string GuildLogsDirectory = LogsDirectory + @"\Guilds";
-            const string GuildLogsDefaultName = "_UnidentifiedGuilds";
             const string OutputConsoleTemplate = "{Timestamp:HH:mm:ss:fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}";
             const string OutputFileTemplate = "{Timestamp:dd.MM.yyyy HH:mm:ss:fff} [{Level:u3}] {Message:j}{NewLine}{Exception}";
+            const string PropertyGuildName = "GuildName";
+            const string GuildLogsDefaultName = "_UnknownGuilds";
+
+            string LogsDirectory = Path.Combine("Logs", "Common");
+            string GuildLogsDirectory = Path.Combine("Logs", "Guilds");
 
             loggerConfig.
-                    MinimumLevel.Verbose()
+                    MinimumLevel.Debug()
+                    .WriteTo.Async(wt => wt.Console(outputTemplate: OutputConsoleTemplate))
                     .WriteTo.Logger(lc => lc
                             .Filter.ByExcluding(Matching.WithProperty(PropertyGuildName))
-                            .WriteTo.Async(wt => wt.Console(outputTemplate: OutputConsoleTemplate)))
-                    .WriteTo.Logger(lc => lc
-                            .Filter.ByExcluding(Matching.WithProperty(PropertyGuildName))
-                            .WriteTo.Async(wt => wt.File(Path.Combine(LogsDirectory, "log.txt"),
-                                          restrictedToMinimumLevel: LogEventLevel.Verbose,
+                            .WriteTo.Async(wt => wt.File(Path.Combine(LogsDirectory, "log_.txt"),
+                                          rollingInterval: RollingInterval.Day,
                                           outputTemplate: OutputFileTemplate,
                                           shared: true)))
                     .WriteTo.Logger(lc => lc.
                             Filter.ByIncludingOnly(Matching.WithProperty(PropertyGuildName))
                             .WriteTo.Map(PropertyGuildName, GuildLogsDefaultName, (guildName, writeTo)
                                  => writeTo.Async(wt => wt.File(Path.Combine(GuildLogsDirectory, guildName, "log_.txt"),
-                                                 restrictedToMinimumLevel: LogEventLevel.Verbose,
                                                  outputTemplate: OutputFileTemplate,
                                                  rollingInterval: RollingInterval.Day,
                                                  shared: true))));
@@ -67,11 +62,10 @@ public static class Application
         .ConfigureAppConfiguration(builder =>
         {
             builder
-            .SetBasePath(Path.Combine(AppContext.BaseDirectory, Constants.ConfigsRoot))
+            .SetBasePath(Path.Combine(AppContext.BaseDirectory, "Resources"))
             .AddJsonFile("AppConfig.json", false, true)
             .AddJsonFile("GamesConfig.json", false, true)
             .AddJsonFile("ContactsConfig.json", false, true)
-            .AddJsonFile("LoggerConfig.json", false, true)
             .AddUserSecrets<Program>(false)
             .Build();
         })

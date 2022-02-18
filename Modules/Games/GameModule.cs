@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics.CodeAnalysis;
@@ -321,7 +322,15 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
         return Task.FromResult(PreconditionResult.FromSuccess());
     }
 
-    protected virtual async Task<int> AddNewStatsAsync(IEnumerable<ulong> playersIds, IDictionary<ulong, TStats> stats)
+
+    protected Task<Dictionary<ulong, TStats>> GetStatsAsync(IEnumerable<ulong> playersIds, bool isTracking = true)
+        => Context.Db.Set<TStats>()
+            .AsTracking(isTracking ? QueryTrackingBehavior.TrackAll : QueryTrackingBehavior.NoTracking)
+            .Where(ms => ms.GuildSettingsId == Context.Guild.Id && playersIds.Any(id => id == ms.UserId))
+            .ToDictionaryAsync(s => s.UserId);
+
+
+    protected async Task<int> AddNewStatsAsync(IEnumerable<ulong> playersIds, IDictionary<ulong, TStats> stats)
     {
         var existingUsersIds = await Context.Db.Users
                             .AsNoTracking()
@@ -347,6 +356,17 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
         stats.AddRange(newUsersStats.ToDictionary(s => s.UserId));
 
         return newUsersStats.Count;
+}
+
+
+    protected async Task<IDictionary<ulong, TStats>> GetStatsWithAddingNewAsync(IEnumerable<ulong> playersIds, bool isTracking = true)
+    {
+        var stats = await GetStatsAsync(playersIds, isTracking);
+
+        if (stats.Count < playersIds.Count())
+            await AddNewStatsAsync(playersIds, stats);
+
+        return stats;
     }
 
     // Mb replace
@@ -593,6 +613,8 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
 
             if (userStats is null)
             {
+                await ReplyEmbedAsync("Личная статистика отсутствует", EmbedStyle.Error);
+
                 return;
             }
 
@@ -602,30 +624,73 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
         }
 
 
-        [Command("Сброс")]
-        [RequireConfirmAction(false)]
-        [RequireUserPermission(GuildPermission.Administrator)]
-        public async Task ResetStatsAsync(IUser? user = null)
+        [Command("Рейтинг")]
+        [Alias("Рейт", "Р")]
+        public virtual async Task ShowRatingAsync(int playersPerPage = 10)
         {
-            user ??= Context.User;
+            var allStats = await GetRatingQuery()
+                .ThenByDescending(stat => stat.UserId)
+                .ToListAsync();
 
-            var userStat = await Context.Db.MafiaStats
-                   .FirstOrDefaultAsync(ms => ms.GuildSettingsId == Context.Guild.Id && ms.UserId == user.Id);
-
-            if (userStat is null)
+            if (allStats.Count == 0)
             {
-                await ReplyEmbedAsync($"Статистика игрока {user.GetFullMention()} не найдена", EmbedStyle.Error);
+                await ReplyEmbedAsync("Рейтинг отсутствует", EmbedStyle.Error);
 
                 return;
             }
 
-            userStat.Reset();
 
-            await Context.Db.SaveChangesAsync();
+            var playersId = allStats
+                .Select(s => s.UserId)
+                .ToHashSet();
 
-            await ReplyEmbedStampAsync($"Статистика игрока {user.GetFullMention()} успешно сброшена", EmbedStyle.Successfull);
+            if (Context.Guild.Users.Count < Context.Guild.MemberCount)
+            {
+                await ReplyEmbedAsync($"Downloading users ({Context.Guild.MemberCount - Context.Guild.Users.Count})...", EmbedStyle.Debug);
+                await Context.Guild.DownloadUsersAsync();
+            }
+
+            var players = Context.Guild.Users
+                .Where(u => playersId.Contains(u.Id))
+                .ToDictionary(u => u.Id);
+
+            playersPerPage = Math.Clamp(playersPerPage, 1, 30);
+
+            var lazyPaginator = new LazyPaginatorBuilder()
+                .WithActionOnCancellation(ActionOnStop.DeleteMessage)
+                .WithActionOnTimeout(ActionOnStop.DeleteMessage)
+                .WithMaxPageIndex((allStats.Count - 1) / playersPerPage)
+                .WithCacheLoadedPages(true)
+                .WithPageFactory(page =>
+                {
+                    int n = playersPerPage * page + 1;
+
+                    var pageBuilder = new PageBuilder()
+                    {
+                        Title = $"Рейтинг [{page * playersPerPage + 1} - {(page + 1) * playersPerPage}]",
+                        Color = Utils.GetRandomColor(),
+                        Description = string.Join('\n', allStats
+                        .Skip(page * playersPerPage)
+                        .Take(playersPerPage)
+                        .Select(ms => $"{n++}. **{players[ms.UserId].GetFullName()}** - {ms.Rating:0.##}"))
+                    };
+
+                    return pageBuilder;
+                })
+                .Build();
+
+            _ = Interactive.SendPaginatorAsync(lazyPaginator, Context.Channel, timeout: TimeSpan.FromMinutes(10));
         }
 
+
+
+        protected virtual IOrderedQueryable<TStats> GetRatingQuery()
+            => Context.Db.Set<TStats>()
+                .AsNoTracking()
+                .Where(s => s.GuildSettingsId == Context.Guild.Id)
+                .OrderByDescending(stat => stat.Rating)
+                    .ThenByDescending(stat => stat.WinRate)
+                        .ThenByDescending(stat => stat.GamesCount);
 
 
         protected virtual EmbedBuilder GetStatsEmbedBuilder(TStats stats, IUser user)
@@ -637,5 +702,58 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
             .WithColor(new Color(230, 151, 16))
             .AddField("Общий % побед", $"{stats.WinRate:P2} ({stats.WinsCount}/{stats.GamesCount})", true);
 
+
+
+
+        [Group]
+        [RequireUserPermission(GuildPermission.Administrator)]
+        public abstract class GameAdminModule : GuildModuleBase
+        {
+            public GameAdminModule(InteractiveService interactiveService) : base(interactiveService)
+            {
+            }
+
+
+            [Command("РейтСброс")]
+            [Alias("РСброс")]
+            [RequireConfirmAction]
+            public virtual async Task ResetRatingAsync()
+            {
+                var allStats = await Context.Db.Set<TStats>()
+                    .Where(s => s.GuildSettingsId == Context.Guild.Id)
+                    .ToListAsync();
+
+                foreach (var stat in allStats)
+                    stat.Reset();
+
+                await Context.Db.SaveChangesAsync();
+
+                await ReplyEmbedStampAsync("Рейтинг успешно сброшен", EmbedStyle.Successfull);
+            }
+
+
+            [Command("Сброс")]
+            [RequireConfirmAction(false)]
+            public async Task ResetStatsAsync(IUser? user = null)
+            {
+                user ??= Context.User;
+
+                var userStat = await Context.Db.MafiaStats
+                       .FirstOrDefaultAsync(ms => ms.GuildSettingsId == Context.Guild.Id && ms.UserId == user.Id);
+
+                if (userStat is null)
+                {
+                    await ReplyEmbedAsync($"Статистика игрока {user.GetFullMention()} не найдена", EmbedStyle.Error);
+
+                    return;
+                }
+
+                userStat.Reset();
+
+                await Context.Db.SaveChangesAsync();
+
+                await ReplyEmbedStampAsync($"Статистика игрока {user.GetFullMention()} успешно сброшена", EmbedStyle.Successfull);
+            }
+        }
     }
 }

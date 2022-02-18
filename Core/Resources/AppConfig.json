@@ -1,0 +1,11 @@
+{
+  "ConnectionStrings": {
+    "SQLServer_Production": "Server=.;Database=SkyNet;Trusted_Connection=True;",
+    "SQLServer_Debug": "Server=.;Database=SkyNet_Debug;Trusted_Connection=True;"
+  },
+  "DefaultSettings": {
+    "Guild": {
+      "Prefix": "!"
+    }
+  }
+}

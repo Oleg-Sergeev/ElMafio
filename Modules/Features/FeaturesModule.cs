@@ -1,21 +1,16 @@
 ﻿using System;
-using System.Data;
-using System.Linq;
-using System.Threading;
+using System.Globalization;
 using System.Threading.Tasks;
 using Core.Common;
+using Core.Resources;
 using Discord;
 using Discord.Commands;
 using Fergun.Interactive;
-using Microsoft.Extensions.Options;
-using Microsoft.VisualBasic;
-using Modules.Common.MultiSelect;
-using Modules.Games.Mafia.Common.Data;
-using Newtonsoft.Json.Linq;
 
 namespace Modules.Features;
 
-[Group("Фичи")]
+[Group("ф")]
+[RequireOwner]
 public class FeaturesModule : GuildModuleBase
 {
     public FeaturesModule(InteractiveService interactiveService) : base(interactiveService)
