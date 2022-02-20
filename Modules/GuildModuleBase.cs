@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Core.Common;
@@ -14,6 +12,9 @@ using Services;
 
 namespace Modules;
 
+[RequireContext(ContextType.Guild)]
+[RequireBotPermission(GuildPermission.SendMessages)]
+[RequireBotPermission(GuildPermission.EmbedLinks)]
 public abstract class GuildModuleBase : ModuleBase<DbSocketCommandContext>
 {
     protected const string LogTemplate = "({Context:l}): {Message}";
@@ -31,6 +32,10 @@ public abstract class GuildModuleBase : ModuleBase<DbSocketCommandContext>
 
     private ILogger? _guildLogger;
     protected ILogger GuildLogger => _guildLogger ??= GetGuildLogger(Context.Guild.Id);
+
+
+    private IUser? _bot;
+    protected IUser Bot => _bot ??= Context.Guild.GetUser(Context.Client.CurrentUser.Id);
 
 
     protected InteractiveService Interactive { get; }

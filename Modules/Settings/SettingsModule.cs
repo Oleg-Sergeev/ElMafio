@@ -8,7 +8,6 @@ namespace Modules.Settings;
 
 [Group("Настройки")]
 [Alias("н")]
-[RequireContext(ContextType.Guild)]
 [RequireUserPermission(GuildPermission.Administrator)]
 public class SettingsModule : GuildModuleBase
 {
@@ -36,6 +35,7 @@ public class SettingsModule : GuildModuleBase
 
 
     [Command("КаналЛог")]
+    [Summary("Задать канал логгирования бота")]
     public async Task UpdateLogChannelAsync([Summary("ID канала для логов")] ulong logChannelId)
     {
         var logChannel = Context.Guild.GetTextChannel(logChannelId);
@@ -51,6 +51,7 @@ public class SettingsModule : GuildModuleBase
     }
 
     [Command("КаналЛог")]
+    [Summary("Задать канал логгирования бота")]
     public async Task UpdateLogChannelAsync([Summary("Канал для логов")] ITextChannel logChannel)
     {
         var guildSettings = await Context.GetGuildSettingsAsync();

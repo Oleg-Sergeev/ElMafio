@@ -2,8 +2,11 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Core.Common;
 using Core.Exceptions;
+using Core.Extensions;
 using Discord;
+using Discord.Net;
 using Discord.WebSocket;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
@@ -34,11 +37,17 @@ public class MafiaSetupService : IMafiaSetupService
         var commandContext = context.CommandContext;
 
         var denyView = MafiaHelper.DenyView;
-        var denyWrite = MafiaHelper.GetDenyWrite(guildData.GeneralTextChannel);
+        var denyWrite = MafiaHelper.DenyWrite;
+
+        var bot = commandContext.Guild.GetUser(903248920099057744);
 
         foreach (var channel in commandContext.Guild.Channels)
         {
-            if (channel.Id == guildData.GeneralTextChannel.Id)
+            var hasPerm = channel.Users.Contains(bot)
+                && channel.GetPermissionOverwrite(commandContext.Guild.EveryoneRole)?.ManageRoles != PermValue.Deny
+                && channel.GetPermissionOverwrite(bot)?.ManageRoles != PermValue.Deny;
+
+            if (channel.Id == guildData.GeneralTextChannel.Id || !hasPerm)
                 continue;
 
             var perms = channel.GetPermissionOverwrite(guildData.MafiaRole);
@@ -46,10 +55,18 @@ public class MafiaSetupService : IMafiaSetupService
             if (perms?.ViewChannel == PermValue.Deny)
                 continue;
 
-            tasks.Add(channel.AddPermissionOverwriteAsync(guildData.MafiaRole, denyView));
+            tasks.Add(Task.Run(async() =>
+            {
+                try
+                {
+                    await channel.AddPermissionOverwriteAsync(guildData.MafiaRole, denyView);
+                }
+                catch (HttpException e)
+                {
+                    await HandleHttpExceptionAsync($"Не удалось добавить переопределение для канала `{channel.Name}`", e, context);
+                }
+            }));
         }
-
-        await Task.WhenAll(tasks);
 
 
         if (guildData.SpectatorRole is not null)
@@ -65,7 +82,7 @@ public class MafiaSetupService : IMafiaSetupService
 
             if (guildData.SpectatorTextChannel is not null)
             {
-                var allowWrite = MafiaHelper.GetAllowWrite(guildData.SpectatorTextChannel);
+                var allowWrite = MafiaHelper.AllowWrite;
 
                 var specPerms = guildData.SpectatorTextChannel.GetPermissionOverwrite(guildData.SpectatorRole);
                 if (!Equals(specPerms, allowWrite))
@@ -74,7 +91,7 @@ public class MafiaSetupService : IMafiaSetupService
 
             if (guildData.SpectatorVoiceChannel is not null)
             {
-                var allowSpeak = MafiaHelper.GetAllowSpeak(guildData.SpectatorVoiceChannel);
+                var allowSpeak = MafiaHelper.AllowSpeak;
 
                 var specPerms = guildData.SpectatorVoiceChannel.GetPermissionOverwrite(guildData.SpectatorRole);
 
@@ -105,8 +122,6 @@ public class MafiaSetupService : IMafiaSetupService
 
         await Task.WhenAll(tasks);
 
-
-
         async Task HandlePlayerAsync(IGuildUser player)
         {
             var serverSettings = context.SettingsTemplate.ServerSubSettings;
@@ -123,9 +138,16 @@ public class MafiaSetupService : IMafiaSetupService
 
             if (serverSettings.RenameUsers && guildPlayer.Nickname is null && guildPlayer.Id != context.CommandContext.Guild.OwnerId)
             {
-                await guildPlayer.ModifyAsync(props => props.Nickname = $"_{guildPlayer.Username}_");
+                try
+                {
+                    await guildPlayer.ModifyAsync(props => props.Nickname = $"_{guildPlayer.Username}_");
 
-                guildData.OverwrittenNicknames.Add(guildPlayer.Id);
+                    guildData.OverwrittenNicknames.Add(guildPlayer.Id);
+                }
+                catch (HttpException e)
+                {
+                    await HandleHttpExceptionAsync($"Не удалось сменить ник пользователю {guildPlayer.GetFullMention()}", e, context);
+                }
             }
 
 
@@ -136,9 +158,16 @@ public class MafiaSetupService : IMafiaSetupService
 
                 foreach (var role in playerRoles)
                 {
-                    await guildPlayer.RemoveRoleAsync(role);
+                    try
+                    {
+                        await guildPlayer.RemoveRoleAsync(role);
 
-                    guildData.PlayerRoleIds[player.Id].Add(role.Id);
+                        guildData.PlayerRoleIds[player.Id].Add(role.Id);
+                    }
+                    catch (HttpException e)
+                    {
+                        await HandleHttpExceptionAsync($"Не удалось убрать роль {role.Mention} с пользователя {guildPlayer.GetFullMention()}", e, context);
+                    }
                 }
             }
 
@@ -179,7 +208,7 @@ public class MafiaSetupService : IMafiaSetupService
             var rolesCount = donsCount + doctorsCount + murdersCount + sheriffsCount + innocentsCount + (isCustomGame ? roleAmount.NeutralRolesCount : 0);
 
             if (rolesCount > mafiaData.Players.Count)
-                throw new WrongPlayersCountException("Inconsistency in the number of roles and players", mafiaData.Players.Count, rolesCount);
+                throw new WrongPlayersCountException("Mismatch in the number of roles and players", mafiaData.Players.Count, rolesCount);
 
 
             if (!gameSettings.IsFillWithMurders)
@@ -278,9 +307,29 @@ public class MafiaSetupService : IMafiaSetupService
         var tasks = new List<Task>();
 
         foreach (var role in context.RolesData.AllRoles.Values)
-            tasks.Add(role.Player.SendMessageAsync(embed: MafiaHelper.GetEmbed(role, _config)));
+            tasks.Add(Task.Run(async () =>
+            {
+                try
+                {
+                    await role.Player.SendMessageAsync(embed: MafiaHelper.GetEmbed(role, _config));
+                }
+                catch (HttpException e)
+                {
+                    await HandleHttpExceptionAsync($"Не удалось отправить сообщение пользователю {role.Player.GetFullMention()}", e, context);
+                }
+            }));
 
 
         await Task.WhenAll(tasks);
+    }
+
+
+    private static async Task HandleHttpExceptionAsync(string message, HttpException e, MafiaContext context)
+    {
+        if (context.SettingsTemplate.ServerSubSettings.ReplyMessagesOnSetupError)
+            await context.CommandContext.Channel.SendEmbedAsync(message, EmbedStyle.Error);
+
+        if (context.SettingsTemplate.ServerSubSettings.AbortGameWhenError)
+            throw new GameSetupAbortedException(message, e);
     }
 }

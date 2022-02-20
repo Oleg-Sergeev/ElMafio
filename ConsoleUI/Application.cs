@@ -93,7 +93,7 @@ public static class Application
         {
             services.AddDbContext<BotContext>(options =>
             {
-                options.UseSqlServer(context.Configuration.GetConnectionStringDebugDb());
+                options.UseSqlServer(context.Configuration.GetConnectionStringProductionDb());
                 options.EnableSensitiveDataLogging();
                 options.EnableDetailedErrors();
             })

@@ -85,7 +85,7 @@ public class RussianRouletteModule : GameModule<RussianRouletteStats>
 
     private async Task<IGuildUser?> PlayAsync(RussianRoulleteData rrData)
     {
-        await ReplyAsync("Крутим барабан...");
+        await ReplyEmbedAsync("Крутим барабан...", EmbedStyle.Waiting);
 
 
         var delay = Task.Delay(3000);
@@ -112,7 +112,7 @@ public class RussianRouletteModule : GameModule<RussianRouletteStats>
                     i = alivePlayers.Count - 1;
 
 
-                await ReplyAsync($"На очереди {alivePlayers[i].Mention}");
+                await ReplyEmbedAsync($"На очереди {alivePlayers[i].Mention}");
 
                 await Task.Delay(3000);
 
@@ -152,11 +152,11 @@ public class RussianRouletteModule : GameModule<RussianRouletteStats>
                     alivePlayers.Shuffle();
 
 
-                    await ReplyAsync($"Не будем унывать, в нашей беспроигрышной лотерее осталось еще {alivePlayers.Count} счастливчиков!");
+                    await ReplyEmbedAsync($"Не будем унывать, в нашей беспроигрышной лотерее осталось еще {alivePlayers.Count} счастливчиков!");
 
                     await Task.Delay(2000);
 
-                    await ReplyAsync("Крутим барабан...");
+                    await ReplyEmbedAsync("Раскручиваем барабан...", EmbedStyle.Waiting);
 
                     await Task.Delay(4000);
 
@@ -181,7 +181,7 @@ public class RussianRouletteModule : GameModule<RussianRouletteStats>
                         await msg.AddReactionAsync(rrData.UnicodeEmojiSurvived);
 
 
-                    await ReplyAsync("А мы идем дальше");
+                    await ReplyEmbedAsync("А мы идем дальше");
                 }
 
                 await Task.Delay(4000);
@@ -256,7 +256,6 @@ public class RussianRouletteModule : GameModule<RussianRouletteStats>
     }
 
 
-    // Maybe add complex adding
     [Group("Смайлы")]
     [RequireUserPermission(GuildPermission.Administrator)]
     public class SetSmileModule : GuildModuleBase

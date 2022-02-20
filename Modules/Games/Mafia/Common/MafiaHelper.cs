@@ -12,25 +12,21 @@ public static class MafiaHelper
 
     public static readonly OverwritePermissions DenyView = new(viewChannel: PermValue.Deny);
 
-    public static OverwritePermissions GetAllowSpeak(IChannel channel)
-        => OverwritePermissions.DenyAll(channel).Modify(
+    public static readonly OverwritePermissions AllowSpeak = new(
                 viewChannel: PermValue.Allow,
                 connect: PermValue.Allow,
                 useVoiceActivation: PermValue.Allow,
-                speak: PermValue.Allow
-                );
+                speak: PermValue.Allow);
 
+    public static readonly OverwritePermissions AllowWrite = new(
+               viewChannel: PermValue.Allow,
+               readMessageHistory: PermValue.Allow,
+               sendMessages: PermValue.Allow);
 
-    public static OverwritePermissions GetAllowWrite(IChannel channel)
-        => OverwritePermissions.DenyAll(channel).Modify(
-       viewChannel: PermValue.Allow,
-       readMessageHistory: PermValue.Allow,
-       sendMessages: PermValue.Allow);
-
-    public static OverwritePermissions GetDenyWrite(IChannel channel)
-        => OverwritePermissions.DenyAll(channel).Modify(
-        viewChannel: PermValue.Allow,
-        readMessageHistory: PermValue.Allow);
+    public static readonly OverwritePermissions DenyWrite = new(
+               viewChannel: PermValue.Allow,
+               readMessageHistory: PermValue.Allow,
+               sendMessages: PermValue.Deny);
 
 
     public static Embed GetEmbed(GameRole role, IConfiguration config)

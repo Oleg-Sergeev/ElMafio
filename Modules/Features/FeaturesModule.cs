@@ -1,11 +1,14 @@
 ﻿using System;
 using System.Globalization;
+using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using Core.Common;
 using Core.Resources;
 using Discord;
 using Discord.Commands;
 using Fergun.Interactive;
+using Microsoft.Extensions.Configuration;
 
 namespace Modules.Features;
 
@@ -13,8 +16,13 @@ namespace Modules.Features;
 [RequireOwner]
 public class FeaturesModule : GuildModuleBase
 {
-    public FeaturesModule(InteractiveService interactiveService) : base(interactiveService)
+    private readonly CommandService _commandService;
+    private readonly IServiceProvider _serviceProvider;
+
+    public FeaturesModule(InteractiveService interactiveService, CommandService commandService, IServiceProvider serviceProvider) : base(interactiveService)
     {
+        _commandService = commandService;
+        _serviceProvider = serviceProvider;
     }
 
     [Command("тест")]
@@ -91,6 +99,57 @@ public class FeaturesModule : GuildModuleBase
                     }
                 }
             }
+        }
+    }
+
+    [LocalizedCommand("Hello")]
+    public async Task LocaleTestAsync()
+    {
+        await ReplyAsync(Resource.Hello);
+    }
+
+    [Command("п")]
+    public async Task ReloadModulesAsync(string lang = "ru")
+    {
+        var res = await _commandService.RemoveModuleAsync<FeaturesModule>();
+
+        if (!res)
+        {
+            await ReplyAsync("Fail");
+
+            return;
+        }
+
+        var t = Resource.Culture.Name;
+
+        Resource.Culture = CultureInfo.GetCultureInfo(lang);
+
+        await _commandService.AddModuleAsync<FeaturesModule>(_serviceProvider);
+
+        Resource.Culture = CultureInfo.GetCultureInfo(t);
+
+        await ReplyAsync("Success");
+    }
+}
+
+
+public class LocalizedCommandAttribute : CommandAttribute
+{
+    public LocalizedCommandAttribute(string key) : base(key)
+    {
+        var type = GetType().BaseType;
+
+        if (type is null)
+            return;
+
+        var fieldText = type.GetField("<Text>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
+
+        if (fieldText is not null)
+        {
+            var localizedCommandName = Resource.ResourceManager.GetString(key, Resource.Culture);
+
+            if (localizedCommandName is not null)
+                fieldText.SetValue(this, localizedCommandName);
         }
     }
 }

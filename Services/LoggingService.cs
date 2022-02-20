@@ -5,6 +5,7 @@ using Core.Common;
 using Core.Extensions;
 using Discord;
 using Discord.Commands;
+using Discord.Net;
 using Discord.WebSocket;
 using Serilog;
 using Serilog.Events;
@@ -72,41 +73,36 @@ public class LoggingService
         if (result.IsSuccess)
             return;
 
+        var msg = "Произошла непредвиденная ошибка";
+
         switch (result.Error)
         {
             case CommandError.ParseFailed or CommandError.BadArgCount or CommandError.ObjectNotFound:
                 var parseResult = (ParseResult)result;
 
-                guildLog.Verbose("({0:l}): {1:l}. Error parameter: {2}; Arg values: {3}; Param values: {4}",
-                    nameof(OnCommandExecutedAsync),
-                    parseResult.ToString(),
-                    parseResult.ErrorParameter?.ToString(),
-                    parseResult.ArgValues,
-                    parseResult.ParamValues);
-
                 var cmd = context.Message.Content.Split(' ')[0].Remove(0, 1);
 
-                await context.Channel.SendEmbedAsync($"Неверные параметры команды. Введите команду **помощь {cmd}** для информации по данной команде", EmbedStyle.Error);
+                msg = $"Неверные параметры команды. Введите команду **помощь {cmd}** для информации по данной команде";
 
                 break;
 
             case CommandError.UnknownCommand:
                 guildLog.Verbose(result.ToString());
 
-                await context.Channel.SendEmbedAsync("Неизвестная команда. Введите команду **помощь** для получения списка команд", EmbedStyle.Error);
+                msg = $"Неизвестная команда. Введите команду **помощь** для получения списка команд";
 
                 break;
 
             case CommandError.UnmetPrecondition:
                 guildLog.Verbose(result.ToString());
 
-                await context.Channel.SendEmbedAsync(result.ErrorReason, EmbedStyle.Error);
+                msg = $"Ошибка полномочий: {result.ErrorReason}";
 
                 break;
 
             default:
                 if (result is ExecuteResult exeResult)
-                    guildLog.Error(exeResult.Exception, LogTemplate,
+                    guildLog.Warning(exeResult.Exception, LogTemplate,
                                    nameof(OnCommandExecutedAsync),
                                    commandInfo.Value,
                                    context.User.Username,
@@ -120,11 +116,56 @@ public class LoggingService
                                      $"{context.Guild.Name}/{context.Channel.Name}",
                                      context.Message.Content,
                                      result.ToString());
-
-
-                await context.Channel.SendEmbedAsync($"Произошла непредвиденная ошибка: {result.ErrorReason}", EmbedStyle.Error);
-
                 break;
+        }
+
+        try
+        {
+            await context.Channel.SendEmbedAsync(msg, EmbedStyle.Error);
+        } 
+        catch (HttpException e1) when (e1.DiscordCode == DiscordErrorCode.InsufficientPermissions)
+        {
+            try
+            {
+                await context.Channel.SendMessageAsync($"**Ошибка:**\n{msg}\nПожалуйста, предоставьте доступ к вставлению ссылок");
+            }
+            catch (HttpException e2) when (e2.DiscordCode == DiscordErrorCode.InsufficientPermissions)
+            {
+                try
+                {
+                    await context.User.SendMessageAsync($"**Ошибка:**\n{msg}\nПожалуйста, предоставьте доступ к отправке текстовых сообщений и вставление ссылок");
+                } 
+                catch (Exception e)
+                {
+                    guildLog.Warning(e, $"{LogTemplate} **Warning**",
+                                        nameof(OnCommandExecutedAsync),
+                                        commandInfo.IsSpecified ? commandInfo.Value.Name : "NULL",
+                                        context.User.Username,
+                                        $"{context.Guild.Name}/{context.Channel.Name}",
+                                        context.Message.Content);
+
+                    var appInfo = await context.Client.GetApplicationInfoAsync();
+                    await appInfo.Owner.SendMessageAsync($"**Warning**\n{e}\n{context.Guild.Name}/{context.Channel.Name}/{context.User.Username}");
+                }
+            }
+            catch (Exception e)
+            {
+                guildLog.Warning(e, LogTemplate,
+                                    nameof(OnCommandExecutedAsync),
+                                    commandInfo.IsSpecified ? commandInfo.Value.Name : "NULL",
+                                    context.User.Username,
+                                    $"{context.Guild.Name}/{context.Channel.Name}",
+                                    context.Message.Content);
+            }
+        }
+        catch (Exception e)
+        {
+            guildLog.Warning(e, LogTemplate,
+                                nameof(OnCommandExecutedAsync),
+                                commandInfo.IsSpecified ? commandInfo.Value.Name : "NULL",
+                                context.User.Username,
+                                $"{context.Guild.Name}/{context.Channel.Name}",
+                                context.Message.Content);
         }
     }
 

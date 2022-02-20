@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics.CodeAnalysis;
@@ -48,9 +47,10 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
 
 
 
-    [Priority(-1)]
     [Command("Играть")]
     [Alias("игра")]
+    [Summary("Присоединиться к существующей игре, или создать новую")]
+    [Priority(-1)]
     public virtual async Task JoinAsync()
     {
         var guildUser = (IGuildUser)Context.User;
@@ -104,6 +104,9 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
 
 
     [Command("Выход")]
+    [Summary("Покинуть игру")]
+    [Remarks("Если игру покидает хост, то хостом становится игрок, следующий за ним" +
+        "\nЕсли игру покидает последний участник - игра автоматически останавливается")]
     public virtual async Task LeaveAsync()
     {
         if (!TryGetGameData(out var gameData))
@@ -136,14 +139,21 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
     }
 
 
-    [RequireUserPermission(GuildPermission.Administrator, Group = "Perm")]
-    [RequireOwner(Group = "Perm")]
     [Command("Стоп")]
+    [Summary("Остановить игру")]
+    [Remarks("Только хост или администратор может остановить игру")]
     public virtual async Task StopAsync()
     {
         if (!TryGetGameData(out var gameData))
         {
             await ReplyEmbedAsync("Игра еще не создана", EmbedStyle.Error);
+
+            return;
+        }
+
+        if (gameData.Host.Id != Context.User.Id && !Context.User.HasGuildPermission(GuildPermission.Administrator))
+        {
+            await ReplyEmbedAsync("Остановить игру может только хост или администратор", EmbedStyle.Error);
 
             return;
         }
@@ -164,12 +174,16 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
 
     [Command("Старт")]
     [Alias("Запуск")]
+    [Summary("Запустить игру")]
+    [Remarks("Только хост или администратор может запустить игру")]
     public abstract Task StartAsync();
 
 
 
     [Command("Упомянуть")]
     [Alias("Квот", "Пинг")]
+    [Summary("Упомянуть всех участников игры")]
+    [Remarks("Только хост или администратор может упомянуть всех")]
     public virtual async Task MentionPlayersAsync()
     {
         if (!TryGetGameData(out var gameData))
@@ -200,7 +214,6 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
 
     [Command("Хост")]
     [Summary("Показать хоста игры")]
-    [Remarks("Только хост может запустить игру")]
     public virtual async Task ShowCreatorAsync()
     {
         if (!TryGetGameData(out var gameData))
@@ -241,9 +254,11 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
 
 
     [Command("Выгнать")]
+    [Alias("Кик")]
     [Summary("Выгнать пользователя из игры")]
-    [Remarks("Попытка выгнать себя приравнивается выходу из игры")]
-    public virtual async Task KickAsync([Summary("Пользователь, которого вы хотите выгнать")] IGuildUser guildUser)
+    [Remarks("Попытка выгнать себя приравнивается выходу из игры" +
+        "\nТолько хост или администратор может выгнать игрока")]
+    public virtual async Task KickAsync(IGuildUser player)
     {
         if (!TryGetGameData(out var gameData))
         {
@@ -264,14 +279,14 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
             }
         }
 
-        if (!gameData.Players.Contains(guildUser))
+        if (!gameData.Players.Contains(player))
         {
-            await ReplyEmbedAsync($"{guildUser.GetFullName()} не участвует в игре", EmbedStyle.Error);
+            await ReplyEmbedAsync($"{player.GetFullName()} не участвует в игре", EmbedStyle.Error);
 
             return;
         }
 
-        if (Context.User.Id == guildUser.Id)
+        if (Context.User.Id == player.Id)
         {
             await LeaveAsync();
 
@@ -286,10 +301,10 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
         }
 
 
-        if (gameData.Players.Remove(guildUser))
-            await ReplyEmbedStampAsync($"{guildUser.GetFullMention()} выгнан из игры. Количество участников: {gameData.Players.Count}", EmbedStyle.Successfull);
+        if (gameData.Players.Remove(player))
+            await ReplyEmbedStampAsync($"{player.GetFullMention()} выгнан из игры. Количество участников: {gameData.Players.Count}", EmbedStyle.Successfull);
         else
-            await ReplyEmbedStampAsync($"Не удалось выгнать {guildUser.GetFullName()}", EmbedStyle.Error);
+            await ReplyEmbedStampAsync($"Не удалось выгнать {player.GetFullName()}", EmbedStyle.Error);
     }
 
 
@@ -477,6 +492,7 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
 
 
     [Group("Помощь")]
+    [Summary("Здесь вы можете получить информацию об игре, ее правилах и других подробностях")]
     public abstract class HelpModule : GuildModuleBase
     {
         protected IConfiguration Config { get; }
@@ -498,6 +514,7 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
 
 
         [Command("ОбИгре")]
+        [Summary("Получить информацию об игре")]
         public virtual async Task ShowAboutGameAsync(bool sendToServer = false)
         {
             var gameAboutSection = GetGameSection("About");
@@ -532,6 +549,7 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
 
 
         [Command("Подробности")]
+        [Summary("Получить подробное описание игры")]
         public virtual async Task ShowGameDetails(bool sendToServer = false)
         {
             var gameDetailsSection = GetGameSection("Details");
@@ -594,6 +612,7 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
 
     [Group("Статистика")]
     [Alias("Стат", "С")]
+    [Summary("Статистика позволяет посмотреть свою эффективность в игре")]
     public abstract class GameStatsModule : GuildModuleBase
     {
         protected GameStatsModule(InteractiveService interactiveService) : base(interactiveService)
@@ -603,6 +622,7 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
 
         [Command("Личная")]
         [Alias("Лич", "Л")]
+        [Summary("Просмотреть личную статистику")]
         public virtual async Task ShowStatsAsync(IUser? user = null)
         {
             user ??= Context.User;
@@ -626,7 +646,8 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
 
         [Command("Рейтинг")]
         [Alias("Рейт", "Р")]
-        public virtual async Task ShowRatingAsync(int playersPerPage = 10)
+        [Summary("Просмотреть рейтинг")]
+        public virtual async Task ShowRatingAsync([Summary("Кол-во игроков на одной странице. Макс. кол-во: `30`")] int playersPerPage = 10)
         {
             var allStats = await GetRatingQuery()
                 .ThenByDescending(stat => stat.UserId)
@@ -645,10 +666,7 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
                 .ToHashSet();
 
             if (Context.Guild.Users.Count < Context.Guild.MemberCount)
-            {
-                await ReplyEmbedAsync($"Downloading users ({Context.Guild.MemberCount - Context.Guild.Users.Count})...", EmbedStyle.Debug);
                 await Context.Guild.DownloadUsersAsync();
-            }
 
             var players = Context.Guild.Users
                 .Where(u => playersId.Contains(u.Id))
@@ -672,7 +690,7 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
                         Description = string.Join('\n', allStats
                         .Skip(page * playersPerPage)
                         .Take(playersPerPage)
-                        .Select(ms => $"{n++}. **{players[ms.UserId].GetFullName()}** - {ms.Rating:0.##}"))
+                        .Select(ms => $"{n++}. **{(players.TryGetValue(ms.UserId, out var p) ? p.GetFullName() : "[Н/Д]")}** - {ms.Rating:0.##}"))
                     };
 
                     return pageBuilder;
@@ -707,6 +725,8 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
 
         [Group]
         [RequireUserPermission(GuildPermission.Administrator)]
+        [Summary("Данный раздел предназначен для управления статистикой и рейтингом игроков")]
+        [Remarks("**Внимание**\nБудьте аккуратны при выполнении команд из этого раздела. Действие команд **нельзя отменить**")]
         public abstract class GameAdminModule : GuildModuleBase
         {
             public GameAdminModule(InteractiveService interactiveService) : base(interactiveService)
@@ -716,6 +736,8 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
 
             [Command("РейтСброс")]
             [Alias("РСброс")]
+            [Summary("Сбросить весь рейтинг игры")]
+            [Remarks("**Действие нельзя обратить!**")]
             [RequireConfirmAction]
             public virtual async Task ResetRatingAsync()
             {
@@ -733,6 +755,8 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
 
 
             [Command("Сброс")]
+            [Summary("Сбросить свою стаститику, или статистику указанного пользователя")]
+            [Remarks("**Действие нельзя обратить!**")]
             [RequireConfirmAction(false)]
             public async Task ResetStatsAsync(IUser? user = null)
             {

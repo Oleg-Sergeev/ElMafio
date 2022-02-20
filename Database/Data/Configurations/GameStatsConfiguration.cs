@@ -22,7 +22,7 @@ public class GameStatsConfiguration<TEntity> : IEntityTypeConfiguration<TEntity>
         builder.Property(s => s.Rating)
             .HasComputedColumnSql(
             $"IIF([{nameof(GameStats.GamesCount)}] != 0, " +
-            $"{WinRateComputed}, " +
+            $"{WinRateComputed} * 100.0, " +
             $"0.0)", true);
     }
 }

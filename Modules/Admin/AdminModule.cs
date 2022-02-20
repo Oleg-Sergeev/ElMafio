@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Net.Http;
@@ -9,7 +8,6 @@ using Core.Common;
 using Core.Extensions;
 using Discord;
 using Discord.Commands;
-using Discord.WebSocket;
 using Fergun.Interactive;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
@@ -19,7 +17,7 @@ namespace Modules.Admin;
 
 [Group("Админ")]
 [Alias("а")]
-[RequireContext(ContextType.Guild)]
+[Summary("Набор команд для управления сервером и получения полезной информации")]
 public class AdminModule : GuildModuleBase
 {
     public AdminModule(InteractiveService interactiveService) : base(interactiveService)
@@ -29,9 +27,10 @@ public class AdminModule : GuildModuleBase
 
     [Command("Слоумод")]
     [Alias("смод")]
+    [Summary("Установить слоумод в текущем канале")]
     [RequireBotPermission(GuildPermission.ManageChannels)]
     [RequireUserPermission(GuildPermission.ManageChannels)]
-    public async Task SetSlowMode([Summary("Количество секунд")] int secs)
+    public async Task SetSlowMode(int secs)
     {
         if (Context.Channel is not ITextChannel textChannel)
             return;
@@ -49,6 +48,8 @@ public class AdminModule : GuildModuleBase
 
     [Command("Очистить")]
     [Alias("оч")]
+    [Summary("Удалить указанное кол-во сообщений из текущего канала")]
+    [Remarks("Максимальное кол-во сообщений, удаляемое за раз: **100**")]
     [RequireBotPermission(GuildPermission.ManageMessages)]
     [RequireUserPermission(GuildPermission.Administrator)]
     public async Task ClearAsync(int count)
@@ -76,9 +77,11 @@ public class AdminModule : GuildModuleBase
 
     [Command("ОчиститьДо")]
     [Alias("Очдо")]
+    [Summary("Удалить сообщения до указанного (удаляются сообщения, идущие **после** указанного)")]
+    [Remarks("Максимальное кол-во сообщений, удаляемое за раз: **100**\nТакже можно ответить на сообщение, до которого нужно удалить все сообщения")]
     [RequireBotPermission(GuildPermission.ManageMessages)]
     [RequireUserPermission(GuildPermission.Administrator)]
-    public async Task ClearToAsync(ulong? messageId = null)
+    public async Task ClearToAsync([Summary("ID сообщения, до которого нужно удалить сообщения")] ulong? messageId = null)
     {
         var message = messageId is not null
             ? await Context.Channel.GetMessageAsync(messageId.Value) ?? Context.Message.ReferencedMessage
@@ -123,6 +126,7 @@ public class AdminModule : GuildModuleBase
 
     [Command("РольЦвет")]
     [Alias("Рц")]
+    [Summary("Изменить цвет роли на новый")]
     [RequireBotPermission(GuildPermission.ManageRoles)]
     [RequireUserPermission(GuildPermission.ManageRoles)]
     public async Task UpdateRoleColor(IRole role, Color color)
@@ -154,7 +158,6 @@ public class AdminModule : GuildModuleBase
 
 
 
-
     [Command("Рольправа")]
     [RequireUserPermission(GuildPermission.ManageRoles)]
     public async Task ShowRolePermissionsAsync(IRole role)
@@ -175,100 +178,9 @@ public class AdminModule : GuildModuleBase
     }
 
 
-    [Command("Каналправа")]
-    [RequireUserPermission(GuildPermission.ManageChannels)]
-    public async Task ShowChannelOverwritePermissionsAsync(IRole role, IGuildChannel guildChannel)
-    {
-        var overwritePerms = guildChannel.GetPermissionOverwrite(role);
-
-        var allowPerms = overwritePerms?.ToAllowList();
-        var denyPerms = overwritePerms?.ToDenyList();
-
-
-        if (allowPerms is null && denyPerms is null)
-        {
-            await ReplyEmbedAsync($"Для роли **{role.Mention}** нет переопределений в канале **{guildChannel}**", EmbedStyle.Warning);
-
-            return;
-        }
-
-
-        allowPerms ??= new();
-        denyPerms ??= new();
-
-        var allPerms = OverwritePermissions.AllowAll(guildChannel).ToAllowList();
-
-
-        var str = GetPermissionsString(allPerms, allowPerms, denyPerms);
-
-
-        var embed = new EmbedBuilder()
-            .WithInformationMessage()
-            .AddField($"Права роли {role.Mention} в канале {guildChannel}", str)
-            .Build();
-
-        await ReplyAsync(embed: embed);
-    }
-
-
-    [Command("Каналправа")]
-    [RequireUserPermission(GuildPermission.ManageChannels)]
-    public async Task ShowChannelOverwritePermissionsAsync(IGuildUser guildUser, IGuildChannel guildChannel)
-{
-        var overwritePerms = guildChannel.GetPermissionOverwrite(guildUser);
-
-        var allowPerms = overwritePerms?.ToAllowList();
-        var denyPerms = overwritePerms?.ToDenyList();
-
-        if (allowPerms is null && denyPerms is null)
-        {
-            await ReplyEmbedAsync($"Для пользователя {guildUser.Mention} нет переопределений в канале **{guildChannel}**", EmbedStyle.Warning);
-
-            return;
-        }
-
-        allowPerms ??= new();
-        denyPerms ??= new();
-
-        var allPerms = OverwritePermissions.AllowAll(guildChannel).ToAllowList();
-
-
-        var str = GetPermissionsString(allPerms, allowPerms, denyPerms);
-
-        var embed = new EmbedBuilder()
-            .WithInformationMessage()
-            .AddField($"Права пользователя {guildUser} в канале {guildChannel}", str)
-            .Build();
-
-        await ReplyAsync(embed: embed);
-    }
-
-
-    private static string GetPermissionsString(List<ChannelPermission> allPerms, List<ChannelPermission>? allowPerms, List<ChannelPermission>? denyPerms)
-    {
-        allowPerms ??= new();
-        denyPerms ??= new();
-
-        var str = "\n";
-
-        for (int i = 0; i < allPerms.Count; i++)
-        {
-            if (allowPerms.Contains(allPerms[i]))
-                str += "✅ ";
-            else if (denyPerms.Contains(allPerms[i]))
-                str += "❌ ";
-            else
-                str += "▫️ ";
-
-            str += $"{allPerms[i]}\n";
-        }
-
-        return str;
-    }
-
-
     [Group("Смайл")]
     [Alias("С")]
+    [Summary("Добавление и удаление пользовательских смайлов")]
     [RequireUserPermission(GuildPermission.Administrator)]
     public class SmileModule : GuildModuleBase
     {
@@ -280,11 +192,13 @@ public class AdminModule : GuildModuleBase
         [Priority(-1)]
         [Command("Добавить")]
         [Alias("+")]
+        [Summary("Добавить смайл со стандартным именем")]
         public async Task AddEmoteAsync()
             => await AddEmoteAsync($"emoji_{Context.Guild.Emotes.Count + 1}");
 
         [Command("Добавить")]
         [Alias("+")]
+        [Summary("Добавить смайл с указанным именем")]
         public async Task AddEmoteAsync(string name)
         {
             var attachment = Context.Message.Attachments.FirstOrDefault() ?? Context.Message.ReferencedMessage?.Attachments.FirstOrDefault();
@@ -367,6 +281,7 @@ public class AdminModule : GuildModuleBase
 
         [Command("Удалить")]
         [Alias("-")]
+        [Summary("Удалить указанный смайл")]
         public async Task DeleteEmoteAsync(Emote emote)
         {
             if (!Context.Guild.Emotes.Contains(emote))

@@ -2,21 +2,21 @@
 
 namespace Core.Exceptions;
 
-public class GameAbortedException : Exception
+public class GameSetupAbortedException : Exception
 {
-    public GameAbortedException()
+    public GameSetupAbortedException()
     {
     }
 
-    public GameAbortedException(string? message) : base(message)
+    public GameSetupAbortedException(string? message) : base(message)
     {
     }
 
-    public GameAbortedException(string? message, Exception? innerException) : base(message, innerException)
+    public GameSetupAbortedException(string? message, Exception? innerException) : base(message, innerException)
     {
     }
 
-    protected GameAbortedException(SerializationInfo info, StreamingContext context) : base(info, context)
+    protected GameSetupAbortedException(SerializationInfo info, StreamingContext context) : base(info, context)
     {
     }
 }

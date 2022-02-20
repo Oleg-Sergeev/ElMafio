@@ -7,18 +7,23 @@ using System.Threading;
 using System.Threading.Tasks;
 using Core.Common;
 using Core.Common.Data;
+using Core.Exceptions;
 using Core.Extensions;
 using Discord;
 using Fergun.Interactive;
 using Infrastructure.Data.Models.Games.Settings.Mafia;
+using Microsoft.VisualBasic;
 using Modules.Games.Mafia.Common;
 using Modules.Games.Mafia.Common.Data;
 using Modules.Games.Mafia.Common.GameRoles;
+using Modules.Games.Mafia.Common.Services;
 
 namespace Modules.Games.Mafia;
 
 public class MafiaGame
 {
+    private readonly IMafiaSetupService _mafiaService;
+
     private readonly MafiaContext _context;
 
     private readonly MafiaSettingsTemplate _template;
@@ -39,7 +44,7 @@ public class MafiaGame
     private bool _isZeroDay;
 
 
-    public MafiaGame(MafiaContext context)
+    public MafiaGame(MafiaContext context, IMafiaSetupService mafiaService)
     {
         _context = context;
 
@@ -52,21 +57,63 @@ public class MafiaGame
         _chronology = new();
 
         _denyView = MafiaHelper.DenyView;
-        _denyWrite = MafiaHelper.GetDenyWrite(_guildData.GeneralTextChannel);
-        _allowWrite = MafiaHelper.GetAllowWrite(_guildData.GeneralTextChannel);
+        _denyWrite = MafiaHelper.DenyWrite;
+        _allowWrite = MafiaHelper.AllowWrite;
 
         if (_guildData.GeneralVoiceChannel is not null)
-            _allowSpeak = MafiaHelper.GetAllowSpeak(_guildData.GeneralVoiceChannel);
+            _allowSpeak = MafiaHelper.AllowSpeak;
 
         _token = context.MafiaData.TokenSource.Token;
 
         _isZeroDay = true;
+        _mafiaService = mafiaService;
     }
+
 
     public async Task<MafiaInfo> RunAsync()
     {
         try
         {
+            try
+            {
+                await _context.CommandContext.Channel.SendEmbedAsync("Подготовка к игре...", EmbedStyle.Waiting);
+                _mafiaService.SetupRoles(_context);
+
+                var tasks = new List<Task>
+                {
+                    _mafiaService.SetupGuildAsync(_context),
+                    _mafiaService.SetupUsersAsync(_context)
+                };
+
+                Task.WaitAll(tasks.ToArray());
+
+                if (_template.ServerSubSettings.SendWelcomeMessage)
+                {
+                    await _mafiaService.SendRolesInfoAsync(_context);
+
+                    await Task.Delay(5000);
+                }
+            }
+            catch (AggregateException ae)
+            {
+                var e = ae.Flatten();
+                throw new GameSetupAbortedException(e.Message, e);
+            }
+            catch (GameSetupAbortedException)
+            {
+                throw;
+            }
+            catch (Exception e)
+            {
+                throw new GameSetupAbortedException($"Ошибка во время подготовки игры\n{e}", e);
+            }
+
+            var msg = $"{_context.MafiaData.Name} успешно запущена";
+
+            await _context.CommandContext.Channel.SendEmbedAsync(msg, EmbedStyle.Successfull);
+            await _guildData.GeneralTextChannel.SendEmbedAsync(msg, EmbedStyle.Successfull);
+
+
             if (_template.GameSubSettings.IsCustomGame && _template.GameSubSettings.PreGameMessage is not null)
             {
                 await _guildData.GeneralTextChannel.SendEmbedAsync(_template.GameSubSettings.PreGameMessage, "Сообщение перед игрой");
@@ -104,7 +151,7 @@ public class MafiaGame
 
                 _chronology.AddAction(playerRoles);
 
-                _ = _guildData.SpectatorTextChannel.SendEmbedAsync(playerRoles, "Роли игроков");
+                await _guildData.SpectatorTextChannel.SendEmbedAsync(playerRoles, "Роли игроков");
             }
 
             while (true)
@@ -510,7 +557,7 @@ public class MafiaGame
             {
                 _chronology.AddAction($"Игрок {maniac.KilledPlayer.GetFullMention()} убит", _rolesData.Maniacs[maniac.Player]);
             }
-        
+
         foreach (var hooker in _rolesData.Hookers.Values.Where(k => !k.IsSkip))
             if (hooker.HealedPlayer is not null && maniacKills.Any(k => k.Id == hooker.HealedPlayer.Id))
             {

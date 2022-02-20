@@ -201,6 +201,9 @@
   <data name="GeneralVoiceChannelId_Name" xml:space="preserve">
     <value>General voice channel ID</value>
   </data>
+  <data name="Hello" xml:space="preserve">
+    <value>Hello</value>
+  </data>
   <data name="HookersCount_Name" xml:space="preserve">
     <value>Hookers count</value>
   </data>

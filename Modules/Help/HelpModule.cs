@@ -136,7 +136,6 @@ public class HelpModule : GuildModuleBase
     }
 
 
-    [Discord.Interactions.SlashCommand("", "")]
     [Command("Помощьблок")]
     [Summary("Получить подробности указанного модуля")]
     [Remarks("Необходимый модуль необходимо указывать вместе со всеми родительскими блоками. Например: **помощьблок Мафия.Настройки**")]

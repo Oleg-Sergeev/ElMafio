@@ -18,7 +18,8 @@ public class FunModule : GuildModuleBase
 
 
     [Command("Шанс")]
-    public async Task CalculateChanceAsync([Remainder] string text)
+    [Summary("С каким шансом случится указанное событие")]
+    public async Task CalculateChanceAsync([Summary("Текст события")][Remainder] string text)
     {
         int num = Random.Next(101);
 
@@ -28,6 +29,8 @@ public class FunModule : GuildModuleBase
 
 
     [Command("Эхо")]
+    [Summary("Напишите от лица бота любую вещь")]
+    [RequireBotPermission(GuildPermission.ManageMessages)]
     public async Task Echo([Remainder] string message)
     {
         await Context.Message.DeleteAsync();
@@ -37,19 +40,21 @@ public class FunModule : GuildModuleBase
 
 
     [Command("Данет")]
+    [Summary("Да, или нет")]
     public async Task SayYesOrNo()
     {
         bool answer = Random.Next(2) > 0;
 
         if (answer)
-            await ReplyAsync("**Да**");
+            await ReplyEmbedAsync("`Да`", EmbedStyle.Successfull);
         else
-            await ReplyAsync("**Нет**");
+            await ReplyEmbedAsync("`Нет`", EmbedStyle.Error);
     }
 
 
     [Command("Кто")]
-    public async Task SayWhoIs([Remainder] string? message = null)
+    [Summary("Узнайте, кто сделал это")]
+    public async Task SayWhoIs([Summary("Событие, которое кто-то сделал")][Remainder] string? message = null)
     {
         int num = Random.Next(0, Context.Guild.Users.Count);
 
@@ -62,9 +67,14 @@ public class FunModule : GuildModuleBase
 
     [Command("Голосование")]
     [Alias("голос", "гс")]
-    public async Task MakeVotingAsync([Remainder] string text)
+    [Summary("Устройте голосование, чтобы узнать мнение людей")]
+    [Remarks("Чтобы добавить в голосование собственные варианты ответа, " +
+        "после заголовка голосования вставьте символ `/` и после него, через запятую, укажите свои варианты ответа" +
+        "\nПример: {префикс} Голосование Что лучше и вкуснее / Арбуз, Конечно арбуз, Ну а что еще кроме арбуза, дыня")]
+    [RequireBotPermission(GuildPermission.AddReactions)]
+    public async Task MakeVotingAsync([Summary("Заголовок голосования [ | Варианты ответа]")][Remainder] string text)
     {
-        var content = text.Split("|");
+        var content = text.Split("/");
 
         string? title = null;
 
@@ -85,7 +95,7 @@ public class FunModule : GuildModuleBase
         {
             content[1] = content[1].Trim();
 
-            points.AddRange(content[1].Split());
+            points.AddRange(content[1].Split(','));
 
             for (int i = 0; i < Math.Min(points.Count, 20); i++)
             {
@@ -101,11 +111,15 @@ public class FunModule : GuildModuleBase
     }
 
     [Command("Буквы")]
+    [Summary("Выведите сообщение огромными буквами, чтобы его точно заметили")]
+    [Remarks("Команда поддерживает перевод кириллицы в латиницу" +
+        "\nСпец. символы, а также некоторые символы кириллицы не переводятся в буквы и заменяются пробелом" +
+        "\nМаксимальная длина сообщения - **30 символов**")]
     public async Task TransferToLetterSmilesAsync([Remainder] string text)
     {
         var letters = "";
 
-        foreach (var letter in text[..Math.Min(25, text.Length)])
+        foreach (var letter in text[..Math.Min(30, text.Length)])
         {
             if (letter.TryConvertToSmile(out var smile))
                 letters += smile;
@@ -120,6 +134,11 @@ public class FunModule : GuildModuleBase
     }
 
     [Command("Эхобуквы")]
+    [Summary("Выведите сообщение огромными буквами от лица бота, чтобы его точно заметили")]
+    [Remarks("Команда поддерживает перевод кириллицы в латиницу" +
+        "\nСпец. символы, а также некоторые символы кириллицы не переводятся в буквы и заменяются пробелом" +
+        "\nМаксимальная длина сообщения - **30 символов**")]
+    [RequireBotPermission(GuildPermission.ManageMessages)]
     public async Task TransferToLetterSmilesAsyncAndEcho([Remainder] string text)
     {
         await TransferToLetterSmilesAsync(text);
@@ -129,13 +148,12 @@ public class FunModule : GuildModuleBase
 
 
     [Command("Аватар")]
-    [Priority(-1)]
-    public async Task GetAvatarAsync()
-        => await GetAvatarAsync(Context.User);
-
-    [Command("Аватар")]
-    public async Task GetAvatarAsync(IUser user)
+    [Summary("Получить свой аватар, или аватар указанного пользователя")]
+    [RequireBotPermission(GuildPermission.AttachFiles)]
+    public async Task GetAvatarAsync(IUser? user = null)
     {
+        user ??= Context.User;
+
         var request = user.GetAvatarUrl(size: 2048);
 
         var resp = await new HttpClient().GetAsync(request);
@@ -148,7 +166,14 @@ public class FunModule : GuildModuleBase
             return;
         }
 
-        var avatarExtension = resp.Content.Headers.ContentType!.MediaType!.Split('/')[1];
+        var avatarExtension = resp.Content.Headers.ContentType?.MediaType?.Split('/')?[1];
+
+        if (avatarExtension is null)
+        {
+            await ReplyEmbedAsync("Не удалось загрузить аватар: не найдено расширение картинки", EmbedStyle.Error);
+
+            return;
+        }
 
         await Context.Channel.SendFileAsync(stream, $"avatar.{avatarExtension}");
     }
@@ -156,16 +181,18 @@ public class FunModule : GuildModuleBase
 
 
     [Command("Смайл")]
-    public async Task GetSmileAsync(string emoteId)
-    {
-        if (Emote.TryParse(emoteId, out var emote))
-            await GetSmileByIdAsync(emote.Id);
-        else
-            await ReplyEmbedAsync("Не удалось распознать пользовательский смайлик", EmbedStyle.Error);
-    }
+    [Summary("Получить картинку указанного смайла")]
+    [Remarks("Если смайл имеет анимацию, то будет получена анимированная версия. При отсутствии анимированной версии, будет получена картинка")]
+    [RequireBotPermission(GuildPermission.AttachFiles)]
+    public Task GetSmileAsync(Emote emote) 
+        => GetSmileByIdAsync(emote.Id);
 
 
     [Command("СмайлАйди")]
+    [Summary("Получить смайл по его ID")]
+    [Remarks("Для получения ID смайла, поставьте `\\` и затем укажите сам смайл. Смайл будет преобразован в вид `<:smileName:smileId>`. " +
+        "Для команды необходим ID, т.е. часть `smileId`")]
+    [RequireBotPermission(GuildPermission.AttachFiles)]
     public async Task GetSmileByIdAsync(ulong smileId)
     {
         var hhtpClient = new HttpClient();

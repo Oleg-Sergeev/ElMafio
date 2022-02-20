@@ -313,6 +313,15 @@ namespace Core.Resources {
         }
         
         /// <summary>
+        ///   Ищет локализованную строку, похожую на Hello.
+        /// </summary>
+        public static string Hello {
+            get {
+                return ResourceManager.GetString("Hello", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Ищет локализованную строку, похожую на Hookers count.
         /// </summary>
         public static string HookersCount_Name {

@@ -201,6 +201,9 @@
   <data name="GeneralVoiceChannelId_Name" xml:space="preserve">
     <value>ID Основного голосового канала</value>
   </data>
+  <data name="Hello" xml:space="preserve">
+    <value>Привет</value>
+  </data>
   <data name="HookersCount_Name" xml:space="preserve">
     <value>Количество путан</value>
   </data>
@@ -386,6 +389,9 @@
   </data>
   <data name="SpectatorsVoiceChannelId_Name" xml:space="preserve">
     <value>ID Голосового канала Наблюдаталей</value>
+  </data>
+  <data name="String1" xml:space="preserve">
+    <value>Ы</value>
   </data>
   <data name="TheOptionsMutuallyExclusive" xml:space="preserve">
     <value>Параметры {0} и {1} взаимоисключают друг друга</value>

@@ -9,8 +9,8 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Core.Common;
-using Core.Common.Chronology;
 using Core.Common.Data;
+using Core.Exceptions;
 using Core.Extensions;
 using Core.Resources;
 using Core.TypeReaders;
@@ -21,22 +21,18 @@ using Discord.Net;
 using Discord.WebSocket;
 using Fergun.Interactive;
 using Fergun.Interactive.Pagination;
-using Infrastructure.Data.Models;
 using Infrastructure.Data.Models.Games.Settings.Mafia;
 using Infrastructure.Data.Models.Games.Stats;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Options;
 using Modules.Common.MultiSelect;
 using Modules.Common.Preconditions;
 using Modules.Games.Mafia.Common;
 using Modules.Games.Mafia.Common.Data;
 using Modules.Games.Mafia.Common.GameRoles;
-using Modules.Games.Mafia.Common.GameRoles.Data;
 using Modules.Games.Mafia.Common.Services;
 using Modules.Games.Services;
 using Serilog;
-using static System.Formats.Asn1.AsnWriter;
 
 namespace Modules.Games.Mafia;
 
@@ -59,8 +55,12 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
         => new("Мафия", 3, host, new());
 
 
+    [RequireBotPermission(GuildPermission.ManageChannels)]
+    [RequireBotPermission(GuildPermission.ManageRoles)]
     public override async Task StartAsync()
     {
+        var task = ReplyEmbedAsync("Проверка корректности настроек...", EmbedStyle.Waiting);
+
         var check = await CheckPreconditionsAsync();
         if (!check.IsSuccess)
         {
@@ -70,12 +70,12 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
         }
 
         var data = GetGameData();
+        data.IsPlaying = true;
         data.Players.Shuffle(3);
 
-        data.IsPlaying = true;
+        await task;
 
-        await ReplyEmbedStampAsync($"{data.Name} успешно запущена", EmbedStyle.Successfull);
-
+        await ReplyEmbedAsync("Настройки корректны", EmbedStyle.Successfull);
 
         try
         {
@@ -88,25 +88,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
             var context = await CreateMafiaContextAsync(settings, data);
 
-            var tasks = new List<Task>
-            {
-                _mafiaService.SetupGuildAsync(context),
-                _mafiaService.SetupUsersAsync(context)
-            };
-
-            await Task.WhenAll(tasks);
-
-            _mafiaService.SetupRoles(context);
-
-            if (settings.CurrentTemplate.ServerSubSettings.SendWelcomeMessage)
-            {
-                await _mafiaService.SendRolesInfoAsync(context);
-
-                await Task.Delay(5000);
-            }
-
-
-            var game = new MafiaGame(context);
+            var game = new MafiaGame(context, _mafiaService);
 
             var (winner, chronology) = await game.RunAsync();
 
@@ -125,9 +107,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
             await ReplyEmbedAsync("Хронология игры");
 
-
-
-            _ = ShowChronology(context.RolesData.AllRoles.Keys, chronology);
+            _ = ShowChronologyAsync(context.RolesData.AllRoles.Keys, chronology);
 
 
             await ReplyEmbedStampAsync($"{data.Name} успешно завершена", EmbedStyle.Successfull);
@@ -138,9 +118,19 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
                 await ReplyEmbedAsync("Статистика успешно обновлена", EmbedStyle.Successfull);
             }
+
+            DeleteGameData();
         }
-        finally
+        catch (GameSetupAbortedException e)
         {
+            await ReplyEmbedAsync($"**Игра была аварийно прервана:**\n{e.Message}", EmbedStyle.Error, "Ошибка настроек");
+
+            data.IsPlaying = false;
+        }
+        catch (Exception e)
+        {
+            await ReplyEmbedAsync($"**Игра была аварийно прервана из-за непредвиненной ошибки:**\n{e.Message}", EmbedStyle.Error, "Ошибка во время игры");
+
             DeleteGameData();
         }
     }
@@ -167,9 +157,20 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
         ArgumentNullException.ThrowIfNull(settings.CurrentTemplate);
 
+        var bot = Context.Guild.GetUser(Context.Client.CurrentUser.Id);
+
+        if (settings.ClearChannelsOnStart && !bot.HasGuildPermission(GuildPermission.ManageMessages))
+            return PreconditionResult.FromError($"Для очистки сообщений необходимо право {GuildPermission.ManageMessages}");
+
+        if ((settings.GeneralVoiceChannelId is not null || settings.MurdersVoiceChannelId is not null) && !bot.HasGuildPermission(GuildPermission.MoveMembers))
+            return PreconditionResult.FromError($"Для корректной работы с голосовыми каналами необходимо право {GuildPermission.MoveMembers}");
+
+        if (settings.CurrentTemplate.ServerSubSettings.RenameUsers && !bot.HasGuildPermission(GuildPermission.ManageNicknames))
+            return PreconditionResult.FromError($"Для возможности менять никнеймы необходимо право {GuildPermission.ManageNicknames}");
+
+
         if (!settings.CurrentTemplate.GameSubSettings.IsCustomGame)
             return PreconditionResult.FromSuccess();
-
 
         var data = GetGameData();
 
@@ -205,8 +206,9 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
     private async Task<MafiaContext> CreateMafiaContextAsync(MafiaSettings settings, MafiaData data)
     {
-        settings.CategoryChannelId ??= (await Context.Guild.CreateCategoryChannelAsync("Мафия")).Id;
+        var category = await Context.Guild.GetCategoryChannelOrCreateAsync(settings.CategoryChannelId ?? 0, "Мафия");
 
+        settings.CategoryChannelId = category.Id;
 
         var _guildData = new MafiaGuildData(
                await Context.Guild.GetTextChannelOrCreateAsync(settings.GeneralTextChannelId, "мафия-общий", SetCategoryChannel),
@@ -218,6 +220,11 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
                await Context.Guild.GetRoleOrCreateAsync(settings.MafiaRoleId, "Игрок мафии", null, Color.Blue, true, true),
                Context.Guild.GetRole(settings.WatcherRoleId ?? 0));
 
+        settings.GeneralTextChannelId = _guildData.GeneralTextChannel.Id;
+        settings.MurdersTextChannelId = _guildData.MurderTextChannel.Id;
+        settings.MafiaRoleId = _guildData.MafiaRole.Id;
+
+        await Context.Db.SaveChangesAsync();
 
         if (settings.ClearChannelsOnStart)
         {
@@ -231,7 +238,6 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
         var context = new MafiaContext(_guildData, data, settings, Context, Interactive);
 
-
         return context;
 
 
@@ -241,13 +247,13 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
             var overwrites = new List<Overwrite>
                 {
-                    new(Context.Guild.EveryoneRole.Id, PermissionTarget.Role, new OverwritePermissions(viewChannel: PermValue.Deny))
+                    new(Context.Guild.EveryoneRole.Id, PermissionTarget.Role, new OverwritePermissions(viewChannel: PermValue.Deny)),
+                    new(Bot.Id, PermissionTarget.User, new OverwritePermissions(viewChannel: PermValue.Allow))
                 };
 
             props.PermissionOverwrites = overwrites;
         }
     }
-
 
 
     private async Task<int> UpdateStatsAsync(IEnumerable<GameRole> roles, Winner winner)
@@ -263,7 +269,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
     }
 
 
-    private async Task ShowChronology(IEnumerable<IGuildUser> players, MafiaChronology chronology)
+    private async Task ShowChronologyAsync(IEnumerable<IGuildUser> players, MafiaChronology chronology)
     {
         try
         {
@@ -306,7 +312,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
                     }
                     catch (Exception e)
                     {
-                        GuildLogger.Error(e, LogTemplate, nameof(ShowChronology),
+                        GuildLogger.Error(e, LogTemplate, nameof(ShowChronologyAsync),
                             "Error occured when send paginator");
 
                         var embed = EmbedHelper.CreateEmbed("Произошла ошибка во время отправки хронологии", EmbedStyle.Error);
@@ -325,7 +331,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
         }
         catch (Exception e)
         {
-            GuildLogger.Error(e, LogTemplate, nameof(ShowChronology),
+            GuildLogger.Error(e, LogTemplate, nameof(ShowChronologyAsync),
                 "Error occured when show chronology");
 
             await ReplyEmbedAsync("Произошла ошибка во время показа хронологии", EmbedStyle.Error);
@@ -473,8 +479,8 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
     [Group("Шаблоны")]
     [Alias("Ш")]
-    [RequireOwner(Group = "perm")]
-    [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
+    [Summary("Раздел для управления шаблонами: добавление, удаление, изменение имени и прочее")]
+    [RequireUserPermission(GuildPermission.Administrator)]
     public class TemplatesModule : GuildModuleBase
     {
         private readonly IGameSettingsService<MafiaSettings> _settingsService;
@@ -488,7 +494,8 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
         [Command("Клонировать")]
         [Alias("клон", "к")]
-        public async Task CloneTemplate([Remainder] string newTemplateName)
+        [Summary("Создать шаблон на основе активного шаблона")]
+        public async Task CloneTemplate([Summary("Имя нового шаблона")] [Remainder] string newTemplateName)
         {
             var settings = await _settingsService.GetSettingsOrCreateAsync(Context);
 
@@ -545,6 +552,8 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
         [Command("Загрузить")]
         [Alias("згр", "з")]
+        [Summary("Загрузить указанный шаблон и сделать его активным")]
+        [Remarks("По умолчанию загружается стандартный шаблон, если такой существует")]
         public async Task LoadTemplate([Remainder] string name = MafiaSettingsTemplate.DefaultTemplateName)
         {
             var settings = await _settingsService.GetSettingsOrCreateAsync(Context);
@@ -570,6 +579,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
         [Command("Текущий")]
         [Alias("тек", "т")]
+        [Summary("Показать имя активного шаблона")]
         public async Task ShowCurrentTemplate()
         {
             var settings = await _settingsService.GetSettingsOrCreateAsync(Context, false);
@@ -582,6 +592,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
         [Command("Список")]
         [Alias("сп")]
+        [Summary("Показать список всех шаблонов")]
         public async Task ShowAllTemplates()
         {
             var settings = await _settingsService.GetSettingsOrCreateAsync(Context, false);
@@ -603,6 +614,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
 
         [Command("Имя")]
+        [Summary("Изменить имя активного шаблона")]
         public async Task UpdateTemplateName([Remainder] string newName)
         {
             var settings = await _settingsService.GetSettingsOrCreateAsync(Context);
@@ -635,6 +647,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
 
         [Command("Сброс")]
+        [Summary("Сбросить настройки активного шаблона до стандартных")]
         public async Task ResetTemplate()
         {
             var settings = await _settingsService.GetSettingsOrCreateAsync(Context);
@@ -654,6 +667,8 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
 
         [Command("Удалить")]
+        [Summary("Удалить указанный шаблон")]
+        [Remarks("Удалить активный шаблон невозможно")]
         public async Task DeleteTemplate([Remainder] string name)
         {
             var settings = await _settingsService.GetSettingsOrCreateAsync(Context, false);
@@ -694,10 +709,9 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
     [Group("Настройки")]
     [Alias("Н")]
-    [RequireOwner(Group = "perm")]
-    [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
+    [RequireUserPermission(GuildPermission.Administrator)]
     [Summary("Настройки для мафии включают в себя настройки сервера(используемые роли, каналы и категорию каналов) и настройки самой игры. " +
-        "Для подробностей введите команду **Мафия.Настройки.Помощь**")]
+        "Для подробностей введите команду `{префикс}Мафия.Настройки.Помощь`")]
     public class SettingsModule : GuildModuleBase
     {
         private readonly IGameSettingsService<MafiaSettings> _settingsService;
@@ -710,6 +724,9 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
         [Command("Автонастройка")]
         [Alias("ан")]
+        [Summary("Автоматическое создание всех каналов и ролей")]
+        [RequireBotPermission(GuildPermission.ManageChannels)]
+        [RequireBotPermission(GuildPermission.ManageRoles)]
         public async Task AutoSetGeneralSettingsAsync()
         {
             var settings = await _settingsService.GetSettingsOrCreateAsync(Context);
@@ -758,7 +775,8 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
                 var overwrites = new List<Overwrite>
                 {
-                    new(Context.Guild.EveryoneRole.Id, PermissionTarget.Role, new OverwritePermissions(viewChannel: PermValue.Deny))
+                    new(Context.Guild.EveryoneRole.Id, PermissionTarget.Role, new OverwritePermissions(viewChannel: PermValue.Deny)),
+                    new(Bot.Id, PermissionTarget.User, new OverwritePermissions(viewChannel: PermValue.Allow))
                 };
 
                 props.PermissionOverwrites = overwrites;
@@ -767,6 +785,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
 
         [Command("Сброс")]
+        [Summary("Сброс и удаление всех каналов и ролей, используемых для игры")]
         public async Task ResetGeneralSettingsAsync()
         {
             var settings = await _settingsService.GetSettingsOrCreateAsync(Context);
@@ -810,6 +829,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
         [Command("Проверка")]
         [Alias("чек")]
+        [Summary("Проверка показывает, какие каналы/роли не установлены, или установлены некорректно")]
         public async Task CheckSettingsAsync()
         {
             var settings = await _settingsService.GetSettingsOrCreateAsync(Context, false);
@@ -849,7 +869,10 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
         [Name("Текущие настройки")]
         [Command]
-        public async Task SetSettingsAsync(string lang = "ru")
+        [Summary("Основное меню для работы со всеми настройками мафии")]
+        [Remarks("Для понимания как работать с настройками, напишите команду `<NoCommand>`")]
+        [Priority(-2)]
+        public async Task SetSettingsAsync()
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
 
@@ -871,9 +894,8 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
             var current = settings.CurrentTemplate;
 
-            var culture = CultureInfo.GetCultureInfo(lang);
+            var culture = CultureInfo.GetCultureInfo("ru");
 
-            Resource.Culture = culture;
 
             var settingsBlocks = new Dictionary<string, Dictionary<string, SettingsDisplay>>()
             {
@@ -911,8 +933,8 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
                     options = options.Concat(settingsBlockValues);
 
-                    description = isModified 
-                        ? $"{Resource.ValueChanged.Replace("{0}", displayName)}" +
+                    description = isModified
+                        ? $"{Resource.ValueChanged.Replace("{0}", displayName)} " +
                         $"{previousValue ?? n_a} -> {currentValue ?? n_a}".Truncate(100)
                     : Resource.ParameterSelect;
 
@@ -1363,16 +1385,14 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
     public class MafiaHelpModule : HelpModule
     {
-        private readonly IOptionsSnapshot<GameRoleData> _conf;
-
-
-        public MafiaHelpModule(InteractiveService interactiveService, IConfiguration config, IOptionsSnapshot<GameRoleData> conf) : base(interactiveService, config)
+        public MafiaHelpModule(InteractiveService interactiveService, IConfiguration config) : base(interactiveService, config)
         {
-            _conf = conf;
+
         }
 
 
         [Command("Роли")]
+        [Summary("Получить подробное описание каждой роли")]
         public virtual async Task ShowGameRolesAsync(bool sendToServer = false)
         {
             var gameRolesSection = GetGameSection("Roles");

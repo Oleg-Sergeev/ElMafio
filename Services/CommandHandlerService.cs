@@ -77,7 +77,7 @@ public class CommandHandlerService : DiscordClientService
 
         int argPos = 0;
         if (userMessage.HasStringPrefix(_prefixes[context.Guild.Id], ref argPos) || userMessage.HasMentionPrefix(Client.CurrentUser, ref argPos))
-            _ = Task.Run(async () => await _commandService.ExecuteAsync(context, argPos, _provider, MultiMatchHandling.Best));
+            _ = Task.Run(async () => await _commandService.ExecuteAsync(context, argPos, _provider));
 
         return Task.CompletedTask;
     }
