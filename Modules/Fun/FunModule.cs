@@ -19,11 +19,13 @@ public class FunModule : GuildModuleBase
 
     [Command("Шанс")]
     [Summary("С каким шансом случится указанное событие")]
-    public async Task CalculateChanceAsync([Summary("Текст события")][Remainder] string text)
+    public async Task CalculateChanceAsync([Summary("Текст события")] [Remainder] string? text = null)
     {
         int num = Random.Next(101);
 
-        await ReplyAsync(embed: EmbedHelper.CreateEmbed($"Шанс того, что {text} - **{num}%**"),
+        var msg = $"Шанс того, что {text} - ";
+
+        await ReplyAsync(embed: EmbedHelper.CreateEmbed($"{(!string.IsNullOrEmpty(text) ? msg : string.Empty)}**{num}%**"),
             messageReference: new(Context.Message.Id));
     }
 
@@ -184,7 +186,7 @@ public class FunModule : GuildModuleBase
     [Summary("Получить картинку указанного смайла")]
     [Remarks("Если смайл имеет анимацию, то будет получена анимированная версия. При отсутствии анимированной версии, будет получена картинка")]
     [RequireBotPermission(GuildPermission.AttachFiles)]
-    public Task GetSmileAsync(Emote emote) 
+    public Task GetSmileAsync([Summary("Пользовательский смайл")] Emote emote) 
         => GetSmileByIdAsync(emote.Id);
 
 
@@ -193,7 +195,7 @@ public class FunModule : GuildModuleBase
     [Remarks("Для получения ID смайла, поставьте `\\` и затем укажите сам смайл. Смайл будет преобразован в вид `<:smileName:smileId>`. " +
         "Для команды необходим ID, т.е. часть `smileId`")]
     [RequireBotPermission(GuildPermission.AttachFiles)]
-    public async Task GetSmileByIdAsync(ulong smileId)
+    public async Task GetSmileByIdAsync([Summary("ID пользовательского смайла")] ulong smileId)
     {
         var hhtpClient = new HttpClient();
 

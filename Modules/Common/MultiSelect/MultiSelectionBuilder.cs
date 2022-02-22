@@ -7,10 +7,11 @@ namespace Modules.Common.MultiSelect;
 
 public class MultiSelectionBuilder<T> : BaseSelectionBuilder<MultiSelection<T>, MultiSelectionOption<T>, MultiSelectionBuilder<T>> where T : notnull
 {
+    public List<string?>? Placeholders { get; set; }
+
     public override InputType InputType => InputType.SelectMenus | InputType.Buttons;
 
     public override MultiSelection<T> Build() => new(this);
-
 
     public MultiSelectionBuilder<T> WithCancelButton(T option)
     {
@@ -18,6 +19,13 @@ public class MultiSelectionBuilder<T> : BaseSelectionBuilder<MultiSelection<T>, 
         {
             new MultiSelectionOption<T>(option, -1)
         };
+
+        return this;
+    }
+
+    public MultiSelectionBuilder<T> WithPlaceholders(IEnumerable<string?> placeholders)
+    {
+        Placeholders = new(placeholders);
 
         return this;
     }

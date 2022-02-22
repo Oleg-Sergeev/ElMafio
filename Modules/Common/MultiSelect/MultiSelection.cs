@@ -10,9 +10,12 @@ namespace Modules.Common.MultiSelect;
 
 public class MultiSelection<T> : BaseSelection<MultiSelectionOption<T>> where T : notnull
 {
+    public IReadOnlyList<string?>? Placeholders { get;}
+
     public MultiSelection(MultiSelectionBuilder<T> builder)
         : base(builder)
     {
+        Placeholders = builder.Placeholders;
     }
 
     public override ComponentBuilder GetOrAddComponents(bool disableAll, ComponentBuilder? builder = null)
@@ -39,6 +42,9 @@ public class MultiSelection<T> : BaseSelection<MultiSelectionOption<T>> where T 
                 selectMenus[option.Row] = new SelectMenuBuilder()
                     .WithCustomId($"selectmenu_{option.Row}")
                     .WithDisabled(disableAll);
+
+                if (Placeholders is not null && Placeholders.Count < option.Row && Placeholders[option.Row] is not null)
+                    selectMenus[option.Row].WithPlaceholder(Placeholders[option.Row]);
             }
 
             if (emote is null && label is null)
