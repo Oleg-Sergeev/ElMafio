@@ -214,7 +214,10 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
 
     [Command("Хост")]
     [Summary("Показать хоста игры")]
-    public virtual async Task ShowCreatorAsync()
+    [Remarks("Хостом игры является первый участник" +
+        "\nХост может запускать/останавливать игру, выгонять игроков и упоминать всех игроков" +
+        "\nЕсли хост покидает игру, то новым хостом становится следующий по порядку участник")]
+    public virtual async Task ShowHostAsync()
     {
         if (!TryGetGameData(out var gameData))
         {
@@ -258,7 +261,7 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
     [Summary("Выгнать пользователя из игры")]
     [Remarks("Попытка выгнать себя приравнивается выходу из игры" +
         "\nТолько хост или администратор может выгнать игрока")]
-    public virtual async Task KickAsync(IGuildUser player)
+    public virtual async Task KickAsync([Summary("Выгоняемый игрок")] IGuildUser player)
     {
         if (!TryGetGameData(out var gameData))
         {
@@ -620,10 +623,10 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
         }
 
 
-        [Command("Личная")]
-        [Alias("Лич", "Л")]
+        [Name("Статистика")]
+        [Command]
         [Summary("Просмотреть личную статистику")]
-        public virtual async Task ShowStatsAsync(IUser? user = null)
+        public virtual async Task ShowStatsAsync([Summary("Игрок, статистику которого нужно просмотреть")] IUser? user = null)
         {
             user ??= Context.User;
 
@@ -647,7 +650,7 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
         [Command("Рейтинг")]
         [Alias("Рейт", "Р")]
         [Summary("Просмотреть рейтинг")]
-        public virtual async Task ShowRatingAsync([Summary("Кол-во игроков на одной странице. Макс. кол-во: `30`")] int playersPerPage = 10)
+        public virtual async Task ShowRatingAsync([Summary("Кол-во игроков на одной странице\nМакс. кол-во: `30`")] int playersPerPage = 10)
         {
             var allStats = await GetRatingQuery()
                 .ThenByDescending(stat => stat.UserId)
@@ -758,7 +761,7 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
             [Summary("Сбросить свою стаститику, или статистику указанного пользователя")]
             [Remarks("**Действие нельзя обратить!**")]
             [RequireConfirmAction(false)]
-            public async Task ResetStatsAsync(IUser? user = null)
+            public async Task ResetStatsAsync([Summary("Игрок, статистику которого нужно сбросить")] IUser? user = null)
             {
                 user ??= Context.User;
 

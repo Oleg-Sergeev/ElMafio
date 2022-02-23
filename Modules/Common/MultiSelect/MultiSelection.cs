@@ -43,7 +43,7 @@ public class MultiSelection<T> : BaseSelection<MultiSelectionOption<T>> where T 
                     .WithCustomId($"selectmenu_{option.Row}")
                     .WithDisabled(disableAll);
 
-                if (Placeholders is not null && Placeholders.Count < option.Row && Placeholders[option.Row] is not null)
+                if (Placeholders is not null && Placeholders.Count > option.Row && !string.IsNullOrEmpty(Placeholders[option.Row]))
                     selectMenus[option.Row].WithPlaceholder(Placeholders[option.Row]);
             }
 

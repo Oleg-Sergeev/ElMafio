@@ -17,6 +17,7 @@ using Modules.Games.Mafia.Common;
 using Modules.Games.Mafia.Common.Data;
 using Modules.Games.Mafia.Common.GameRoles;
 using Modules.Games.Mafia.Common.Services;
+using static System.Collections.Specialized.BitVector32;
 
 namespace Modules.Games.Mafia;
 
@@ -77,22 +78,21 @@ public class MafiaGame
             try
             {
                 await _context.CommandContext.Channel.SendEmbedAsync("Подготовка к игре...", EmbedStyle.Waiting);
+
+                await _mafiaService.SendWelcomeMessageAsync(_context);
+
                 _mafiaService.SetupRoles(_context);
 
                 var tasks = new List<Task>
                 {
+                    _mafiaService.SendRolesInfoAsync(_context),
                     _mafiaService.SetupGuildAsync(_context),
                     _mafiaService.SetupUsersAsync(_context)
                 };
 
                 Task.WaitAll(tasks.ToArray());
 
-                if (_template.ServerSubSettings.SendWelcomeMessage)
-                {
-                    await _mafiaService.SendRolesInfoAsync(_context);
-
-                    await Task.Delay(5000);
-                }
+                await Task.Delay(3000);
             }
             catch (AggregateException ae)
             {
@@ -114,7 +114,7 @@ public class MafiaGame
             await _guildData.GeneralTextChannel.SendEmbedAsync(msg, EmbedStyle.Successfull);
 
 
-            if (_template.GameSubSettings.IsCustomGame && _template.GameSubSettings.PreGameMessage is not null)
+            if (_template.GameSubSettings.PreGameMessage is not null)
             {
                 await _guildData.GeneralTextChannel.SendEmbedAsync(_template.GameSubSettings.PreGameMessage, "Сообщение перед игрой");
 
@@ -183,6 +183,10 @@ public class MafiaGame
     private async Task<Winner?> LoopAsync(int lastWordNightCount)
     {
         _chronology.NextDay();
+
+        if (_guildData.SpectatorTextChannel is not null)
+            await _guildData.SpectatorTextChannel.SendEmbedAsync("Утро", $"День {_chronology.CurrentDay}");
+
 
         await ChangeMurdersPermsAsync(_denyWrite, _denyView);
 
@@ -306,6 +310,9 @@ public class MafiaGame
         }
         else
         {
+            if (_guildData.SpectatorTextChannel is not null)
+                await _guildData.SpectatorTextChannel.SendEmbedAsync($"Голосование", $"День {_chronology.CurrentDay}");
+
             var citizenVotingResult = await DoCitizenVotingAsync();
 
             if (citizenVotingResult.Choice.Option is not null)
@@ -373,6 +380,9 @@ public class MafiaGame
 
     private async Task DoNightMovesAsync()
     {
+        if (_guildData.SpectatorTextChannel is not null)
+            await _guildData.SpectatorTextChannel.SendEmbedAsync("Наступила ночь", $"День {_chronology.CurrentDay}");
+
         var exceptRoles = new List<GameRole>(_rolesData.Murders.Values.Where(m => m is not Don));
 
         var roles = _rolesData.AllRoles.Values.ToList();

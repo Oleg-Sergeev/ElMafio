@@ -1,21 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
-using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Xml.Linq;
 using Core.Common;
 using Core.Comparers;
 using Core.Extensions;
-using Core.Resources;
 using Discord;
 using Discord.Commands;
 using Discord.Net;
 using Fergun.Interactive;
-using Fergun.Interactive.Pagination;
 using Microsoft.Extensions.Configuration;
 using Modules.Common.MultiSelect;
 
@@ -28,22 +22,20 @@ public class HelpModule : GuildModuleBase
 
     private readonly CommandService _commandService;
     private readonly IConfiguration _config;
-    private readonly IServiceProvider _services;
 
 
-    public HelpModule(InteractiveService interactiveService, CommandService commands, IConfiguration config, IServiceProvider services) : base(interactiveService)
+    public HelpModule(InteractiveService interactiveService, CommandService commands, IConfiguration config) : base(interactiveService)
     {
         _commandService = commands;
         _config = config;
-        _services = services;
     }
 
 
-    [Command("Помощь")]
-    [Alias("команды")]
+    [Command("ПомощьСтарое")]
+    [Alias("командыСтарое")]
     [Summary("Получить список доступных команд")]
     [Remarks("Список содержит только те команды, которые доступны вам")]
-    public async Task HelpAsync(bool sendToServer = false)
+    public async Task HelpLegacyAsync(bool sendToServer = false)
     {
         IMessageChannel channel = !sendToServer ? await Context.User.CreateDMChannelAsync() : Context.Channel;
 
@@ -98,11 +90,242 @@ public class HelpModule : GuildModuleBase
 
     }
 
+
+    [Command("Помощь")]
+    [Alias("команды")]
+    [Summary("Получить список доступных команд")]
+    [Remarks("Список содержит только те команды, которые доступны вам")]
     [Priority(-1)]
+    public async Task HelpAsync()
+    {
+        var reset = "[Сбросить]";
+
+        var modulesTree = await GetModuleTreeAsync();
+
+        IUserMessage? message = null;
+        InteractiveMessageResult<MultiSelectionOption<object>?>? result = null;
+
+        Dictionary<int, ModuleNode> selectedNodes = new();
+        CommandInfo? selectedCommand = null;
+        ModuleInfo? selectedModule = null;
+
+        int selectedRow = 0;
+
+        var rootNodes = modulesTree.Select(mt =>
+        new MultiSelectionOption<object>(mt, 0, selectedNodes.TryGetValue(0, out var node) && mt.Module == node.Module))
+            .Append(new MultiSelectionOption<object>($"{reset}{selectedNodes.GetValueOrDefault(0)?.Module.Name}", 0));
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+
+        var embedBuilder = new EmbedBuilder()
+            .WithThumbnailUrl(Context.Guild.CurrentUser.GetAvatarUrlOrDefaultAvatarUrl())
+            .WithCurrentTimestamp()
+            .WithUserFooter(Context.User)
+            .WithColor(new Color(6, 65, 120));
+
+        do
+        {
+            var commandsVariants = new List<EmbedBuilder>();
+
+            var title = "Помощь";
+            var description = "С помощью выпадающих списков выберите интересующий вас блок и его команды";
+
+            var childNodes = new List<MultiSelectionOption<object>>();
+
+
+            for (int row = 0; row <= selectedRow; row++)
+            {
+                int n = childNodes.Count;
+
+                childNodes.AddRange(selectedNodes.TryGetValue(row, out var selectedNode)
+                ? selectedNode.Children
+                .Select(c => new MultiSelectionOption<object>(c, row + 1, selectedNodes.TryGetValue(row + 1, out var node) && node.Module == c.Module))
+                : Enumerable.Empty<MultiSelectionOption<object>>());
+
+                if (childNodes.Count > n)
+                    childNodes.Add(new MultiSelectionOption<object>($"{reset}{new string(EmptySpace, row + 1)}", row + 1));
+            }
+
+            int commandsRow = childNodes.Count > 0 ? selectedRow + 2 : selectedRow + 1;
+
+            var commands = selectedNodes.TryGetValue(selectedRow, out var commandsNode)
+                ? commandsNode.Commands
+                .DistinctBy(c => c.Name)
+                .Select(c => new MultiSelectionOption<object>(c, commandsRow, c == selectedCommand))
+                .Append(new MultiSelectionOption<object>($"{reset} {new string(EmptySpace, selectedRow)}", commandsRow))
+                : Enumerable.Empty<MultiSelectionOption<object>>();
+
+            var selectionOptions = rootNodes.Concat(childNodes).Concat(commands).ToList();
+
+
+            embedBuilder.Fields.Clear();
+
+            if (selectedCommand is not null)
+            {
+                title = $"Команда `{selectedCommand.Name}`";
+
+                description = null;
+
+                var module = selectedModule ?? selectedCommand.Module;
+
+                foreach (var cmd in module.Commands.Where(cmd => cmd.Name == selectedCommand.Name))
+                {
+                    var res = await cmd.CheckPreconditionsAsync(Context);
+
+                    if (!res.IsSuccess)
+                        continue;
+
+                    var commandEmbedBuilder = new EmbedBuilder()
+                        .WithTitle($"Вариация команды `{cmd.Name}`")
+                        .WithColor(new Color(54, 77, 191))
+                        .AddField("Псевдонимы", GetAllAliases(cmd));
+
+                    if (cmd.Parameters.Count > 0)
+                        commandEmbedBuilder.AddField("Параметры", string.Join('\n', cmd.Parameters.Select(GetParameterInfo)));
+
+                    if (!string.IsNullOrEmpty(cmd.Summary))
+                        commandEmbedBuilder.AddField("О команде", cmd.Summary);
+
+                    if (!string.IsNullOrEmpty(cmd.Remarks))
+                        commandEmbedBuilder.AddField("Примечание", cmd.Remarks);
+
+                    commandsVariants.Add(commandEmbedBuilder);
+                }
+
+                if (commandsVariants.Count == 0)
+                    throw new InvalidOperationException("Executable commands not found");
+
+                embedBuilder.WithFields(commandsVariants[0].Fields);
+            }
+            else if (selectedModule is not null)
+            {
+                title = $"Блок {selectedModule.Name}";
+
+                description = null;
+
+                var aliases = GetAllAliases(selectedModule);
+
+                if (aliases is not null)
+                    embedBuilder.AddField("Псевдонимы", aliases);
+
+                if (!string.IsNullOrEmpty(selectedModule.Summary))
+                    embedBuilder.AddField("О модуле", selectedModule.Summary);
+
+                if (!string.IsNullOrEmpty(selectedModule.Remarks))
+                    embedBuilder.AddField("Примечание", selectedModule.Remarks);
+            }
+
+            embedBuilder.WithTitle(title);
+
+            if (description is not null)
+                embedBuilder.WithDescription(description);
+
+            if (commandsVariants.Count > 0)
+                commandsVariants[0] = embedBuilder;
+            else
+                commandsVariants.Add(embedBuilder);
+
+            var multiPageBuilder = new MultiEmbedPageBuilder()
+                .WithBuilders(commandsVariants);
+
+            var placeholders = Enumerable.Repeat("Выберите модуль", commandsRow).Append("Выберите команду");
+
+            var multiSelection = new MultiSelectionBuilder<object>()
+                .AddUser(Context.User)
+                .WithPlaceholders(placeholders)
+                .WithOptions(selectionOptions.ToArray())
+                .WithAllowCancel(true)
+                .WithCancelButton("Закрыть")
+                .WithStringConverter(StringConverter)
+                .WithSelectionPage(multiPageBuilder)
+                .WithActionOnCancellation(ActionOnStop.DeleteMessage)
+                .WithActionOnTimeout(ActionOnStop.DeleteMessage)
+                .Build();
+
+
+            result = message is null
+            ? await Interactive.SendSelectionAsync(multiSelection, Context.Channel, TimeSpan.FromMinutes(2), null)
+            : await Interactive.SendSelectionAsync(multiSelection, message, TimeSpan.FromMinutes(2), null);
+
+            message = result.Message;
+
+            if (!result.IsSuccess)
+            {
+                if (result.IsCanceled || result.IsTimeout)
+                    break;
+
+                continue;
+            }
+
+            var value = result.Value;
+
+            if (value.Row == commandsRow)
+            {
+                if (!value.Option.ToString()?.Contains(reset) ?? false)
+                    selectedCommand = (CommandInfo)value.Option;
+                else
+                    selectedCommand = null;
+            }
+            else
+            {
+                selectedCommand = null;
+
+                if (!value.Option.ToString()?.Contains(reset) ?? false)
+                {
+                    var node = (ModuleNode)value.Option;
+
+                    selectedNodes[value.Row] = node;
+
+                    selectedModule = node.Module;
+
+                    selectedRow = value.Row;
+                }
+                else
+                {
+                    selectedNodes.Remove(value.Row);
+
+                    if (value.Row > 0)
+                    {
+                        selectedRow = value.Row - 1;
+
+                        selectedModule = selectedNodes[selectedRow].Module;
+                    }
+                    else
+                    {
+                        selectedRow = 0;
+
+                        selectedModule = null;
+                    }
+                }
+            }
+        }
+        while (!cts.IsCancellationRequested);
+
+        try
+        {
+            await message.DeleteAsync();
+        }
+        catch (HttpException)
+        { }
+
+
+
+        static string StringConverter(MultiSelectionOption<object> select)
+        {
+            if (select.Option is ModuleNode n)
+                return !string.IsNullOrEmpty(n.Module.Aliases[0]) ? n.Module.Aliases[0] : n.Module.Name;
+
+            if (select.Option is CommandInfo c)
+                return c.Aliases[0];
+
+            return select.Option.ToString() ?? "Без имени";
+        }
+    }
+
     [Command("Помощь")]
     [Alias("команда")]
     [Summary("Получить подробности указанной команды")]
-    [Remarks("Необходимую команду необходимо указывать вместе со всеми блоками. Например: **помощь Мафия.Настройки.Параметры**" +
+    [Remarks("Необходимую команду необходимо указывать вместе со всеми блоками. Например: `помощь Мафия.Настройки.Параметры`" +
         "\n Если команда имеет несколько вариаций, каждая вариация будет показана отдельным сообщением")]
     public async Task HelpAsync([Summary("Указанная команда")] string command)
     {
@@ -110,7 +333,7 @@ public class HelpModule : GuildModuleBase
 
         if (!result.IsSuccess)
         {
-            await ReplyEmbedAsync($"Команда **{command}** не найдена", EmbedStyle.Error);
+            await ReplyEmbedAsync($"Команда `{command}` не найдена", EmbedStyle.Error);
             return;
         }
 
@@ -137,23 +360,23 @@ public class HelpModule : GuildModuleBase
                 builder.AddField("Параметры", string.Join("\n", cmd.Parameters.Select(GetParameterInfo)));
 
             if (!string.IsNullOrEmpty(cmd.Summary))
-                builder.AddField("О команде ", cmd.Summary);
+                builder.AddField("О команде", cmd.Summary);
 
             if (!string.IsNullOrEmpty(cmd.Remarks))
-                builder.AddField("Примечание ", cmd.Remarks);
+                builder.AddField("Примечание", cmd.Remarks);
 
 
             await ReplyAsync(embed: builder.Build());
         }
 
         if (!hasAnyAvailableCommand)
-            await ReplyEmbedAsync($"У вас нет прав на использование команды {command}", EmbedStyle.Error);
+            await ReplyEmbedAsync($"У вас нет прав на использование команды `{command}`", EmbedStyle.Error);
     }
 
 
     [Command("Помощьблок")]
     [Summary("Получить подробности указанного модуля")]
-    [Remarks("Необходимый модуль необходимо указывать вместе со всеми родительскими блоками. Например: **помощьблок Мафия.Настройки**")]
+    [Remarks("Необходимый модуль необходимо указывать вместе со всеми родительскими блоками. Например: `помощьблок Мафия.Настройки`")]
     public async Task HelpModuleAsync(string moduleName)
     {
         moduleName = moduleName.ToLower();
@@ -169,7 +392,6 @@ public class HelpModule : GuildModuleBase
 
             return;
         }
-
 
         var builder = new EmbedBuilder()
             .WithThumbnailUrl(Context.Guild.CurrentUser.GetAvatarUrl() ?? Context.Guild.CurrentUser.GetDefaultAvatarUrl())
@@ -229,7 +451,7 @@ public class HelpModule : GuildModuleBase
 
 
 
-    private string GetParameterInfo(ParameterInfo parameter)
+    private string GetParameterInfo(Discord.Commands.ParameterInfo parameter)
     {
         var info = "`";
 
@@ -266,12 +488,12 @@ public class HelpModule : GuildModuleBase
 
         allAliases.Add($"[{string.Join("/", GetOwnAliases(command))}]");
 
-        var aliases = $"`{string.Join('.', allAliases)}`";
+        var aliases = $"`{string.Join('.', allAliases.DistinctBy(a => a.ToLower()))}`";
 
         return aliases;
     }
 
-    private static string GetAllAliases(ModuleInfo module)
+    private static string? GetAllAliases(ModuleInfo module)
     {
         var modules = new List<ModuleInfo>();
         var parentModule = module;
@@ -288,9 +510,12 @@ public class HelpModule : GuildModuleBase
 
         allAliases.Reverse();
 
-        var aliases = $"`{string.Join('.', allAliases)}`";
+        var aliasesStr = string.Join('.', allAliases);
 
-        return aliases;
+        if (string.IsNullOrEmpty(aliasesStr))
+            return null;
+
+        return $"`{aliasesStr}`";
     }
 
 
@@ -341,210 +566,23 @@ public class HelpModule : GuildModuleBase
         return t;
     }
 
-
-    [Command("х")]
-    public async Task TestAsync()
-    {
-        var reset = "Сбросить";
-
-        var modulesTree = await GetModuleTreeAsync();
-
-        IUserMessage? message = null;
-        InteractiveMessageResult<MultiSelectionOption<object>?>? result = null;
-
-        Dictionary<int, ModuleNode> selectedNodes = new();
-        CommandInfo? selectedCommand = null;
-        ModuleInfo? selectedModule = null;
-
-        int selectedRow = 0;
-
-        var rootNodes = modulesTree.Select(mt =>
-        new MultiSelectionOption<object>(mt, 0, selectedNodes.TryGetValue(0, out var node) && mt.Module == node.Module))
-            .Append(new MultiSelectionOption<object>(reset, 0));
-
-        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
-
-        var embedBuilder = new EmbedBuilder()
-            .WithThumbnailUrl(Context.Guild.CurrentUser.GetAvatarUrlOrDefaultAvatarUrl())
-            .WithCurrentTimestamp()
-            .WithUserFooter(Context.User)
-            .WithColor(new Color(6, 65, 120));
-
-        do
-        {
-            var title = "Помощь";
-            var description = "С помощью выпадающих списков выберите интересующий вас блок и его команды";
-
-            var childNodes = new List<MultiSelectionOption<object>>();
-
-
-            for (int row = 0; row <= selectedRow; row++)
-            {
-                int n = childNodes.Count;
-
-                childNodes.AddRange(selectedNodes.TryGetValue(row, out var selectedNode)
-                ? selectedNode.Children
-                .Select(c => new MultiSelectionOption<object>(c, row + 1, selectedNodes.TryGetValue(row + 1, out var node) && node.Module == c.Module))
-                : Enumerable.Empty<MultiSelectionOption<object>>());
-
-                if (childNodes.Count > n)
-                    childNodes.Add(new MultiSelectionOption<object>($"{reset}_{row + 1}", row + 1));
-            }
-
-            int commandsRow = childNodes.Count > 0 ? selectedRow + 2 : selectedRow + 1;
-
-            var commands = selectedNodes.TryGetValue(selectedRow, out var commandsNode)
-                ? commandsNode.Commands
-                .DistinctBy(c => c.Name)
-                .Select(c => new MultiSelectionOption<object>(c, commandsRow, c == selectedCommand))
-                .Append(new MultiSelectionOption<object>($"{reset}_{commandsRow}", commandsRow))
-                : Enumerable.Empty<MultiSelectionOption<object>>();
-
-            var selectionOptions = rootNodes.Concat(childNodes).Concat(commands).ToList();
-
-
-            embedBuilder.Fields.Clear();
-
-            if (selectedCommand is not null)
-            {
-                title = $"Команда {selectedCommand.Name}";
-
-                if (selectedModule is not null)
-                    description = $"Путь команды: `{selectedModule.GetModulePath(false)}.{selectedCommand.Name}`";
-
-                embedBuilder.AddField("Псевдонимы", GetAllAliases(selectedCommand));
-
-                if (selectedCommand.Parameters.Count > 0)
-                    embedBuilder.AddField("Параметры", string.Join('\n', selectedCommand.Parameters.Select(GetParameterInfo)));
-
-                if (!string.IsNullOrEmpty(selectedCommand.Summary))
-                    embedBuilder.AddField("О команде", selectedCommand.Summary);
-
-                if (!string.IsNullOrEmpty(selectedCommand.Remarks))
-                    embedBuilder.AddField("Примечание", selectedCommand.Remarks);
-            }
-            else if (selectedModule is not null)
-            {
-                title = $"Блок {selectedModule.Name}";
-
-                description = $"Путь блока: `{selectedModule.GetModulePath(false)}`";
-
-                embedBuilder.AddField("Псевдонимы", GetAllAliases(selectedModule));
-
-                if (!string.IsNullOrEmpty(selectedModule.Summary))
-                    embedBuilder.AddField("О модуле", selectedModule.Summary);
-
-                if (!string.IsNullOrEmpty(selectedModule.Remarks))
-                    embedBuilder.AddField("Примечание", selectedModule.Remarks);
-            }
-
-            embedBuilder
-            .WithTitle(title)
-            .WithDescription(description);
-
-            var pageBuilder = PageBuilder.FromEmbedBuilder(embedBuilder);
-
-
-            var placeholders = Enumerable.Repeat("Выберите модуль", commandsRow).Append("Выберите команду");
-
-            var multiSelection = new MultiSelectionBuilder<object>()
-                .AddUser(Context.User)
-                .WithPlaceholders(placeholders)
-                .WithOptions(selectionOptions.ToArray())
-                .WithAllowCancel(true)
-                .WithCancelButton("Закрыть")
-                .WithStringConverter(StringConverter)
-                .WithSelectionPage(pageBuilder)
-                .WithActionOnCancellation(ActionOnStop.DeleteMessage)
-                .WithActionOnTimeout(ActionOnStop.DeleteMessage)
-                .Build();
-
-
-            result = message is null
-            ? await Interactive.SendSelectionAsync(multiSelection, Context.Channel, TimeSpan.FromMinutes(2), null)
-            : await Interactive.SendSelectionAsync(multiSelection, message, TimeSpan.FromMinutes(2), null);
-
-            message = result.Message;
-
-            if (!result.IsSuccess)
-            {
-                if (result.IsCanceled || result.IsTimeout)
-                    break;
-
-                continue;
-            }
-
-            var value = result.Value;
-
-            if (value.Row == commandsRow)
-            {
-                if (value.Option.ToString() != $"{reset}_{value.Row}")
-                    selectedCommand = (CommandInfo)value.Option;
-                else
-                    selectedCommand = null;
-            }
-            else
-            {
-                selectedCommand = null;
-
-                selectedRow = value.Row;
-
-                if (!value.Option.ToString()?.Contains(reset) ?? false)
-                {
-                    var node = (ModuleNode)value.Option;
-
-                    selectedNodes[value.Row] = node;
-
-                    selectedModule = node.Module;
-                }
-                else
-                {
-                    selectedNodes.Remove(value.Row);
-                }
-            }
-        }
-        while (!cts.IsCancellationRequested);
-
-        try
-        {
-            await message.DeleteAsync();
-        }
-        catch (HttpException)
-        { }
-
-
-
-        static string StringConverter(MultiSelectionOption<object> select)
-        {
-            if (select.Option is ModuleNode m)
-                return m.Module.GetModulePath();
-
-            if (select.Option is CommandInfo c)
-                return $"{c.Module.GetModulePath()}.{c.Name}";
-
-            return select.Option.ToString() ?? "Без имени";
-        }
-    }
-
-
     private async Task<List<ModuleNode>> GetModuleTreeAsync()
     {
         var modules = _commandService.Modules.ToList();
 
-        var rootModules = modules.Where(m => !m.IsSubmodule && m.Commands.Any(cmd => cmd.CheckPreconditionsAsync(Context, _services).Result.IsSuccess));
+        var rootModules = modules.Where(m => !m.IsSubmodule && m.Commands.Any(cmd => cmd.CheckPreconditionsAsync(Context).Result.IsSuccess));
 
         var moduleNodeGroups = new List<ModuleNode>(rootModules.Select(rm => new ModuleNode(rm)));
 
         foreach (var node in moduleNodeGroups)
             await AddChildsAsync(node);
 
-
         return moduleNodeGroups;
 
 
         async Task AddChildsAsync(ModuleNode parentNode)
         {
-            var children = modules.Where(m => m.Parent == parentNode.Module)
+            var children = parentNode.Module.Submodules
                 .Select(c => new ModuleNode(c))
                 .ToList();
 
@@ -554,7 +592,7 @@ public class HelpModule : GuildModuleBase
 
             for (int i = parentNode.Commands.Count - 1; i >= 0; i--)
             {
-                var res = await parentNode.Commands[i].CheckPreconditionsAsync(Context, _services);
+                var res = await parentNode.Commands[i].CheckPreconditionsAsync(Context);
 
                 if (!res.IsSuccess)
                     parentNode.Commands.RemoveAt(i);

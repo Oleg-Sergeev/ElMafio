@@ -323,6 +323,28 @@ public class MafiaSetupService : IMafiaSetupService
         await Task.WhenAll(tasks);
     }
 
+    public async Task SendWelcomeMessageAsync(MafiaContext context)
+    {
+        var tasks = new List<Task>();
+
+        foreach (var role in context.RolesData.AllRoles.Values)
+            tasks.Add(Task.Run(async () =>
+            {
+                var welcomeMsg = "**Добро пожаловать в Мафию!**\nСкоро я вышлю вам вашу роль и вы начнете играть";
+
+                try
+                {
+                    await role.Player.SendMessageAsync(embed: EmbedHelper.CreateEmbed(welcomeMsg, "Мафия"));
+                }
+                catch (HttpException e)
+                {
+                    await HandleHttpExceptionAsync($"Не удалось отправить сообщение пользователю {role.Player.GetFullMention()}", e, context);
+                }
+            }));
+
+
+        await Task.WhenAll(tasks);
+    }
 
     private static async Task HandleHttpExceptionAsync(string message, HttpException e, MafiaContext context)
     {

@@ -11,14 +11,14 @@ namespace Modules.Games.Mafia.Common;
 
 public class MafiaChronology : Chronology<StringChronology>
 {
-    private int _currentDay;
+    public int CurrentDay { get; private set; }
 
 
     public MafiaChronology()
     {
         AddAction(new StringChronology());
 
-        _currentDay = 0;
+        CurrentDay = 0;
     }
 
 
@@ -28,21 +28,21 @@ public class MafiaChronology : Chronology<StringChronology>
             ? $"[{role.Name}] {role.Player.GetFullMention()}: **{action}**"
             : $"{role.Name}: **{action}**";
 
-        Actions[_currentDay].AddAction(str);
+        Actions[CurrentDay].AddAction(str);
 
         return str;
     }
 
     public void AddAction(string action)
     {
-        Actions[_currentDay].AddAction(action);
+        Actions[CurrentDay].AddAction(action);
     }
 
     public void NextDay()
     {
         AddAction(new StringChronology());
 
-        _currentDay++;
+        CurrentDay++;
     }
 
 

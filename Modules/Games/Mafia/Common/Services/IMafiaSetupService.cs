@@ -12,4 +12,6 @@ public interface IMafiaSetupService
     void SetupRoles(MafiaContext context);
 
     Task SendRolesInfoAsync(MafiaContext context);
+
+    Task SendWelcomeMessageAsync(MafiaContext context);
 }

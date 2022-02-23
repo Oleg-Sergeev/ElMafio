@@ -28,9 +28,10 @@ public class AdminModule : GuildModuleBase
     [Command("Слоумод")]
     [Alias("смод")]
     [Summary("Установить слоумод в текущем канале")]
+    [Remarks("Диапазон интервала: `0-300с`")]
     [RequireBotPermission(GuildPermission.ManageChannels)]
     [RequireUserPermission(GuildPermission.ManageChannels)]
-    public async Task SetSlowMode(int secs)
+    public async Task SetSlowMode([Summary("Интервал слоумода")] int secs)
     {
         if (Context.Channel is not ITextChannel textChannel)
             return;
@@ -49,10 +50,10 @@ public class AdminModule : GuildModuleBase
     [Command("Очистить")]
     [Alias("оч")]
     [Summary("Удалить указанное кол-во сообщений из текущего канала")]
-    [Remarks("Максимальное кол-во сообщений, удаляемое за раз: **100**")]
+    [Remarks("Максимальное кол-во сообщений, удаляемое за раз: `100`")]
     [RequireBotPermission(GuildPermission.ManageMessages)]
     [RequireUserPermission(GuildPermission.Administrator)]
-    public async Task ClearAsync(int count)
+    public async Task ClearAsync([Summary("Кол-во удаляемых сообщений")] int count)
     {
         if (Context.Channel is not ITextChannel textChannel)
         {
@@ -78,7 +79,7 @@ public class AdminModule : GuildModuleBase
     [Command("ОчиститьДо")]
     [Alias("Очдо")]
     [Summary("Удалить сообщения до указанного (удаляются сообщения, идущие **после** указанного)")]
-    [Remarks("Максимальное кол-во сообщений, удаляемое за раз: **100**\nТакже можно ответить на сообщение, до которого нужно удалить все сообщения")]
+    [Remarks("Максимальное кол-во сообщений, удаляемое за раз: `100`\n**Также можно ответить на сообщение, до которого нужно удалить все сообщения**")]
     [RequireBotPermission(GuildPermission.ManageMessages)]
     [RequireUserPermission(GuildPermission.Administrator)]
     public async Task ClearToAsync([Summary("ID сообщения, до которого нужно удалить сообщения")] ulong? messageId = null)
@@ -123,13 +124,16 @@ public class AdminModule : GuildModuleBase
     }
 
 
-
     [Command("РольЦвет")]
-    [Alias("Рц")]
+    [Alias("РЦ")]
     [Summary("Изменить цвет роли на новый")]
+    [Remarks("Форматы ввода цвета:" +
+        "\n**0-255:** `(r, g, b)` **Пример:** `(150, 255, 0)`" +
+        "\n**0-1:** `(r, g, b)` **Пример:** `(0.4, 0, 1)`" +
+        "\n**HEX:** `#RRGGBB` **Пример:** `#280af0`")]
     [RequireBotPermission(GuildPermission.ManageRoles)]
     [RequireUserPermission(GuildPermission.ManageRoles)]
-    public async Task UpdateRoleColor(IRole role, Color color)
+    public async Task UpdateRoleColorAsync([Summary("Роль, для которой нужно изменить цвет")] IRole role, [Summary("Новый цвет")] Color color)
     {
         var guildUser = (IGuildUser)Context.User;
 
@@ -151,31 +155,11 @@ public class AdminModule : GuildModuleBase
 
         await role.ModifyAsync(r => r.Color = color);
 
-        await ReplyEmbedStampAsync($"Старый цвет: {oldColor} ({oldColor.R}, {oldColor.G}, {oldColor.B})",
+        await ReplyEmbedStampAsync($"Старый цвет: {oldColor} {oldColor.ToRgbString()}",
             EmbedStyle.Successfull,
             "Цвет роли успешно изменен");
     }
 
-
-
-    [Command("Рольправа")]
-    [RequireUserPermission(GuildPermission.ManageRoles)]
-    public async Task ShowRolePermissionsAsync(IRole role)
-    {
-        var str = "\n";
-
-        var allPerms = GuildPermissions.All.ToList();
-        var rolePerms = role.Permissions.ToList();
-
-        var builder = new EmbedBuilder().WithInformationMessage();
-
-        for (int i = 0; i < allPerms.Count; i++)
-            str += $"{(rolePerms.Contains(allPerms[i]) ? "✅" : "❌")} {allPerms[i]}\n";
-
-        builder.AddField($"Права роли {role}", str);
-
-        await ReplyAsync(embed: builder.Build());
-    }
 
 
     [Group("Смайл")]
@@ -193,13 +177,17 @@ public class AdminModule : GuildModuleBase
         [Command("Добавить")]
         [Alias("+")]
         [Summary("Добавить смайл со стандартным именем")]
-        public async Task AddEmoteAsync()
-            => await AddEmoteAsync($"emoji_{Context.Guild.Emotes.Count + 1}");
+        [Remarks("Чтобы загрузить смайл на сервер, прикрепите картинку к сообщению, или ответьте на сообщение, содержащее картинку" +
+            "\n**Картинка должна весить не более `256Кб`**")]
+        public Task AddEmoteAsync()
+            => AddEmoteAsync($"emoji_{Context.Guild.Emotes.Count + 1}");
 
         [Command("Добавить")]
         [Alias("+")]
         [Summary("Добавить смайл с указанным именем")]
-        public async Task AddEmoteAsync(string name)
+        [Remarks("Чтобы загрузить смайл на сервер, прикрепите картинку к сообщению, или ответьте на сообщение, содержащее картинку" +
+            "\n**Картинка должна весить не более `256Кб`**")]
+        public async Task AddEmoteAsync([Summary("Имя смайла")] string name)
         {
             var attachment = Context.Message.Attachments.FirstOrDefault() ?? Context.Message.ReferencedMessage?.Attachments.FirstOrDefault();
 
@@ -263,7 +251,7 @@ public class AdminModule : GuildModuleBase
 
             if (stream is null)
             {
-                await ReplyEmbedAsync("Не удалось загрузить картинку", EmbedStyle.Error);
+                await ReplyEmbedAsync("Не удалось загрузить картинку\nКартинка не найдена", EmbedStyle.Error);
 
                 return;
             }
@@ -281,8 +269,8 @@ public class AdminModule : GuildModuleBase
 
         [Command("Удалить")]
         [Alias("-")]
-        [Summary("Удалить указанный смайл")]
-        public async Task DeleteEmoteAsync(Emote emote)
+        [Summary("Удалить указанный смайл с сервера")]
+        public async Task DeleteEmoteAsync([Summary("Смайл, который необходимо удалить")] Emote emote)
         {
             if (!Context.Guild.Emotes.Contains(emote))
             {

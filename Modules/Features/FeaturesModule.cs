@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Globalization;
-using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Core.Common;
@@ -8,11 +7,11 @@ using Core.Resources;
 using Discord;
 using Discord.Commands;
 using Fergun.Interactive;
-using Microsoft.Extensions.Configuration;
 
 namespace Modules.Features;
 
-[Group("ф")]
+[Group("Фичи")]
+[Alias("Ф")]
 [RequireOwner]
 public class FeaturesModule : GuildModuleBase
 {

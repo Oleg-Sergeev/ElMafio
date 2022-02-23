@@ -40,8 +40,8 @@ public static class MafiaHelper
 
         if (roleInfo is not null)
         {
-            if (roleInfo.ContainsKey("Description"))
-                description = roleInfo["Description"];
+            if (roleInfo.ContainsKey("Value"))
+                description = roleInfo["Value"];
 
             if (roleInfo.TryGetValue("Color", out var colorStr) && uint.TryParse(colorStr, NumberStyles.HexNumber, null, out var rawColor))
                 color = new Color(rawColor);

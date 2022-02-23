@@ -257,7 +257,9 @@ public class RussianRouletteModule : GameModule<RussianRouletteStats>
 
 
     [Group("Смайлы")]
+    [Summary("Раздел для настройки смайлов, добавляющихся после каждого нажатия курка")]
     [RequireUserPermission(GuildPermission.Administrator)]
+    [RequireBotPermission(GuildPermission.AddReactions)]
     public class SetSmileModule : GuildModuleBase
     {
         private readonly IGameSettingsService<RussianRouletteSettings> _settingsService;
