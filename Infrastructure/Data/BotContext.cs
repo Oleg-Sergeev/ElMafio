@@ -46,7 +46,7 @@ public class BotContext : DbContext
         modelBuilder.Entity<RussianRouletteSettings>()
             .Property(s => s.UnicodeSmileSurvived)
                 .HasDefaultValue("😎");
-        
+
         modelBuilder.Entity<GuildSettings>()
             .Property(g => g.Prefix)
             .HasDefaultValue("/");

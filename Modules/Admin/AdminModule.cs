@@ -3,6 +3,7 @@ using System.Data;
 using System.Linq;
 using System.Net.Http;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Core.Common;
 using Core.Extensions;
@@ -52,7 +53,8 @@ public class AdminModule : GuildModuleBase
     [Summary("Удалить указанное кол-во сообщений из текущего канала")]
     [Remarks("Максимальное кол-во сообщений, удаляемое за раз: `100`")]
     [RequireBotPermission(GuildPermission.ManageMessages)]
-    [RequireUserPermission(GuildPermission.Administrator)]
+    [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
+    [RequireOwner(Group = "perm")]
     public async Task ClearAsync([Summary("Кол-во удаляемых сообщений")] int count)
     {
         if (Context.Channel is not ITextChannel textChannel)
@@ -81,7 +83,8 @@ public class AdminModule : GuildModuleBase
     [Summary("Удалить сообщения до указанного (удаляются сообщения, идущие **после** указанного)")]
     [Remarks("Максимальное кол-во сообщений, удаляемое за раз: `100`\n**Также можно ответить на сообщение, до которого нужно удалить все сообщения**")]
     [RequireBotPermission(GuildPermission.ManageMessages)]
-    [RequireUserPermission(GuildPermission.Administrator)]
+    [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
+    [RequireOwner(Group = "perm")]
     public async Task ClearToAsync([Summary("ID сообщения, до которого нужно удалить сообщения")] ulong? messageId = null)
     {
         var message = messageId is not null
@@ -132,16 +135,22 @@ public class AdminModule : GuildModuleBase
         "\n**0-1:** `(r, g, b)` **Пример:** `(0.4, 0, 1)`" +
         "\n**HEX:** `#RRGGBB` **Пример:** `#280af0`")]
     [RequireBotPermission(GuildPermission.ManageRoles)]
-    [RequireUserPermission(GuildPermission.ManageRoles)]
+    [RequireUserPermission(GuildPermission.ManageRoles, Group = "perm")]
+    [RequireOwner(Group = "perm")]
     public async Task UpdateRoleColorAsync([Summary("Роль, для которой нужно изменить цвет")] IRole role, [Summary("Новый цвет")] Color color)
     {
         var guildUser = (IGuildUser)Context.User;
 
         if (guildUser.Hierarchy < role.Position)
         {
-            await ReplyEmbedAsync("Невозможно управлять ролью: недостаточно полномочий", EmbedStyle.Error);
+            var botOwner = (await Context.Client.GetApplicationInfoAsync()).Owner;
 
-            return;
+            if (botOwner.Id != guildUser.Id)
+            {
+                await ReplyEmbedAsync("Невозможно управлять ролью: недостаточно полномочий", EmbedStyle.Error);
+
+                return;
+            }
         }
 
         if (role.Color == color)
@@ -165,7 +174,8 @@ public class AdminModule : GuildModuleBase
     [Group("Смайл")]
     [Alias("С")]
     [Summary("Добавление и удаление пользовательских смайлов")]
-    [RequireUserPermission(GuildPermission.Administrator)]
+    [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
+    [RequireOwner(Group = "perm")]
     public class SmileModule : GuildModuleBase
     {
         public SmileModule(InteractiveService interactiveService) : base(interactiveService)

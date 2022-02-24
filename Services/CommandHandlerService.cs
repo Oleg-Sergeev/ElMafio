@@ -13,7 +13,6 @@ using Discord.Interactions;
 using Discord.WebSocket;
 using Infrastructure.Data;
 using Infrastructure.Data.Models;
-using Infrastructure.Data.Models.Games.Stats;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -140,7 +139,7 @@ public class CommandHandlerService : DiscordClientService
         {
             var settings = lastGuildSettingsEntry.Entity;
 
-            if (_prefixes[settings.Id] != settings.Prefix)
+            if (_prefixes.TryGetValue(settings.Id, out var prefix) && prefix != settings.Prefix)
             {
                 _prefixes[settings.Id] = settings.Prefix;
 

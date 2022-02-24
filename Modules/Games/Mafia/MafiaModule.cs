@@ -383,6 +383,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
             [Group]
             [RequireConfirmAction(false)]
+            [RequireOwner(Group = "perm")]
             public class ScoresModule : GuildModuleBase
             {
                 public ScoresModule(InteractiveService interactiveService) : base(interactiveService)
@@ -484,7 +485,8 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
     [Group("Шаблоны")]
     [Alias("Ш")]
     [Summary("Раздел для управления шаблонами: добавление, удаление, изменение имени и прочее")]
-    [RequireUserPermission(GuildPermission.Administrator)]
+    [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
+    [RequireOwner(Group = "perm")]
     public class TemplatesModule : GuildModuleBase
     {
         private readonly IGameSettingsService<MafiaSettings> _settingsService;
@@ -715,7 +717,8 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
     [Group("Настройки")]
     [Alias("Н")]
-    [RequireUserPermission(GuildPermission.Administrator)]
+    [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
+    [RequireOwner(Group = "perm")]
     [Summary("Настройки для мафии включают в себя настройки сервера(используемые роли, каналы и категорию каналов) и настройки самой игры. " +
         "Для подробностей введите команду `Мафия.Настройки.Помощь`")]
     public class SettingsModule : GuildModuleBase

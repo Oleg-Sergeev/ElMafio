@@ -8,7 +8,8 @@ namespace Modules.Settings;
 
 [Group("Настройки")]
 [Alias("н")]
-[RequireUserPermission(GuildPermission.Administrator)]
+[RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
+[RequireOwner(Group = "perm")]
 public class SettingsModule : GuildModuleBase
 {
     public SettingsModule(InteractiveService interactiveService) : base(interactiveService)

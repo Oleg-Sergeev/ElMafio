@@ -29,7 +29,8 @@ public class ManualModule : GuildModuleBase
     [Command("Администрирование")]
     [Alias("Админ", "а")]
     [Summary("Руководство для администраторов поможет разобраться с первичной настройкой бота и дальнейшей работой с ним")]
-    [RequireUserPermission(GuildPermission.Administrator)]
+    [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
+    [RequireOwner(Group = "perm")]
     public async Task ShowAdminManualList()
     {
         await ReplyAsync("OK");

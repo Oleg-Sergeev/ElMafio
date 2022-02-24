@@ -194,7 +194,9 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
         }
 
 
-        if (gameData.Host.Id != Context.User.Id && !Context.User.HasGuildPermission(GuildPermission.Administrator))
+        var res = await CheckUserPermsAsync(gameData.Host.Id);
+
+        if (!res.IsSuccess)
         {
             await ReplyEmbedAsync("Упомянуть всех участников может только хост или администратор", EmbedStyle.Error);
 
@@ -270,16 +272,13 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
             return;
         }
 
-        if (gameData.Host.Id != Context.User.Id)
+        var res = await CheckUserPermsAsync(gameData.Host.Id);
+
+        if (!res.IsSuccess)
         {
-            var ownerId = (await Context.Client.GetApplicationInfoAsync()).Owner.Id;
+            await ReplyEmbedAsync("Вы не являетесь создателем игры", EmbedStyle.Error);
 
-            if (ownerId != Context.User.Id)
-            {
-                await ReplyEmbedAsync("Вы не являетесь создателем игры", EmbedStyle.Error);
-
-                return;
-            }
+            return;
         }
 
         if (!gameData.Players.Contains(player))
@@ -314,30 +313,29 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
     protected abstract TData CreateGameData(IGuildUser host);
 
 
-    protected virtual Task<PreconditionResult> CheckPreconditionsAsync()
+    protected virtual async Task<PreconditionResult> CheckPreconditionsAsync()
     {
         if (!TryGetGameData(out var gameData))
         {
-            return Task.FromResult(PreconditionResult.FromError("Игра еще не создана"));
+            return PreconditionResult.FromError("Игра еще не создана");
         }
 
         if (gameData.Players.Count < gameData.MinPlayersCount)
         {
-            return Task.FromResult(PreconditionResult.FromError($"Недостаточно игроков. Минимальное количество игроков для игры: {gameData.MinPlayersCount}"));
+            return PreconditionResult.FromError($"Недостаточно игроков. Минимальное количество игроков для игры: {gameData.MinPlayersCount}");
         }
 
         if (gameData.IsPlaying)
         {
-            return Task.FromResult(PreconditionResult.FromError($"{gameData.Name} уже запущена, дождитесь завершения игры"));
+            return PreconditionResult.FromError($"{gameData.Name} уже запущена, дождитесь завершения игры");
         }
 
-        if (gameData.Host.Id != Context.User.Id && Context.User.Id != Context.Guild.OwnerId)
-        {
-            return Task.FromResult(PreconditionResult.FromError("Вы не являетесь хостом игры. Запустить игру может только хост"));
-        }
+        var res = await CheckUserPermsAsync(gameData.Host.Id);
 
+        if (!res.IsSuccess)
+            return res;
 
-        return Task.FromResult(PreconditionResult.FromSuccess());
+        return PreconditionResult.FromSuccess();
     }
 
 
@@ -447,6 +445,19 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
         return games.TryGetValue(type, out gameData);
     }
 
+
+    protected async Task<PreconditionResult> CheckUserPermsAsync(ulong hostId)
+    {
+        if (hostId != Context.User.Id && Context.User.Id != Context.Guild.OwnerId)
+        {
+            var botOwner = (await Context.Client.GetApplicationInfoAsync()).Owner;
+
+            if (botOwner.Id != hostId)
+                return PreconditionResult.FromError("Вы не являетесь хостом игры. Запустить игру может только хост");
+        }
+
+        return PreconditionResult.FromSuccess();
+    }
 
 
     private bool StartAfkWaiting(TData data)
@@ -727,7 +738,8 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
 
 
         [Group]
-        [RequireUserPermission(GuildPermission.Administrator)]
+        [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
+        [RequireOwner(Group = "perm")]
         [Summary("Данный раздел предназначен для управления статистикой и рейтингом игроков")]
         [Remarks("**Внимание**\nБудьте аккуратны при выполнении команд из этого раздела. Действие команд **нельзя отменить**")]
         public abstract class GameAdminModule : GuildModuleBase

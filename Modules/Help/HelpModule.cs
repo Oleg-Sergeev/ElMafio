@@ -435,23 +435,45 @@ public class HelpModule : GuildModuleBase
 
 
 
-    [Command("Контакты")]
-    [Summary("Показать контакты для связи")]
-    public async Task ShowContactsAsync()
+    [Command("Информация")]
+    [Alias("Инфо")]
+    [Summary("Раздел содержит информацию о боте, список изменений, полезные ссылки и многое другое")]
+    public async Task ShowInfoAsync()
     {
         var contactsSection = _config.GetSection("Contacts");
 
         var msg = "Если у вас есть вопросы, или другие пожелания, то данный список для вас:\n";
 
         foreach (var contact in contactsSection.GetChildren())
+        {
             msg += $"**{contact.Key}**: {contact.Value}\n";
+        }
 
         await ReplyEmbedAsync(msg);
     }
 
+    [Command("Сообщить")]
+    [Alias("Репорт")]
+    [Summary("Нашли баг, или есть идея? Тогда пришлите ваше сообщение через данную команду")]
+    [Remarks("Максимальная длина сообщения: `2000`")]
+    public async Task ShowContactsAsync([Remainder] string msg)
+    {
+        var owner = (await Context.Client.GetApplicationInfoAsync()).Owner;
+
+        msg = msg.Truncate(2000);
+
+        var title = $"Сообщение от `{Context.Guild.Name}/{Context.Channel.Name}/{Context.User.GetFullName()} " +
+            $"({Context.Guild.Id}/{Context.Channel.Id}/{Context.User.Id})`".Truncate(256);
 
 
-    private string GetParameterInfo(Discord.Commands.ParameterInfo parameter)
+        await owner.SendMessageAsync(embed: EmbedHelper.CreateEmbed(msg, title));
+
+        await ReplyEmbedAsync("Сообщение успешно отправлено", EmbedStyle.Successfull);
+    }
+
+
+
+    private string GetParameterInfo(ParameterInfo parameter)
     {
         var info = "`";
 

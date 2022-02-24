@@ -39,6 +39,7 @@ public class RussianRouletteModule : GameModule<RussianRouletteStats>
     public override async Task StartAsync()
     {
         var check = await CheckPreconditionsAsync();
+
         if (!check.IsSuccess)
         {
             await ReplyEmbedAsync(check.ErrorReason, EmbedStyle.Error);
@@ -258,7 +259,8 @@ public class RussianRouletteModule : GameModule<RussianRouletteStats>
 
     [Group("Смайлы")]
     [Summary("Раздел для настройки смайлов, добавляющихся после каждого нажатия курка")]
-    [RequireUserPermission(GuildPermission.Administrator)]
+    [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
+    [RequireOwner(Group = "perm")]
     [RequireBotPermission(GuildPermission.AddReactions)]
     public class SetSmileModule : GuildModuleBase
     {
