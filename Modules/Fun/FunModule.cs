@@ -12,7 +12,7 @@ using Fergun.Interactive;
 namespace Modules.Fun;
 
 [Name("Фан")]
-public class FunModule : GuildModuleBase
+public class FunModule : CommandGuildModuleBase
 {
     public FunModule(InteractiveService interactiveService) : base(interactiveService) { }
 

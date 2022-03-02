@@ -13,6 +13,7 @@ public class CitizenGroup : GroupRole
 {
     public CitizenGroup(IReadOnlyList<GameRole> roles, IOptionsSnapshot<GameRoleData> options) : base(roles, options)
     {
+        EarlyVotingTermination = true;
     }
 
     public override async Task<VoteGroup> VoteManyAsync(MafiaContext context, IMessageChannel? voteChannel = null, IMessageChannel? voteResultchannel = null, bool waitAfterVote = true)

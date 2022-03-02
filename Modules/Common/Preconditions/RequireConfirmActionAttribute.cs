@@ -30,6 +30,7 @@ public class RequireConfirmActionAttribute : PreconditionAttribute
     {
         var interactive = services.GetService<InteractiveService>();
 
+        // If interactive is null, then checking for permissions is not required. Check is called from code
         if (interactive is null)
             return PreconditionResult.FromSuccess();
 

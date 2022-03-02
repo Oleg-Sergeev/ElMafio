@@ -15,7 +15,7 @@ namespace Modules;
 [RequireContext(ContextType.Guild)]
 [RequireBotPermission(GuildPermission.SendMessages)]
 [RequireBotPermission(GuildPermission.EmbedLinks)]
-public abstract class GuildModuleBase : ModuleBase<DbSocketCommandContext>
+public abstract class CommandGuildModuleBase : ModuleBase<DbSocketCommandContext>
 {
     protected const string LogTemplate = "({Context:l}): {Message}";
 
@@ -34,14 +34,18 @@ public abstract class GuildModuleBase : ModuleBase<DbSocketCommandContext>
     protected ILogger GuildLogger => _guildLogger ??= GetGuildLogger(Context.Guild.Id);
 
 
-    private IUser? _bot;
-    protected IUser Bot => _bot ??= Context.Guild.GetUser(Context.Client.CurrentUser.Id);
+    private IGuildUser? _bot;
+    protected IGuildUser Bot => _bot ??= Context.Guild.GetUser(Context.Client.CurrentUser.Id);
+
+
+    private IUser? _botOwner;
+    protected IUser BotOwner => _botOwner ??= Context.Client.GetApplicationInfoAsync().Result.Owner;
 
 
     protected InteractiveService Interactive { get; }
 
 
-    protected GuildModuleBase(InteractiveService interactiveService)
+    protected CommandGuildModuleBase(InteractiveService interactiveService)
     {
         Interactive = interactiveService;
     }

@@ -12,7 +12,7 @@ using Discord.Commands;
 using Discord.Interactions;
 using Discord.WebSocket;
 using Infrastructure.Data;
-using Infrastructure.Data.Models;
+using Infrastructure.Data.Models.Guild;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -28,19 +28,17 @@ public class CommandHandlerService : DiscordClientService
 
     private readonly BotContext _db;
     private readonly CommandService _commandService;
-    private readonly InteractionService _interactionService;
     private readonly IServiceProvider _provider;
     private readonly IConfiguration _config;
 
 
     public CommandHandlerService(DiscordSocketClient client, CommandService commandService, BotContext db,
-        IServiceProvider provider, IConfiguration config, ILogger<DiscordClientService> logger, InteractionService interactionService) : base(client, logger)
+        IServiceProvider provider, IConfiguration config, ILogger<DiscordClientService> logger) : base(client, logger)
     {
         _db = db;
         _config = config;
         _provider = provider;
         _commandService = commandService;
-        _interactionService = interactionService;
     }
 
 

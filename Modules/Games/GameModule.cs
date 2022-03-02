@@ -30,7 +30,7 @@ public abstract class GameModule<TStats> : GameModule<GameData, TStats> where TS
 
 
 [RequireContext(ContextType.Guild)]
-public abstract class GameModule<TData, TStats> : GuildModuleBase
+public abstract class GameModule<TData, TStats> : CommandGuildModuleBase
     where TData : GameData
     where TStats : GameStats, new()
 {
@@ -219,6 +219,7 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
     [Remarks("Хостом игры является первый участник" +
         "\nХост может запускать/останавливать игру, выгонять игроков и упоминать всех игроков" +
         "\nЕсли хост покидает игру, то новым хостом становится следующий по порядку участник")]
+    [Priority(-1)]
     public virtual async Task ShowHostAsync()
     {
         if (!TryGetGameData(out var gameData))
@@ -229,6 +230,35 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
         }
 
         await ReplyEmbedAsync($"Хост - **{gameData.Host.GetFullName()}**");
+    }
+
+
+    [Command("Хост")]
+    [Summary("Сменить хоста игры")]
+    [Remarks("Хостом игры является первый участник" +
+        "\nХост может запускать/останавливать игру, выгонять игроков и упоминать всех игроков" +
+        "\nЕсли хост покидает игру, то новым хостом становится следующий по порядку участник")]
+    public virtual async Task ChangeHostAsync(IGuildUser newHost)
+    {
+        if (!TryGetGameData(out var gameData))
+        {
+            await ReplyEmbedAsync("Игра еще не создана", EmbedStyle.Error);
+
+            return;
+        }
+
+        var res = await CheckUserPermsAsync(gameData.Host.Id);
+
+        if (!res.IsSuccess)
+        {
+            await ReplyEmbedAsync("Сменить хоста может только текущий хост или администратор", EmbedStyle.Error);
+
+            return;
+        }
+
+        await ReplyEmbedAsync($"Хост успешно сменен: `{gameData.Host.GetFullMention()}` -> `{newHost.GetFullMention()}`", EmbedStyle.Successfull);
+
+        gameData.Host = newHost;
     }
 
 
@@ -372,7 +402,7 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
         stats.AddRange(newUsersStats.ToDictionary(s => s.UserId));
 
         return newUsersStats.Count;
-}
+    }
 
 
     protected async Task<IDictionary<ulong, TStats>> GetStatsWithAddingNewAsync(IEnumerable<ulong> playersIds, bool isTracking = true)
@@ -446,17 +476,15 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
     }
 
 
-    protected async Task<PreconditionResult> CheckUserPermsAsync(ulong hostId)
+    protected Task<PreconditionResult> CheckUserPermsAsync(ulong hostId)
     {
-        if (hostId != Context.User.Id && Context.User.Id != Context.Guild.OwnerId)
-        {
-            var botOwner = (await Context.Client.GetApplicationInfoAsync()).Owner;
+        if (Context.User.Id != hostId
+            && !Context.User.HasGuildPermission(GuildPermission.Administrator)
+            && Context.User.Id != Context.Guild.OwnerId 
+            && Context.User.Id != BotOwner.Id)
+                return Task.FromResult(PreconditionResult.FromError("Вы не являетесь хостом игры. Запустить игру может только хост"));
 
-            if (botOwner.Id != hostId)
-                return PreconditionResult.FromError("Вы не являетесь хостом игры. Запустить игру может только хост");
-        }
-
-        return PreconditionResult.FromSuccess();
+        return Task.FromResult(PreconditionResult.FromSuccess());
     }
 
 
@@ -507,7 +535,7 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
 
     [Group("Помощь")]
     [Summary("Здесь вы можете получить информацию об игре, ее правилах и других подробностях")]
-    public abstract class HelpModule : GuildModuleBase
+    public abstract class HelpModule : CommandGuildModuleBase
     {
         protected IConfiguration Config { get; }
 
@@ -624,18 +652,17 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
     }
 
 
-    [Group("Статистика")]
-    [Alias("Стат", "С")]
-    [Summary("Статистика позволяет посмотреть свою эффективность в игре")]
-    public abstract class GameStatsModule : GuildModuleBase
+    [Name("Статистика")]
+    [Group]
+    public abstract class GameStatsModule : CommandGuildModuleBase
     {
         protected GameStatsModule(InteractiveService interactiveService) : base(interactiveService)
         {
         }
 
 
-        [Name("Статистика")]
-        [Command]
+        [Command("Статистика")]
+        [Alias("Стат", "С")]
         [Summary("Просмотреть личную статистику")]
         public virtual async Task ShowStatsAsync([Summary("Игрок, статистику которого нужно просмотреть")] IUser? user = null)
         {
@@ -658,73 +685,6 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
         }
 
 
-        [Command("Рейтинг")]
-        [Alias("Рейт", "Р")]
-        [Summary("Просмотреть рейтинг")]
-        public virtual async Task ShowRatingAsync([Summary("Кол-во игроков на одной странице\nМакс. кол-во: `30`")] int playersPerPage = 10)
-        {
-            var allStats = await GetRatingQuery()
-                .ThenByDescending(stat => stat.UserId)
-                .ToListAsync();
-
-            if (allStats.Count == 0)
-            {
-                await ReplyEmbedAsync("Рейтинг отсутствует", EmbedStyle.Error);
-
-                return;
-            }
-
-
-            var playersId = allStats
-                .Select(s => s.UserId)
-                .ToHashSet();
-
-            if (Context.Guild.Users.Count < Context.Guild.MemberCount)
-                await Context.Guild.DownloadUsersAsync();
-
-            var players = Context.Guild.Users
-                .Where(u => playersId.Contains(u.Id))
-                .ToDictionary(u => u.Id);
-
-            playersPerPage = Math.Clamp(playersPerPage, 1, 30);
-
-            var lazyPaginator = new LazyPaginatorBuilder()
-                .WithActionOnCancellation(ActionOnStop.DeleteMessage)
-                .WithActionOnTimeout(ActionOnStop.DeleteMessage)
-                .WithMaxPageIndex((allStats.Count - 1) / playersPerPage)
-                .WithCacheLoadedPages(true)
-                .WithPageFactory(page =>
-                {
-                    int n = playersPerPage * page + 1;
-
-                    var pageBuilder = new PageBuilder()
-                    {
-                        Title = $"Рейтинг [{page * playersPerPage + 1} - {(page + 1) * playersPerPage}]",
-                        Color = Utils.GetRandomColor(),
-                        Description = string.Join('\n', allStats
-                        .Skip(page * playersPerPage)
-                        .Take(playersPerPage)
-                        .Select(ms => $"{n++}. **{(players.TryGetValue(ms.UserId, out var p) ? p.GetFullName() : "[Н/Д]")}** - {ms.Rating:0.##}"))
-                    };
-
-                    return pageBuilder;
-                })
-                .Build();
-
-            _ = Interactive.SendPaginatorAsync(lazyPaginator, Context.Channel, timeout: TimeSpan.FromMinutes(10));
-        }
-
-
-
-        protected virtual IOrderedQueryable<TStats> GetRatingQuery()
-            => Context.Db.Set<TStats>()
-                .AsNoTracking()
-                .Where(s => s.GuildSettingsId == Context.Guild.Id)
-                .OrderByDescending(stat => stat.Rating)
-                    .ThenByDescending(stat => stat.WinRate)
-                        .ThenByDescending(stat => stat.GamesCount);
-
-
         protected virtual EmbedBuilder GetStatsEmbedBuilder(TStats stats, IUser user)
             => new EmbedBuilder()
             .WithTitle($"Статистика игрока {user.GetFullName()}")
@@ -735,37 +695,15 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
             .AddField("Общий % побед", $"{stats.WinRate:P2} ({stats.WinsCount}/{stats.GamesCount})", true);
 
 
-
-
         [Group]
         [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
         [RequireOwner(Group = "perm")]
         [Summary("Данный раздел предназначен для управления статистикой и рейтингом игроков")]
         [Remarks("**Внимание**\nБудьте аккуратны при выполнении команд из этого раздела. Действие команд **нельзя отменить**")]
-        public abstract class GameAdminModule : GuildModuleBase
+        public abstract class GameAdminModule : CommandGuildModuleBase
         {
             public GameAdminModule(InteractiveService interactiveService) : base(interactiveService)
             {
-            }
-
-
-            [Command("РейтСброс")]
-            [Alias("РСброс")]
-            [Summary("Сбросить весь рейтинг игры")]
-            [Remarks("**Действие нельзя обратить!**")]
-            [RequireConfirmAction]
-            public virtual async Task ResetRatingAsync()
-            {
-                var allStats = await Context.Db.Set<TStats>()
-                    .Where(s => s.GuildSettingsId == Context.Guild.Id)
-                    .ToListAsync();
-
-                foreach (var stat in allStats)
-                    stat.Reset();
-
-                await Context.Db.SaveChangesAsync();
-
-                await ReplyEmbedStampAsync("Рейтинг успешно сброшен", EmbedStyle.Successfull);
             }
 
 
@@ -792,6 +730,114 @@ public abstract class GameModule<TData, TStats> : GuildModuleBase
                 await Context.Db.SaveChangesAsync();
 
                 await ReplyEmbedStampAsync($"Статистика игрока {user.GetFullMention()} успешно сброшена", EmbedStyle.Successfull);
+            }
+        }
+    }
+
+
+    [Name("Рейтинг")]
+    [Group]
+    public class RatingModule : CommandGuildModuleBase
+    {
+        public RatingModule(InteractiveService interactiveService) : base(interactiveService)
+        {
+        }
+
+
+        [Command("Рейтинг")]
+        [Alias("Рейт", "Р")]
+        [Summary("Просмотреть рейтинг")]
+        public virtual async Task ShowRatingAsync([Summary("Кол-во игроков на одной странице\nМакс. кол-во: `50`")] int playersPerPage = 10)
+        {
+            var allStats = await GetRatingQuery()
+                .ThenByDescending(stat => stat.UserId)
+                .ToListAsync();
+
+            if (allStats.Count == 0)
+            {
+                await ReplyEmbedAsync("Рейтинг отсутствует", EmbedStyle.Error);
+
+                return;
+            }
+
+
+            var playersId = allStats
+                .Select(s => s.UserId)
+                .ToHashSet();
+
+            if (Context.Guild.Users.Count < Context.Guild.MemberCount)
+                await Context.Guild.DownloadUsersAsync();
+
+            var players = Context.Guild.Users
+                .Where(u => playersId.Contains(u.Id))
+                .ToDictionary(u => u.Id);
+
+            playersPerPage = Math.Clamp(playersPerPage, 1, 50);
+
+            var lazyPaginator = new LazyPaginatorBuilder()
+                .WithActionOnCancellation(ActionOnStop.DeleteMessage)
+                .WithActionOnTimeout(ActionOnStop.DeleteMessage)
+                .WithMaxPageIndex((allStats.Count - 1) / playersPerPage)
+                .WithCacheLoadedPages(true)
+                .WithPageFactory(page =>
+                {
+                    int n = playersPerPage * page + 1;
+
+                    var pageBuilder = new PageBuilder()
+                    {
+                        Title = $"Рейтинг [{page * playersPerPage + 1} - {(page + 1) * playersPerPage}]",
+                        Color = Utils.GetRandomColor(),
+                        Description = string.Join('\n', allStats
+                            .Skip(page * playersPerPage)
+                            .Take(playersPerPage)
+                            .Select(ms => $"{n++}. **{(players.TryGetValue(ms.UserId, out var p) ? p.GetFullName() : "[Н/Д]")}** - `{ms.Rating:0.##}`"))
+                    };
+
+                    return pageBuilder;
+                })
+                .Build();
+
+            _ = Interactive.SendPaginatorAsync(lazyPaginator, Context.Channel, timeout: TimeSpan.FromMinutes(10));
+        }
+
+
+        protected virtual IOrderedQueryable<TStats> GetRatingQuery()
+            => Context.Db.Set<TStats>()
+                .AsNoTracking()
+                .Where(s => s.GuildSettingsId == Context.Guild.Id)
+                .OrderByDescending(stat => stat.Rating)
+                    .ThenByDescending(stat => stat.WinRate)
+                        .ThenByDescending(stat => stat.GamesCount);
+
+
+
+        [Group]
+        [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
+        [RequireOwner(Group = "perm")]
+        public abstract class GameAdminModule : CommandGuildModuleBase
+        {
+            public GameAdminModule(InteractiveService interactiveService) : base(interactiveService)
+            {
+            }
+
+
+            [Command("РейтСброс")]
+            [Alias("РСброс")]
+            [Summary("Сбросить весь рейтинг игры")]
+            [Remarks("**Действие нельзя обратить!**")]
+            [RequireConfirmAction]
+            public virtual async Task ResetRatingAsync()
+            {
+                var allStats = await Context.Db.Set<TStats>()
+                    .Where(s => s.GuildSettingsId == Context.Guild.Id)
+                    .ToListAsync();
+
+                foreach (var stat in allStats)
+                    stat.Reset();
+
+                await Context.Db.SaveChangesAsync();
+
+                await ReplyEmbedStampAsync("Рейтинг успешно сброшен", EmbedStyle.Successfull);
             }
         }
     }

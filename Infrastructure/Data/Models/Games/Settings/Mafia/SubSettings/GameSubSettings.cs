@@ -11,6 +11,8 @@ public record GameSubSettings
 
     public int LastWordNightCount { get; set; }
 
+    public bool IsAnonymousVoting { get; set; }
+
     public bool IsRatingGame { get; set; }
 
     public bool IsCustomGame { get; set; }

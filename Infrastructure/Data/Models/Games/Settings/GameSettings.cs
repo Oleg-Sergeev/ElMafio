@@ -1,4 +1,6 @@
-﻿namespace Infrastructure.Data.Models.Games.Settings;
+﻿using Infrastructure.Data.Models.Guild;
+
+namespace Infrastructure.Data.Models.Games.Settings;
 
 public abstract class GameSettings
 {

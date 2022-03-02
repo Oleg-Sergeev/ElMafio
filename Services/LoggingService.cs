@@ -1,4 +1,4 @@
-﻿using System;
+﻿    using System;
 using System.IO;
 using System.Threading.Tasks;
 using Core.Common;
@@ -7,6 +7,8 @@ using Discord;
 using Discord.Commands;
 using Discord.Net;
 using Discord.WebSocket;
+using Infrastructure.Data;
+using Infrastructure.Data.Models.Guild;
 using Serilog;
 using Serilog.Events;
 
@@ -16,8 +18,6 @@ public class LoggingService
 {
     public const string PropertyGuildName = "GuildName";
 
-    private const string LogsDirectory = @"Data\Logs";
-    private const string GuildLogsDirectory = LogsDirectory + @"\Guilds";
     private const string GuildLogsDefaultName = "_UnidentifiedGuilds";
     private const string OutputConsoleTemplate = "{Timestamp:HH:mm:ss:fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}";
     private const string OutputFileTemplate = "{Timestamp:dd.MM.yyyy HH:mm:ss:fff} [{Level:u3}] {Message:j}{NewLine}{Exception}";
@@ -25,12 +25,13 @@ public class LoggingService
     private const string LogTemplate = "({0:l}): Executed {1} for {2} in {3}. Raw message: {4}";
 
 
+    private readonly BotContext _db;
     private readonly DiscordSocketClient _client;
     private readonly CommandService _commandService;
     private readonly Discord.Interactions.InteractionService _interactionService;
 
 
-    public LoggingService(DiscordSocketClient client, CommandService commandService, Discord.Interactions.InteractionService interactionService)
+    public LoggingService(DiscordSocketClient client, CommandService commandService, Discord.Interactions.InteractionService interactionService, BotContext db)
     {
         _client = client;
         _commandService = commandService;
@@ -38,25 +39,9 @@ public class LoggingService
 
 
         _commandService.CommandExecuted += OnCommandExecutedAsync;
-
-        _interactionService.Log += OnLogAsync;
+        _db = db;
     }
 
-
-    public static FileStream? GetLogFile(string path)
-    {
-        if (!File.Exists(path))
-            return null;
-
-        return new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-    }
-
-    public static FileStream? GetGuildLogFileToday(ulong guildId)
-    {
-        var path = Path.Combine(GuildLogsDirectory, guildId.ToString(), $"log_{DateTime.Now:yyyyMMdd}.txt");
-
-        return GetLogFile(path);
-    }
 
 
     private async Task OnCommandExecutedAsync(Optional<CommandInfo> commandInfo, ICommandContext context, IResult result)
@@ -101,8 +86,9 @@ public class LoggingService
                 break;
 
             default:
-                if (result is ExecuteResult exeResult)
-                    guildLog.Warning(exeResult.Exception, LogTemplate,
+                var exeResult = result as ExecuteResult?;
+                if (exeResult is not null)
+                    guildLog.Warning(exeResult.Value.Exception, LogTemplate,
                                    nameof(OnCommandExecutedAsync),
                                    commandInfo.Value,
                                    context.User.Username,
@@ -116,6 +102,20 @@ public class LoggingService
                                      $"{context.Guild.Name}/{context.Channel.Name}",
                                      context.Message.Content,
                                      result.ToString());
+
+                var guildSettings = await _db.GuildSettings.FindAsync(context.Guild.Id);
+
+                if (guildSettings is not null)
+                {
+                    var errorInfo = guildSettings.DebugMode switch
+                    {
+                        DebugMode.ErrorMessages => $"\n{result.ErrorReason}",
+                        DebugMode.StackTrace => $"\n{exeResult?.Exception.ToString() ?? result.ErrorReason}",
+                        _ => null
+                    };
+
+                    msg += errorInfo;
+                }
                 break;
         }
 

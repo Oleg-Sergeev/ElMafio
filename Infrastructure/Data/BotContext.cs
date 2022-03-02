@@ -4,6 +4,7 @@ using Infrastructure.Data.Models;
 using Infrastructure.Data.Models.Games.Settings;
 using Infrastructure.Data.Models.Games.Settings.Mafia;
 using Infrastructure.Data.Models.Games.Stats;
+using Infrastructure.Data.Models.Guild;
 using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Data;
@@ -38,22 +39,6 @@ public class BotContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
-
-        modelBuilder.Entity<RussianRouletteSettings>()
-            .Property(s => s.UnicodeSmileKilled)
-                .HasDefaultValue("💀");
-
-        modelBuilder.Entity<RussianRouletteSettings>()
-            .Property(s => s.UnicodeSmileSurvived)
-                .HasDefaultValue("😎");
-
-        modelBuilder.Entity<GuildSettings>()
-            .Property(g => g.Prefix)
-            .HasDefaultValue("/");
-
-        modelBuilder.Entity<MafiaSettingsTemplate>()
-            .HasIndex(t => t.Name)
-            .IsUnique();
 
         modelBuilder.ApplyConfiguration(new GameStatsConfiguration<QuizStats>());
         modelBuilder.ApplyConfiguration(new GameStatsConfiguration<RussianRouletteStats>());

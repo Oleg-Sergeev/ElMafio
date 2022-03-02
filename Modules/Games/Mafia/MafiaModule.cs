@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Reflection;
+using System.Reflection.PortableExecutable;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,6 +24,7 @@ using Fergun.Interactive;
 using Fergun.Interactive.Pagination;
 using Infrastructure.Data.Models.Games.Settings.Mafia;
 using Infrastructure.Data.Models.Games.Stats;
+using Infrastructure.Data.Models.Guild;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Modules.Common.MultiSelect;
@@ -81,6 +83,8 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
         await ReplyEmbedAsync("Настройки корректны", EmbedStyle.Successfull);
 
+        var guildSettings = await Context.GetGuildSettingsAsync();
+
         try
         {
             var settings = await _settingsService.GetSettingsOrCreateAsync(Context);
@@ -127,13 +131,26 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
         }
         catch (GameSetupAbortedException e)
         {
-            await ReplyEmbedAsync($"**Игра была аварийно прервана:**\n{e.Message}", EmbedStyle.Error, "Ошибка настроек");
+            var msg = guildSettings.DebugMode switch
+            {
+                DebugMode.ErrorMessages => e.Message,
+                DebugMode.StackTrace => e.ToString(),
+                _ => null
+            };
+
+            await ReplyEmbedAsync($"**Игра была аварийно прервана:**\n{msg}", EmbedStyle.Error, "Ошибка настроек");
 
             data.IsPlaying = false;
         }
         catch (Exception e)
         {
-            await ReplyEmbedAsync($"**Игра была аварийно прервана из-за непредвиненной ошибки:**\n{e.Message}", EmbedStyle.Error, "Ошибка во время игры");
+            var msg = guildSettings.DebugMode switch
+            {
+                DebugMode.ErrorMessages => e.Message,
+                DebugMode.StackTrace => e.ToString(),
+                _ => null
+            };
+            await ReplyEmbedAsync($"**Игра была аварийно прервана из-за непредвиненной ошибки:**\n{msg}", EmbedStyle.Error, "Ошибка во время игры");
 
             DeleteGameData();
         }
@@ -161,15 +178,13 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
         ArgumentNullException.ThrowIfNull(settings.CurrentTemplate);
 
-        var bot = Context.Guild.GetUser(Context.Client.CurrentUser.Id);
-
-        if (settings.ClearChannelsOnStart && !bot.HasGuildPermission(GuildPermission.ManageMessages))
+        if (settings.ClearChannelsOnStart && !Bot.HasGuildPermission(GuildPermission.ManageMessages))
             return PreconditionResult.FromError($"Для очистки сообщений необходимо право {GuildPermission.ManageMessages}");
 
-        if ((settings.GeneralVoiceChannelId is not null || settings.MurdersVoiceChannelId is not null) && !bot.HasGuildPermission(GuildPermission.MoveMembers))
+        if ((settings.GeneralVoiceChannelId is not null || settings.MurdersVoiceChannelId is not null) && !Bot.HasGuildPermission(GuildPermission.MoveMembers))
             return PreconditionResult.FromError($"Для корректной работы с голосовыми каналами необходимо право {GuildPermission.MoveMembers}");
 
-        if (settings.CurrentTemplate.ServerSubSettings.RenameUsers && !bot.HasGuildPermission(GuildPermission.ManageNicknames))
+        if (settings.CurrentTemplate.ServerSubSettings.RenameUsers && !Bot.HasGuildPermission(GuildPermission.ManageNicknames))
             return PreconditionResult.FromError($"Для возможности менять никнеймы необходимо право {GuildPermission.ManageNicknames}");
 
 
@@ -189,7 +204,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
         if (!gameSettings.IsFillWithMurders && rolesSettings.BlackRolesCount == 0)
             return PreconditionResult.FromError("Для игры необходимо наличие хотя бы одной черной роли. " +
-                    "Измените настройки ролей, добавив черную роль, или назначьте автозаполнение ролями мафии");
+                "Измените настройки ролей, добавив черную роль, или назначьте автозаполнение ролями мафии");
 
         if (rolesSettings.RedRolesCount + rolesSettings.NeutralRolesCount == data.Players.Count)
             return PreconditionResult.FromError("Невозможно добавить черную роль на стол: не хватает места." +
@@ -198,7 +213,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
         if (gameSettings.IsFillWithMurders && rolesSettings.RedRolesCount == 0)
             return PreconditionResult.FromError("Для игры необходимо наличие хотя бы одной красной роли. " +
-                    "Измените настройки ролей, добавив красную роль, или назначьте автозаполнение ролями мирных жителей");
+                "Измените настройки ролей, добавив красную роль, или назначьте автозаполнение ролями мирных жителей");
 
         if (rolesSettings.BlackRolesCount + rolesSettings.NeutralRolesCount == data.Players.Count)
             return PreconditionResult.FromError("Невозможно добавить красную роль на стол: не хватает места." +
@@ -350,10 +365,6 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
         }
 
 
-        protected override IOrderedQueryable<MafiaStats> GetRatingQuery()
-            => base.GetRatingQuery().ThenByDescending(stat => stat.BlacksWinRate);
-
-
         protected override EmbedBuilder GetStatsEmbedBuilder(MafiaStats stats, IUser user)
         {
             var embedBuilder = base.GetStatsEmbedBuilder(stats, user);
@@ -378,105 +389,123 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
             public MafiaAdminModule(InteractiveService interactiveService) : base(interactiveService)
             {
             }
+        }
+    }
+
+
+    public class MafiaRatingModule : RatingModule
+    {
+        public MafiaRatingModule(InteractiveService interactiveService) : base(interactiveService)
+        {
+        }
+
+        protected override IOrderedQueryable<MafiaStats> GetRatingQuery()
+            => base.GetRatingQuery().ThenByDescending(stat => stat.BlacksWinRate);
 
 
 
-            [Group]
-            [RequireConfirmAction(false)]
-            [RequireOwner(Group = "perm")]
-            public class ScoresModule : GuildModuleBase
+
+        [Group]
+        [RequireConfirmAction(false)]
+        [RequireOwner(Group = "perm")]
+        public class ScoresModule : CommandGuildModuleBase
+        {
+            public ScoresModule(InteractiveService interactiveService) : base(interactiveService)
             {
-                public ScoresModule(InteractiveService interactiveService) : base(interactiveService)
+            }
+
+
+
+            [Command("ДопОчки+")]
+            [Alias("ДО+")]
+            [Summary("Добавить дополнительные очки")]
+            public async Task AddExtraScoresAsync([Summary("Кол-во добавляемых доп. очков")] float scores, [Summary("Игрок")] IUser? user = null)
+            {
+                if (!await TryUpdateScoresAsync(scores, user, true))
+                    return;
+
+                await ReplyEmbedStampAsync("Дополнительные очки успешно начислены", EmbedStyle.Successfull);
+            }
+
+            [Command("ДопОчки-")]
+            [Alias("ДО-")]
+            [Summary("Убрать дополнительные очки")]
+            public async Task RemoveExtraScoresAsync([Summary("Кол-во убавляемых доп. очков")] float scores, [Summary("Игрок")] IUser? user = null)
+            {
+                if (!await TryUpdateScoresAsync(-scores, user, true))
+                    return;
+
+                await ReplyEmbedStampAsync("Дополнительные очки успешно списаны", EmbedStyle.Successfull);
+            }
+
+            [Command("ДопОчкиСброс")]
+            [Alias("ДОС")]
+            [Summary("Сбросить дополнительные очки")]
+            public async Task ResetExtraScoresAsync([Summary("Игрок")] IUser? user = null)
+            {
+                if (!await TryUpdateScoresAsync(null, user, true))
+                    return;
+
+                await ReplyEmbedStampAsync("Дополнительные очки успешно сброшены", EmbedStyle.Successfull);
+            }
+
+
+            [Command("ШтрафОчки+")]
+            [Alias("ШО+")]
+            [Summary("Добавить штрафные очки")]
+            public async Task AddPenaltyScoresAsync([Summary("Кол-во добалвяемых штрафных очков")] float scores, [Summary("Игрок")] IUser? user = null)
+            {
+                if (!await TryUpdateScoresAsync(scores, user, false))
+                    return;
+
+                await ReplyEmbedStampAsync("Штрафные очки успешно начислены", EmbedStyle.Successfull);
+            }
+
+            [Command("ШтрафОчки-")]
+            [Alias("ШО-")]
+            [Summary("Убрать штрафные очки")]
+            public async Task RemovePenaltyScoresAsync([Summary("Кол-во убавляемых штрафных очков")] float scores, [Summary("Игрок")] IUser? user = null)
+            {
+                if (!await TryUpdateScoresAsync(-scores, user, false))
+                    return;
+
+                await ReplyEmbedStampAsync("Штрафные очки успешно списаны", EmbedStyle.Successfull);
+            }
+
+            [Command("ШтрафОчкиСброс")]
+            [Alias("ШОС")]
+            [Summary("Сбросить штрафные очки")]
+            public async Task ResetPenaltyScoresAsync([Summary("Игрок")] IUser? user = null)
+            {
+                if (!await TryUpdateScoresAsync(null, user, false))
+                    return;
+
+                await ReplyEmbedStampAsync("Штрафные очки успешно сброшены", EmbedStyle.Successfull);
+            }
+
+
+            private async Task<bool> TryUpdateScoresAsync(float? scores, IUser? user, bool extra)
+            {
+                user ??= Context.User;
+
+                var userStat = await Context.Db.MafiaStats
+                    .FirstOrDefaultAsync(ms => ms.GuildSettingsId == Context.Guild.Id && ms.UserId == user.Id);
+
+                if (userStat is null)
                 {
+                    await ReplyEmbedAsync($"Статистика игрока {user.GetFullMention()} не найдена", EmbedStyle.Error);
+
+                    return false;
                 }
 
+                if (extra)
+                    userStat.ExtraScores += scores ?? -userStat.ExtraScores;
+                else
+                    userStat.PenaltyScores += scores ?? -userStat.PenaltyScores;
 
+                await Context.Db.SaveChangesAsync();
 
-                [Command("ДопОчки+")]
-                [Alias("ДО+")]
-                public async Task AddExtraScoresAsync(float scores, IUser? user = null)
-                {
-                    if (!await TryUpdateScoresAsync(scores, user, true))
-                        return;
-
-                    await ReplyEmbedStampAsync("Дополнительные очки успешно начислены", EmbedStyle.Successfull);
-                }
-
-                [Command("ДопОчки-")]
-                [Alias("ДО-")]
-                public async Task RemoveExtraScoresAsync(float scores, IUser? user = null)
-                {
-                    if (!await TryUpdateScoresAsync(-scores, user, true))
-                        return;
-
-                    await ReplyEmbedStampAsync("Дополнительные очки успешно списаны", EmbedStyle.Successfull);
-                }
-
-                [Command("ДопОчкиСброс")]
-                [Alias("ДОС")]
-                public async Task ResetExtraScoresAsync(IUser? user = null)
-                {
-                    if (!await TryUpdateScoresAsync(null, user, true))
-                        return;
-
-                    await ReplyEmbedStampAsync("Дополнительные очки успешно сброшены", EmbedStyle.Successfull);
-                }
-
-
-                [Command("ШтрафОчки+")]
-                [Alias("ШО+")]
-                public async Task AddPenaltyScoresAsync(float scores, IUser? user = null)
-                {
-                    if (!await TryUpdateScoresAsync(scores, user, false))
-                        return;
-
-                    await ReplyEmbedStampAsync("Штрафные очки успешно начислены", EmbedStyle.Successfull);
-                }
-
-                [Command("ШтрафОчки-")]
-                [Alias("ШО-")]
-                public async Task RemovePenaltyScoresAsync(float scores, IUser? user = null)
-                {
-                    if (!await TryUpdateScoresAsync(-scores, user, false))
-                        return;
-
-                    await ReplyEmbedStampAsync("Штрафные очки успешно списаны", EmbedStyle.Successfull);
-                }
-
-                [Command("ШтрафОчкиСброс")]
-                [Alias("ШОС")]
-                public async Task ResetPenaltyScoresAsync(IUser? user = null)
-                {
-                    if (!await TryUpdateScoresAsync(null, user, false))
-                        return;
-
-                    await ReplyEmbedStampAsync("Штрафные очки успешно сброшены", EmbedStyle.Successfull);
-                }
-
-
-                private async Task<bool> TryUpdateScoresAsync(float? scores, IUser? user, bool extra)
-                {
-                    user ??= Context.User;
-
-                    var userStat = await Context.Db.MafiaStats
-                        .FirstOrDefaultAsync(ms => ms.GuildSettingsId == Context.Guild.Id && ms.UserId == user.Id);
-
-                    if (userStat is null)
-                    {
-                        await ReplyEmbedAsync($"Статистика игрока {user.GetFullMention()} не найдена", EmbedStyle.Error);
-
-                        return false;
-                    }
-
-                    if (extra)
-                        userStat.ExtraScores += scores ?? -userStat.ExtraScores;
-                    else
-                        userStat.PenaltyScores += scores ?? -userStat.PenaltyScores;
-
-                    await Context.Db.SaveChangesAsync();
-
-                    return true;
-                }
+                return true;
             }
         }
     }
@@ -487,7 +516,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
     [Summary("Раздел для управления шаблонами: добавление, удаление, изменение имени и прочее")]
     [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
     [RequireOwner(Group = "perm")]
-    public class TemplatesModule : GuildModuleBase
+    public class TemplatesModule : CommandGuildModuleBase
     {
         private readonly IGameSettingsService<MafiaSettings> _settingsService;
 
@@ -721,7 +750,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
     [RequireOwner(Group = "perm")]
     [Summary("Настройки для мафии включают в себя настройки сервера(используемые роли, каналы и категорию каналов) и настройки самой игры. " +
         "Для подробностей введите команду `Мафия.Настройки.Помощь`")]
-    public class SettingsModule : GuildModuleBase
+    public class SettingsModule : CommandGuildModuleBase
     {
         private readonly IGameSettingsService<MafiaSettings> _settingsService;
 
@@ -975,7 +1004,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
                                 if (ulong.TryParse(v?.ToString(), out var id))
                                     return Context.Guild.GetMentionFromId(id);
 
-                                return v?.ToString() ?? n_a;
+                                return v?.ToString()?.Truncate(900) ?? n_a;
                             })),
                             IsInline = true
                         }
@@ -1453,6 +1482,8 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
             var paginatorBuilder = new StaticPaginatorBuilder()
                 .WithActionOnCancellation(ActionOnStop.DeleteMessage);
 
+            var orderedPageBuilders = new List<(int order, IPageBuilder pageBuilder)>();
+
             foreach (var section in gameRolesSection.GetChildren())
             {
                 var roleFields = section.GetSectionFields();
@@ -1468,8 +1499,11 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
                 if (roleFields.TryGetValue("Color", out var colorStr) && uint.TryParse(colorStr, NumberStyles.HexNumber, null, out var rawColor))
                     pageBuilder.WithColor(new Color(rawColor));
 
-                paginatorBuilder.AddPage(pageBuilder);
+                orderedPageBuilders.Add((Convert.ToInt32(roleFields.GetValueOrDefault("Order")), pageBuilder));
             }
+
+
+            paginatorBuilder.WithPages(orderedPageBuilders.OrderBy(x => x.order).Select(x => x.pageBuilder));
 
             if (!sendToServer)
                 await Interactive.SendPaginatorAsync(paginatorBuilder.Build(), await Context.User.CreateDMChannelAsync(), TimeSpan.FromMinutes(15));

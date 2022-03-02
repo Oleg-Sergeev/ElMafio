@@ -4,8 +4,8 @@ using System.Threading.Tasks;
 using Discord.Commands;
 using Discord.WebSocket;
 using Infrastructure.Data;
-using Infrastructure.Data.Models;
 using Infrastructure.Data.Models.Games.Settings;
+using Infrastructure.Data.Models.Guild;
 using Microsoft.EntityFrameworkCore;
 
 namespace Services;

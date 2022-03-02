@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using Core.Common;
 using Core.Exceptions;
@@ -33,6 +34,8 @@ public class MafiaSetupService : IMafiaSetupService
     {
         var tasks = new List<Task>();
 
+        var token = context.MafiaData.TokenSource.Token;
+
         var guildData = context.GuildData;
         var commandContext = context.CommandContext;
 
@@ -43,29 +46,41 @@ public class MafiaSetupService : IMafiaSetupService
 
         foreach (var channel in commandContext.Guild.Channels)
         {
-            var hasPerm = channel.Users.Contains(bot)
-                && channel.GetPermissionOverwrite(commandContext.Guild.EveryoneRole)?.ManageRoles != PermValue.Deny
-                && channel.GetPermissionOverwrite(bot)?.ManageRoles != PermValue.Deny;
+            var hasPerm = bot.GetPermissions(channel).ViewChannel && channel.GetPermissionOverwrite(bot)?.ManageRoles != PermValue.Deny;
 
-            if (channel.Id == guildData.GeneralTextChannel.Id || !hasPerm)
+            if (!hasPerm)
                 continue;
+
+            if (channel.Id == guildData.GeneralTextChannel.Id)
+            {
+                var mafiaPerms = channel.GetPermissionOverwrite(guildData.MafiaRole);
+
+                if (!mafiaPerms?.AreSame(denyWrite) ?? true)
+                    tasks.Add(AddPermsAsync(denyWrite));
+
+                continue;
+            }
 
             var perms = channel.GetPermissionOverwrite(guildData.MafiaRole);
 
             if (perms?.ViewChannel == PermValue.Deny)
                 continue;
 
-            tasks.Add(Task.Run(async() =>
+            tasks.Add(AddPermsAsync(denyView));
+
+
+
+            async Task AddPermsAsync(OverwritePermissions perms)
             {
                 try
                 {
-                    await channel.AddPermissionOverwriteAsync(guildData.MafiaRole, denyView);
+                    await channel.AddPermissionOverwriteAsync(guildData.MafiaRole, perms, new() { CancelToken = token });
                 }
                 catch (HttpException e)
                 {
                     await HandleHttpExceptionAsync($"Не удалось добавить переопределение для канала `{channel.Name}`", e, context);
                 }
-            }));
+            }
         }
 
 
@@ -101,24 +116,24 @@ public class MafiaSetupService : IMafiaSetupService
         }
 
 
-        if (!Equals(guildData.GeneralTextChannel.GetPermissionOverwrite(commandContext.Guild.EveryoneRole), denyView))
+        if (!guildData.GeneralTextChannel.GetPermissionOverwrite(commandContext.Guild.EveryoneRole)?.AreSame(denyView) ?? true)
             await guildData.GeneralTextChannel.AddPermissionOverwriteAsync(commandContext.Guild.EveryoneRole, denyView);
 
-        if (!Equals(guildData.MurderTextChannel.GetPermissionOverwrite(commandContext.Guild.EveryoneRole), denyView))
+        if (!guildData.MurderTextChannel.GetPermissionOverwrite(commandContext.Guild.EveryoneRole)?.AreSame(denyView) ?? true)
             await guildData.MurderTextChannel.AddPermissionOverwriteAsync(commandContext.Guild.EveryoneRole, denyView);
 
 
-
-        static bool Equals(OverwritePermissions? o1, OverwritePermissions? o2)
-            => o1?.AllowValue == o2?.AllowValue && o1?.DenyValue == o2?.DenyValue;
+        Task.WaitAll(tasks.ToArray(), token);
     }
 
     public async Task SetupUsersAsync(MafiaContext context)
     {
         var tasks = new List<Task>();
 
+        var token = context.MafiaData.TokenSource.Token;
+
         foreach (var player in context.MafiaData.Players)
-            tasks.Add(Task.Run(() => HandlePlayerAsync(player)));
+            tasks.Add(Task.Run(() => HandlePlayerAsync(player), token));
 
         await Task.WhenAll(tasks);
 
@@ -129,7 +144,7 @@ public class MafiaSetupService : IMafiaSetupService
             var guildData = context.GuildData;
 
 
-            await guildData.MurderTextChannel.RemovePermissionOverwriteAsync(player);
+            await guildData.MurderTextChannel.RemovePermissionOverwriteAsync(player, new() { CancelToken = token });
 
             guildData.PlayerRoleIds.Add(player.Id, new List<ulong>());
 
@@ -140,7 +155,7 @@ public class MafiaSetupService : IMafiaSetupService
             {
                 try
                 {
-                    await guildPlayer.ModifyAsync(props => props.Nickname = $"_{guildPlayer.Username}_");
+                    await guildPlayer.ModifyAsync(props => props.Nickname = $"_{guildPlayer.Username}_", new() { CancelToken = token });
 
                     guildData.OverwrittenNicknames.Add(guildPlayer.Id);
                 }
@@ -160,7 +175,7 @@ public class MafiaSetupService : IMafiaSetupService
                 {
                     try
                     {
-                        await guildPlayer.RemoveRoleAsync(role);
+                        await guildPlayer.RemoveRoleAsync(role, new() { CancelToken = token });
 
                         guildData.PlayerRoleIds[player.Id].Add(role.Id);
                     }
@@ -171,7 +186,7 @@ public class MafiaSetupService : IMafiaSetupService
                 }
             }
 
-            await player.AddRoleAsync(guildData.MafiaRole);
+            await player.AddRoleAsync(guildData.MafiaRole, new() { CancelToken = token });
         }
     }
 
@@ -306,18 +321,20 @@ public class MafiaSetupService : IMafiaSetupService
     {
         var tasks = new List<Task>();
 
+        var token = context.MafiaData.TokenSource.Token;
+
         foreach (var role in context.RolesData.AllRoles.Values)
             tasks.Add(Task.Run(async () =>
             {
                 try
                 {
-                    await role.Player.SendMessageAsync(embed: MafiaHelper.GetEmbed(role, _config));
+                    await role.Player.SendMessageAsync(embed: MafiaHelper.GetEmbed(role, _config), options: new() { CancelToken = token });
                 }
                 catch (HttpException e)
                 {
                     await HandleHttpExceptionAsync($"Не удалось отправить сообщение пользователю {role.Player.GetFullMention()}", e, context);
                 }
-            }));
+            }, token));
 
 
         await Task.WhenAll(tasks);
@@ -327,6 +344,8 @@ public class MafiaSetupService : IMafiaSetupService
     {
         var tasks = new List<Task>();
 
+        var token = context.MafiaData.TokenSource.Token;
+
         foreach (var role in context.RolesData.AllRoles.Values)
             tasks.Add(Task.Run(async () =>
             {
@@ -334,17 +353,18 @@ public class MafiaSetupService : IMafiaSetupService
 
                 try
                 {
-                    await role.Player.SendMessageAsync(embed: EmbedHelper.CreateEmbed(welcomeMsg, "Мафия"));
+                    await role.Player.SendMessageAsync(embed: EmbedHelper.CreateEmbed(welcomeMsg, "Мафия"), options: new() { CancelToken = token });
                 }
                 catch (HttpException e)
                 {
                     await HandleHttpExceptionAsync($"Не удалось отправить сообщение пользователю {role.Player.GetFullMention()}", e, context);
                 }
-            }));
+            }, token));
 
 
         await Task.WhenAll(tasks);
     }
+
 
     private static async Task HandleHttpExceptionAsync(string message, HttpException e, MafiaContext context)
     {

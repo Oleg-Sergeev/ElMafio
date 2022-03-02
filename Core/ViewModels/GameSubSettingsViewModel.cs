@@ -11,6 +11,7 @@ public class GameSubSettingsViewModel
     [DisplayName("Число ночей с последним словом")]
     public int? LastWordNightCount { get; init; }
 
+    public bool? IsAnonymousVoting { get; set; }
 
     [DisplayName("Рейтинговая игра")]
     public bool? IsRatingGame { get; init; }

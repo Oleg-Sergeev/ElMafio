@@ -11,23 +11,26 @@ using Discord.Commands;
 using Discord.Net;
 using Fergun.Interactive;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using Modules.Common.MultiSelect;
 
 namespace Modules.Help;
 
 [Name("Помощь")]
-public class HelpModule : GuildModuleBase
+public class HelpModule : CommandGuildModuleBase
 {
     private const char EmptySpace = '⠀';
 
     private readonly CommandService _commandService;
     private readonly IConfiguration _config;
+    private readonly IReadOnlyDictionary<string, string> _commandExamples;
 
 
-    public HelpModule(InteractiveService interactiveService, CommandService commands, IConfiguration config) : base(interactiveService)
+    public HelpModule(InteractiveService interactiveService, CommandService commands, IConfiguration config, IOptionsSnapshot<Dictionary<string, string>> commandExamples) : base(interactiveService)
     {
         _commandService = commands;
         _config = config;
+        _commandExamples = commandExamples.Value;
     }
 
 

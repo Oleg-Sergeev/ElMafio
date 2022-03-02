@@ -262,7 +262,7 @@ public class RussianRouletteModule : GameModule<RussianRouletteStats>
     [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
     [RequireOwner(Group = "perm")]
     [RequireBotPermission(GuildPermission.AddReactions)]
-    public class SetSmileModule : GuildModuleBase
+    public class SetSmileModule : CommandGuildModuleBase
     {
         private readonly IGameSettingsService<RussianRouletteSettings> _settingsService;
 

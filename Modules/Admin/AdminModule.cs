@@ -2,24 +2,22 @@
 using System.Data;
 using System.Linq;
 using System.Net.Http;
-using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Core.Common;
 using Core.Extensions;
 using Discord;
 using Discord.Commands;
+using Discord.WebSocket;
 using Fergun.Interactive;
 using Microsoft.EntityFrameworkCore;
-using Serilog;
-using Services;
 
 namespace Modules.Admin;
 
 [Group("Админ")]
 [Alias("а")]
 [Summary("Набор команд для управления сервером и получения полезной информации")]
-public class AdminModule : GuildModuleBase
+public class AdminModule : CommandGuildModuleBase
 {
     public AdminModule(InteractiveService interactiveService) : base(interactiveService)
     {
@@ -176,7 +174,7 @@ public class AdminModule : GuildModuleBase
     [Summary("Добавление и удаление пользовательских смайлов")]
     [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
     [RequireOwner(Group = "perm")]
-    public class SmileModule : GuildModuleBase
+    public class SmileModule : CommandGuildModuleBase
     {
         public SmileModule(InteractiveService interactiveService) : base(interactiveService)
         {
@@ -294,50 +292,6 @@ public class AdminModule : GuildModuleBase
             await Context.Guild.DeleteEmoteAsync(guildEmote);
 
             await ReplyEmbedAsync("Смайл успешно удален", EmbedStyle.Successfull);
-        }
-    }
-
-
-    [RequireOwner]
-    [Group]
-    public class OwnerModule : GuildModuleBase
-    {
-        public OwnerModule(InteractiveService interactiveService) : base(interactiveService)
-        {
-        }
-
-
-        [Command("Лог")]
-        public async Task GetFileLogTodayAsync()
-        {
-            using var filestream = LoggingService.GetGuildLogFileToday(Context.Guild.Id);
-
-            if (filestream is null)
-            {
-                await ReplyEmbedAsync("Файл не найден", EmbedStyle.Error);
-
-                return;
-            }
-
-            await ReplyEmbedAsync("Файл успешно отправлен", EmbedStyle.Successfull);
-
-            await Context.User.SendFileAsync(filestream, filestream.Name);
-        }
-
-
-        [Command("Рестарт")]
-        public async Task RestartAsync()
-        {
-            await ReplyEmbedAsync("Перезапуск...", EmbedStyle.Debug);
-
-            Log.Debug("({0:l}): Restart request received from server {1} by user {2}",
-                      nameof(RestartAsync),
-                      Context.Guild.Name,
-                      Context.User.GetFullName());
-
-            System.Diagnostics.Process.Start(Assembly.GetEntryAssembly()!.Location.Replace("dll", "exe"));
-
-            Environment.Exit(0);
         }
     }
 }

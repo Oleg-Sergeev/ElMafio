@@ -2,7 +2,7 @@
 using Infrastructure.Data.Models.Games.Settings;
 using Infrastructure.Data.Models.Games.Settings.Mafia;
 
-namespace Infrastructure.Data.Models;
+namespace Infrastructure.Data.Models.Guild;
 
 public class GuildSettings
 {
@@ -10,14 +10,21 @@ public class GuildSettings
     public ulong Id { get; set; }
 
 
-    public string Prefix { get; set; } = string.Empty;
-
-    public ulong? RoleMuteId { get; set; } // TODO: Remove
+    public string Prefix { get; set; }
 
     public ulong? LogChannelId { get; set; }
 
+    public DebugMode DebugMode { get; set; }
 
     public MafiaSettings MafiaSettings { get; set; } = null!;
 
     public RussianRouletteSettings RussianRouletteSettings { get; set; } = null!;
+
+
+    public GuildSettings()
+    {
+        DebugMode = DebugMode.Off;
+
+        Prefix = "/";
+    }
 }

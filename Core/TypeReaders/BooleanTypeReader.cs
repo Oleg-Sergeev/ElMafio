@@ -12,10 +12,10 @@ public class BooleanTypeReader : TypeReader
         if (bool.TryParse(input, out var res))
             return Task.FromResult(TypeReaderResult.FromSuccess(res));
 
-        if (input.ToLower() == "да" || input.ToLower() == "yes" || input.ToLower() == "y" || input[0] == '+')
+        if (input.ToLower() == "да" || input.ToLower() == "yes" || input.ToLower() == "y" || input[0] == '+' || input[0] == '1')
             return Task.FromResult(TypeReaderResult.FromSuccess(true));
 
-        if (input.ToLower() == "нет" || input.ToLower() == "no" || input.ToLower() == "n" || input[0] == '-')
+        if (input.ToLower() == "нет" || input.ToLower() == "no" || input.ToLower() == "n" || input[0] == '-' || input[0] == '0')
             return Task.FromResult(TypeReaderResult.FromSuccess(false));
 
         if (input.ToLower() == "x" || input.ToLower() == "х" || input.ToLower() == "=")

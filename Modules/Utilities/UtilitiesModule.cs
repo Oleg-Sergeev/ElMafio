@@ -7,7 +7,7 @@ using Fergun.Interactive;
 namespace Modules.Utilities;
 
 [Name("Утилиты")]
-public class UtilitiesModule : GuildModuleBase
+public class UtilitiesModule : CommandGuildModuleBase
 {
     public UtilitiesModule(InteractiveService interactiveService) : base(interactiveService)
     {

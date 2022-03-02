@@ -10,7 +10,7 @@ namespace Modules.Settings;
 [Alias("н")]
 [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
 [RequireOwner(Group = "perm")]
-public class SettingsModule : GuildModuleBase
+public class SettingsModule : CommandGuildModuleBase
 {
     public SettingsModule(InteractiveService interactiveService) : base(interactiveService)
     {

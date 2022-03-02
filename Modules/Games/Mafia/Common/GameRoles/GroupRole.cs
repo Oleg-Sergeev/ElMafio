@@ -15,6 +15,8 @@ namespace Modules.Games.Mafia.Common.GameRoles;
 
 public abstract class GroupRole : GameRole
 {
+    protected bool EarlyVotingTermination { get; init; }
+
     protected IReadOnlyList<GameRole> Roles { get; }
 
     protected IEnumerable<GameRole> AliveRoles => Roles.Where(r => r.IsAlive);
@@ -24,6 +26,8 @@ public abstract class GroupRole : GameRole
 
     public GroupRole(IReadOnlyList<GameRole> roles, IOptionsSnapshot<GameRoleData> options) : base(roles[0].Player, options)
     {
+        EarlyVotingTermination = false;
+
         Roles = roles;
     }
 
@@ -43,12 +47,14 @@ public abstract class GroupRole : GameRole
         var playersVotes = new Dictionary<IGuildUser, Vote?>();
         //var votesCount = new Dictionary<IGuildUser, int>();
 
+        var playersNames = new List<string>();
 
         foreach (var voter in voters)
+        {
             playersVotes.Add(voter.Player, null);
 
-        var playersNames = voters.Select(p => p.Player.GetFullName());
-
+            playersNames.Add($"{playersNames.Count + 1} {voter.Player.GetFullName()}");
+        }
 
         var voteProgressEmbed = GetVotingInfoEmbed();
 
@@ -64,7 +70,7 @@ public abstract class GroupRole : GameRole
 
 
         var roles = voters.ToDictionary(p => p.Player.Id);
-        var notVotedRoles = new Dictionary<ulong, GameRole>(roles);
+        var notEntriedRoles = new Dictionary<ulong, GameRole>(roles);
 
         var timeout = TimeSpan.FromSeconds(context.VoteTime);
 
@@ -80,7 +86,7 @@ public abstract class GroupRole : GameRole
 
                 try
                 {
-                    while (timeout.TotalSeconds > 0)
+                    while (timeout.TotalSeconds > 0 && (!EarlyVotingTermination || votes.Count < roles.Count))
                     {
                         await Task.Delay(5000, token);
 
@@ -101,9 +107,9 @@ public abstract class GroupRole : GameRole
 
 
 
-        while (notVotedRoles.Count > 0 && timeout.TotalSeconds > 0 && !token.IsCancellationRequested)
+        while (notEntriedRoles.Count > 0 && timeout.TotalSeconds > 0 && !token.IsCancellationRequested)
         {
-            var res = await context.Interactive.NextMessageComponentAsync(m => m.Message.Id == entryVoteMsg.Id && notVotedRoles.ContainsKey(m.User.Id),
+            var res = await context.Interactive.NextMessageComponentAsync(m => m.Message.Id == entryVoteMsg.Id && notEntriedRoles.ContainsKey(m.User.Id),
                 timeout: timeout,
                 cancellationToken: token);
 
@@ -112,9 +118,9 @@ public abstract class GroupRole : GameRole
             {
                 var interaction = res.Value;
 
-                var role = notVotedRoles[res.Value.User.Id];
+                var role = notEntriedRoles[res.Value.User.Id];
 
-                notVotedRoles.Remove(interaction.User.Id);
+                notEntriedRoles.Remove(interaction.User.Id);
 
 
                 tasks.Add(Task.Run(async () =>
@@ -148,10 +154,11 @@ public abstract class GroupRole : GameRole
                 break;
         }
 
+        tasks.Add(entryVoteMsg.DeleteAsync());
 
         try
         {
-            await Task.WhenAll(tasks);
+            Task.WaitAll(tasks.ToArray());
         }
         catch (AggregateException ae)
         {
@@ -161,7 +168,7 @@ public abstract class GroupRole : GameRole
             throw;
         }
 
-        foreach (var role in notVotedRoles.Values)
+        foreach (var role in notEntriedRoles.Values)
         {
             role.HandleChoice(null);
 
@@ -283,11 +290,17 @@ public abstract class GroupRole : GameRole
 
 
         Embed GetVotingInfoEmbed()
-            => new EmbedBuilder()
-            .WithTitle($"Дневное голосование #")
-            .AddField("Игрок", string.Join('\n', playersNames), true)
-            .AddField("Голос", string.Join('\n', playersVotes.Values.Select(v => v is null ? "None" : v.IsSkip ? "Skip" : v.Option?.GetFullName() ?? "None")), true)
+        {
+            var showNicknames = !context.SettingsTemplate.GameSubSettings.IsAnonymousVoting;
+
+            int n = 1;
+
+            return new EmbedBuilder()
+            .WithTitle("Дневное голосование")
+            .AddField("Игрок", string.Join('\n', showNicknames ? playersNames : Enumerable.Repeat("********", playersVotes.Count)), true)
+            .AddField("Голос", string.Join('\n', playersVotes.Values.Select(v => $"{n++} {(v is null ? "None" : v.IsSkip ? "Skip" : v.Option?.GetFullName() ?? "None")}")), true)
             .Build();
+        }
     }
 
 

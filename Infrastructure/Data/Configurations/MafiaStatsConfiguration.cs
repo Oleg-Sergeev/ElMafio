@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Infrastructure.Data.Configurations;
 
-public class SomeClass : GameStatsConfiguration<MafiaStats>
+public class MafiaStatsConfiguration : GameStatsConfiguration<MafiaStats>
 {
     private static readonly string ScoresComputed =
             $"CAST(([{nameof(MafiaStats.WinsCount)}] " +

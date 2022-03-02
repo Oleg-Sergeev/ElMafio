@@ -4,6 +4,7 @@ using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,10 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations
 {
     [DbContext(typeof(BotContext))]
-    partial class GuildContextModelSnapshot : ModelSnapshot
+    [Migration("20220225174744_RemoveMuteRoleIdAndMisc")]
+    partial class RemoveMuteRoleIdAndMisc
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -113,9 +115,6 @@ namespace Infrastructure.Migrations
                         .HasColumnType("bit");
 
                     b.Property<bool>("ConditionContinueGameWithNeutrals")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsAnonymousVoting")
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsCustomGame")
@@ -452,15 +451,10 @@ namespace Infrastructure.Migrations
                     b.ToTable("RussianRouletteStats");
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.Guild.GuildSettings", b =>
+            modelBuilder.Entity("Infrastructure.Data.Models.GuildSettings", b =>
                 {
                     b.Property<decimal>("Id")
                         .HasColumnType("decimal(20,0)");
-
-                    b.Property<int>("DebugMode")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(0);
 
                     b.Property<decimal?>("LogChannelId")
                         .HasColumnType("decimal(20,0)");
@@ -495,7 +489,7 @@ namespace Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("CurrentTemplateId");
 
-                    b.HasOne("Infrastructure.Data.Models.Guild.GuildSettings", "GuildSettings")
+                    b.HasOne("Infrastructure.Data.Models.GuildSettings", "GuildSettings")
                         .WithOne("MafiaSettings")
                         .HasForeignKey("Infrastructure.Data.Models.Games.Settings.Mafia.MafiaSettings", "GuildSettingsId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -553,7 +547,7 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Infrastructure.Data.Models.Games.Settings.RussianRouletteSettings", b =>
                 {
-                    b.HasOne("Infrastructure.Data.Models.Guild.GuildSettings", "GuildSettings")
+                    b.HasOne("Infrastructure.Data.Models.GuildSettings", "GuildSettings")
                         .WithOne("RussianRouletteSettings")
                         .HasForeignKey("Infrastructure.Data.Models.Games.Settings.RussianRouletteSettings", "GuildSettingsId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -564,7 +558,7 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Infrastructure.Data.Models.Games.Stats.MafiaStats", b =>
                 {
-                    b.HasOne("Infrastructure.Data.Models.Guild.GuildSettings", "GuildSettings")
+                    b.HasOne("Infrastructure.Data.Models.GuildSettings", "GuildSettings")
                         .WithMany()
                         .HasForeignKey("GuildSettingsId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -583,7 +577,7 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Infrastructure.Data.Models.Games.Stats.QuizStats", b =>
                 {
-                    b.HasOne("Infrastructure.Data.Models.Guild.GuildSettings", "GuildSettings")
+                    b.HasOne("Infrastructure.Data.Models.GuildSettings", "GuildSettings")
                         .WithMany()
                         .HasForeignKey("GuildSettingsId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -602,7 +596,7 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Infrastructure.Data.Models.Games.Stats.RussianRouletteStats", b =>
                 {
-                    b.HasOne("Infrastructure.Data.Models.Guild.GuildSettings", "GuildSettings")
+                    b.HasOne("Infrastructure.Data.Models.GuildSettings", "GuildSettings")
                         .WithMany()
                         .HasForeignKey("GuildSettingsId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -639,7 +633,7 @@ namespace Infrastructure.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.Guild.GuildSettings", b =>
+            modelBuilder.Entity("Infrastructure.Data.Models.GuildSettings", b =>
                 {
                     b.Navigation("MafiaSettings")
                         .IsRequired();

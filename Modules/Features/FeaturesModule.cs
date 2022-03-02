@@ -13,7 +13,7 @@ namespace Modules.Features;
 [Group("Фичи")]
 [Alias("Ф")]
 [RequireOwner]
-public class FeaturesModule : GuildModuleBase
+public class FeaturesModule : CommandGuildModuleBase
 {
     private readonly CommandService _commandService;
     private readonly IServiceProvider _serviceProvider;

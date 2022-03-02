@@ -10,6 +10,7 @@ using Core.Common.Data;
 using Core.Exceptions;
 using Core.Extensions;
 using Discord;
+using Discord.Net;
 using Fergun.Interactive;
 using Infrastructure.Data.Models.Games.Settings.Mafia;
 using Microsoft.VisualBasic;
@@ -94,14 +95,14 @@ public class MafiaGame
 
                 await Task.Delay(3000);
             }
+            catch (GameSetupAbortedException)
+            {
+                throw;
+            }
             catch (AggregateException ae)
             {
                 var e = ae.Flatten();
                 throw new GameSetupAbortedException(e.Message, e);
-            }
-            catch (GameSetupAbortedException)
-            {
-                throw;
             }
             catch (Exception e)
             {
@@ -671,24 +672,69 @@ public class MafiaGame
 
     private async Task EjectPlayerAsync(IGuildUser player, bool isKill = true)
     {
-        await _guildData.MurderTextChannel.RemovePermissionOverwriteAsync(player);
+        if (_rolesData.AllRoles.ContainsKey(player))
+        {
+            await _context.CommandContext.Channel.SendEmbedAsync($"Игрок {player.GetFullMention()} не найден", EmbedStyle.Error);
 
+            return;
+        }
+
+        if (_rolesData.AliveRoles.ContainsKey(player))
+        {
+            Console.WriteLine("********************\n************************KICK MURDER******************************\n****************************");
+
+            try
+            {
+                await _guildData.MurderTextChannel.RemovePermissionOverwriteAsync(player);
+
+                if (_guildData.MurderVoiceChannel is not null)
+                    await _guildData.MurderVoiceChannel.RemovePermissionOverwriteAsync(player);
+            } 
+            catch (Exception e)
+            {
+                await _context.CommandContext.Channel
+                    .SendEmbedAsync($"Произошла ошибка: {e.Message}.  Не удалось снять переопределения с мафиози {player.GetFullMention()}", EmbedStyle.Error);
+            }
+        }
 
         _rolesData.AllRoles[player].GameOver();
         _rolesData.AliveRoles.Remove(player);
 
 
-        await player.RemoveRoleAsync(_guildData.MafiaRole);
-
+        try
+        {
+            await player.RemoveRoleAsync(_guildData.MafiaRole);
+        }
+        catch (Exception e)
+        {
+            await _context.CommandContext.Channel
+                .SendEmbedAsync($"Произошла ошибка: {e.Message}. Не удалось снять роль `{_guildData.MafiaRole.Mention}` с игрока {player.GetFullMention()}", EmbedStyle.Error);
+        }
 
         if (_guildData.PlayerRoleIds.TryGetValue(player.Id, out var rolesIds) && rolesIds.Count > 0)
-            await player.AddRolesAsync(rolesIds);
+            try
+            {
+                await player.AddRolesAsync(rolesIds);
+            }
+            catch (Exception e)
+            {
+                await _context.CommandContext.Channel
+                    .SendEmbedAsync($"Произошла ошибка: {e.Message}. Не удалось вернуть роли игроку {player.GetFullMention()}", EmbedStyle.Error);
+            }
 
         if (_guildData.OverwrittenNicknames.Contains(player.Id))
         {
-            await player.ModifyAsync(props => props.Nickname = null);
+            try
+            {
+                await player.ModifyAsync(props => props.Nickname = null);
 
-            _guildData.OverwrittenNicknames.Remove(player.Id);
+                _guildData.OverwrittenNicknames.Remove(player.Id);
+            }
+            catch (Exception e)
+            {
+                await _context.CommandContext.Channel
+                    .SendEmbedAsync($"Произошла ошибка: {e.Message}. Не удалось восстановить изначальный ник игроку {player.GetFullMention()}", EmbedStyle.Error);
+            }
         }
 
 
@@ -697,7 +743,15 @@ public class MafiaGame
             _guildData.KilledPlayers.Add(player);
 
             if (_guildData.SpectatorTextChannel is not null && _guildData.SpectatorRole is not null)
-                await player.AddRoleAsync(_guildData.SpectatorRole);
+                try
+                {
+                    await player.AddRoleAsync(_guildData.SpectatorRole);
+                }
+                catch (Exception e)
+                {
+                    await _context.CommandContext.Channel
+                        .SendEmbedAsync($"Произошла ошибка: {e.Message}. Не удалось добавить роль `{_guildData.SpectatorRole.Mention}` игроку {player.GetFullMention()}", EmbedStyle.Error);
+                }
         }
     }
 

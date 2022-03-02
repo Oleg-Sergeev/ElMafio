@@ -1,4 +1,5 @@
 ﻿using Core.Interfaces;
+using Infrastructure.Data.Models.Guild;
 
 namespace Infrastructure.Data.Models.Games.Stats;
 

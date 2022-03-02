@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Core.Common;
@@ -18,7 +19,9 @@ using Modules.Games.Mafia.Common.GameRoles;
 using Modules.Games.Mafia.Common.GameRoles.Data;
 using Modules.Games.Mafia.Common.Services;
 using Modules.Games.Services;
+using Modules.Help;
 using Serilog;
+using Serilog.Events;
 using Serilog.Filters;
 using Services;
 using CmdRunMode = Discord.Commands.RunMode;
@@ -43,18 +46,21 @@ public static class Application
             string GuildLogsDirectory = Path.Combine("Logs", "Guilds");
 
             loggerConfig.
-                    MinimumLevel.Debug()
-                    .WriteTo.Async(wt => wt.Console(outputTemplate: OutputConsoleTemplate))
+                    MinimumLevel.Verbose()
                     .WriteTo.Logger(lc => lc
                             .Filter.ByExcluding(Matching.WithProperty(PropertyGuildName))
-                            .WriteTo.Async(wt => wt.File(Path.Combine(LogsDirectory, "log_.txt"),
-                                          rollingInterval: RollingInterval.Day,
+                            .WriteTo.Async(wt => wt.Console(outputTemplate: OutputConsoleTemplate)))
+                    .WriteTo.Logger(lc => lc
+                            .Filter.ByExcluding(Matching.WithProperty(PropertyGuildName))
+                            .WriteTo.Async(wt => wt.File(Path.Combine(LogsDirectory, "log.txt"),
+                                          restrictedToMinimumLevel: LogEventLevel.Verbose,
                                           outputTemplate: OutputFileTemplate,
                                           shared: true)))
                     .WriteTo.Logger(lc => lc.
                             Filter.ByIncludingOnly(Matching.WithProperty(PropertyGuildName))
                             .WriteTo.Map(PropertyGuildName, GuildLogsDefaultName, (guildName, writeTo)
                                  => writeTo.Async(wt => wt.File(Path.Combine(GuildLogsDirectory, guildName, "log_.txt"),
+                                                 restrictedToMinimumLevel: LogEventLevel.Verbose,
                                                  outputTemplate: OutputFileTemplate,
                                                  rollingInterval: RollingInterval.Day,
                                                  shared: true))));
@@ -66,6 +72,8 @@ public static class Application
             .AddJsonFile("AppConfig.json", false, true)
             .AddJsonFile("GamesConfig.json", false, true)
             .AddJsonFile("ContactsConfig.json", false, true)
+            .AddJsonFile("CommandExamples.json", true, true)
+            .AddJsonFile("Manuals.json", true, true)
             .AddUserSecrets<Program>(false)
             .Build();
         })
@@ -75,11 +83,11 @@ public static class Application
             {
                 LogLevel = LogSeverity.Verbose,
                 UseSystemClock = true,
-                GatewayIntents = GatewayIntents.All
+                GatewayIntents = GatewayIntents.All,
+                DefaultRetryMode = RetryMode.AlwaysRetry
             };
 
             discordConfig.Token = context.Configuration["Tokens:DiscordBot"];
-
         })
         .UseCommandService((context, commandServicesConfig) =>
         {
@@ -88,6 +96,11 @@ public static class Application
             commandServicesConfig.IgnoreExtraArgs = true;
             commandServicesConfig.LogLevel = LogSeverity.Verbose;
             commandServicesConfig.SeparatorChar = '.';
+        })
+        .UseInteractionService((context, interactionServiceConfig) =>
+        {
+            interactionServiceConfig.LogLevel = LogSeverity.Verbose;
+            interactionServiceConfig.UseCompiledLambda = true;
         })
         .ConfigureServices((context, services) =>
         {
@@ -98,12 +111,8 @@ public static class Application
                 options.EnableDetailedErrors();
             })
             .AddHostedService<CommandHandlerService>()
+            .AddHostedService<InteractionHandlerService>()
             .AddSingleton<InteractiveService>()
-            .AddSingleton(x => new InteractionService(x.GetRequiredService<DiscordSocketClient>(), new InteractionServiceConfig()
-            {
-                DefaultRunMode = InrctRunMode.Async,
-                LogLevel = LogSeverity.Verbose
-            }))
             .AddSingleton<LoggingService>()
             .AddTransient<IMafiaSetupService, MafiaSetupService>()
             .AddTransient(typeof(IGameSettingsService<>), typeof(GameSettingsService<>))
@@ -113,5 +122,7 @@ public static class Application
 
             foreach (var section in sections)
                 services.Configure<GameRoleData>(section, context.Configuration.GetSection($"{GameRoleData.RootSection}:{section}"));
+
+            services.Configure<Dictionary<string, string>>(nameof(HelpModule), context.Configuration.GetSection("CommandExamples"));
         });
 }
