@@ -159,7 +159,7 @@ public abstract class GameRole
     }
 
 
-    protected static async Task<Vote> VoteInternalAsync(GameRole role, MafiaContext context, IMessageChannel? voteChannel = null, IMessageChannel? voteResultChannel = null, bool waitAfterVote = true)
+    protected static async Task<Vote> VoteInternalAsync(GameRole role, MafiaContext context, IMessageChannel? voteChannel = null, IMessageChannel? voteResultChannel = null)
     {
         var token = context.MafiaData.TokenSource.Token;
 
@@ -344,15 +344,15 @@ public abstract class GameRole
 
         role._votes.Add(vote);
 
-        if (waitAfterVote && timeout.TotalSeconds > 0)
+        if (timeout.TotalSeconds > 0)
             await Task.Delay(timeout, token);
 
 
         return vote;
     }
 
-    public virtual Task<Vote> VoteAsync(MafiaContext context, IMessageChannel? voteChannel = null, IMessageChannel? voteResultChannel = null, bool waitAfterVote = true)
-        => VoteInternalAsync(this, context, voteChannel, voteResultChannel, waitAfterVote);
+    public virtual Task<Vote> VoteAsync(MafiaContext context, IMessageChannel? voteChannel = null, IMessageChannel? voteResultChannel = null)
+        => VoteInternalAsync(this, context, voteChannel, voteResultChannel);
 
 
     public virtual void UpdateStats(MafiaStats stats, Winner winner)

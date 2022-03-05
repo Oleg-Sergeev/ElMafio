@@ -11,18 +11,23 @@ namespace Modules.Games.Mafia.Common.GameRoles;
 
 public class MurdersGroup : GroupRole
 {
+    protected int DiscussionTime { get; init; }
+
+
     public MurdersGroup(IReadOnlyList<Murder> roles, IOptionsSnapshot<GameRoleData> options) : base(roles, options)
     {
-
+        DiscussionTime = Roles.Count * 30;
     }
 
 
-    public override async Task<VoteGroup> VoteManyAsync(MafiaContext context, IMessageChannel? voteChannel = null, IMessageChannel? voteResultchannel = null, bool waitAfterVote = true)
+    public override async Task<VoteGroup> VoteManyAsync(MafiaContext context, IMessageChannel? voteChannel = null, IMessageChannel? voteResultchannel = null)
     {
+        await context.GuildData.MurderTextChannel.SendEmbedAsync($"Время обсудить вашу следующую жертву. ({DiscussionTime}с)", EmbedStyle.Waiting);
+
         await context.GuildData.MurderTextChannel.SendEmbedAsync("Голосование начинается...", EmbedStyle.Waiting);
 
-        await Task.Delay(3000);
+        await context.ChangeMurdersPermsAsync(MafiaHelper.DenyWrite, MafiaHelper.DenyView);
 
-        return await base.VoteManyAsync(context, context.GuildData.MurderTextChannel, context.GuildData.MurderTextChannel, waitAfterVote);
+        return await base.VoteManyAsync(context, context.GuildData.MurderTextChannel, context.GuildData.MurderTextChannel);
     }
 }

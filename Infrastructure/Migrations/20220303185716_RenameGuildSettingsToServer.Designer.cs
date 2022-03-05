@@ -4,6 +4,7 @@ using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,10 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations
 {
     [DbContext(typeof(BotContext))]
-    partial class GuildContextModelSnapshot : ModelSnapshot
+    [Migration("20220303185716_RenameGuildSettingsToServer")]
+    partial class RenameGuildSettingsToServer
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -38,9 +40,6 @@ namespace Infrastructure.Migrations
 
                     b.Property<int?>("CurrentTemplateId")
                         .HasColumnType("int");
-
-                    b.Property<bool>("DisbandPartyAfterGameEnd")
-                        .HasColumnType("bit");
 
                     b.Property<decimal?>("GeneralTextChannelId")
                         .HasColumnType("decimal(20,0)");
@@ -460,17 +459,6 @@ namespace Infrastructure.Migrations
                     b.Property<decimal>("Id")
                         .HasColumnType("decimal(20,0)");
 
-                    b.Property<int>("BlockBehaviour")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(1);
-
-                    b.Property<string>("BlockMessage")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("nvarchar(max)")
-                        .HasDefaultValue("Вам заблокирован доступ к командам. Пожалуйста, обратитесь к администраторам сервера для разблокировки");
-
                     b.Property<int>("DebugMode")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
@@ -488,24 +476,6 @@ namespace Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Servers");
-                });
-
-            modelBuilder.Entity("Infrastructure.Data.Models.ServerUser", b =>
-                {
-                    b.Property<decimal>("UserId")
-                        .HasColumnType("decimal(20,0)");
-
-                    b.Property<decimal>("ServerId")
-                        .HasColumnType("decimal(20,0)");
-
-                    b.Property<bool>("IsBlocked")
-                        .HasColumnType("bit");
-
-                    b.HasKey("UserId", "ServerId");
-
-                    b.HasIndex("ServerId");
-
-                    b.ToTable("ServerUsers");
                 });
 
             modelBuilder.Entity("Infrastructure.Data.Models.User", b =>
@@ -651,25 +621,6 @@ namespace Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.ServerUser", b =>
-                {
-                    b.HasOne("Infrastructure.Data.Models.ServerInfo.Server", "Server")
-                        .WithMany("ServerUsers")
-                        .HasForeignKey("ServerId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Infrastructure.Data.Models.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Server");
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("Infrastructure.Data.Models.Games.Settings.Mafia.MafiaSettings", b =>
                 {
                     b.Navigation("MafiaSettingsTemplates");
@@ -697,8 +648,6 @@ namespace Infrastructure.Migrations
 
                     b.Navigation("RussianRouletteSettings")
                         .IsRequired();
-
-                    b.Navigation("ServerUsers");
                 });
 #pragma warning restore 612, 618
         }

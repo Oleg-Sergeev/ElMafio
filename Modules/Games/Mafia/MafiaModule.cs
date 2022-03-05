@@ -83,12 +83,12 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
         await ReplyEmbedAsync("Настройки корректны", EmbedStyle.Successfull);
 
-        var guildSettings = await Context.GetGuildSettingsAsync();
+        var server = await Context.GetServerAsync();
+
+        var settings = await _settingsService.GetSettingsOrCreateAsync(Context);
 
         try
         {
-            var settings = await _settingsService.GetSettingsOrCreateAsync(Context);
-
             ArgumentNullException.ThrowIfNull(settings.CurrentTemplate);
 
             if (settings.CurrentTemplate.ServerSubSettings.MentionPlayersOnGameStart)
@@ -127,11 +127,14 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
                 await ReplyEmbedAsync("Статистика успешно обновлена", EmbedStyle.Successfull);
             }
 
-            DeleteGameData();
+            if (settings.DisbandPartyAfterGameEnd)
+                DeleteGameData();
+            else
+                data.IsPlaying = false;
         }
         catch (GameSetupAbortedException e)
         {
-            var msg = guildSettings.DebugMode switch
+            var msg = server.DebugMode switch
             {
                 DebugMode.ErrorMessages => e.Message,
                 DebugMode.StackTrace => e.ToString(),
@@ -144,7 +147,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
         }
         catch (Exception e)
         {
-            var msg = guildSettings.DebugMode switch
+            var msg = server.DebugMode switch
             {
                 DebugMode.ErrorMessages => e.Message,
                 DebugMode.StackTrace => e.ToString(),
@@ -152,7 +155,10 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
             };
             await ReplyEmbedAsync($"**Игра была аварийно прервана из-за непредвиненной ошибки:**\n{msg}", EmbedStyle.Error, "Ошибка во время игры");
 
-            DeleteGameData();
+            if (settings.DisbandPartyAfterGameEnd)
+                DeleteGameData();
+            else
+                data.IsPlaying = false;
         }
     }
 
@@ -489,7 +495,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
                 user ??= Context.User;
 
                 var userStat = await Context.Db.MafiaStats
-                    .FirstOrDefaultAsync(ms => ms.GuildSettingsId == Context.Guild.Id && ms.UserId == user.Id);
+                    .FirstOrDefaultAsync(ms => ms.ServerId == Context.Guild.Id && ms.UserId == user.Id);
 
                 if (userStat is null)
                 {

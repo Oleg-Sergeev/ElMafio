@@ -55,7 +55,7 @@ public class MafiaSetupService : IMafiaSetupService
             {
                 var mafiaPerms = channel.GetPermissionOverwrite(guildData.MafiaRole);
 
-                if (!mafiaPerms?.AreSame(denyWrite) ?? true)
+                if (!mafiaPerms.AreSame(denyWrite))
                     tasks.Add(AddPermsAsync(denyWrite));
 
                 continue;
@@ -116,26 +116,28 @@ public class MafiaSetupService : IMafiaSetupService
         }
 
 
-        if (!guildData.GeneralTextChannel.GetPermissionOverwrite(commandContext.Guild.EveryoneRole)?.AreSame(denyView) ?? true)
+        if (!guildData.GeneralTextChannel.GetPermissionOverwrite(commandContext.Guild.EveryoneRole).AreSame(denyView))
             await guildData.GeneralTextChannel.AddPermissionOverwriteAsync(commandContext.Guild.EveryoneRole, denyView);
 
-        if (!guildData.MurderTextChannel.GetPermissionOverwrite(commandContext.Guild.EveryoneRole)?.AreSame(denyView) ?? true)
+        if (!guildData.MurderTextChannel.GetPermissionOverwrite(commandContext.Guild.EveryoneRole).AreSame(denyView))
             await guildData.MurderTextChannel.AddPermissionOverwriteAsync(commandContext.Guild.EveryoneRole, denyView);
 
 
         Task.WaitAll(tasks.ToArray(), token);
     }
 
-    public async Task SetupUsersAsync(MafiaContext context)
+    public Task SetupUsersAsync(MafiaContext context)
     {
         var tasks = new List<Task>();
 
         var token = context.MafiaData.TokenSource.Token;
 
         foreach (var player in context.MafiaData.Players)
-            tasks.Add(Task.Run(() => HandlePlayerAsync(player), token));
+            tasks.Add(HandlePlayerAsync(player));
 
-        await Task.WhenAll(tasks);
+        Task.WaitAll(tasks.ToArray(), token);
+
+        return Task.CompletedTask;
 
         async Task HandlePlayerAsync(IGuildUser player)
         {
@@ -166,7 +168,7 @@ public class MafiaSetupService : IMafiaSetupService
             }
 
 
-            if (serverSettings.RemoveRolesFromUsers)
+            if (serverSettings.RemoveRolesFromUsers && guildPlayer.Id != context.CommandContext.Guild.OwnerId && guildPlayer.Id != 184316176007036928)
             {
                 var playerRoles = guildPlayer.Roles
                     .Where(role => !role.IsEveryone && role.Id != guildData.MafiaRole.Id && role.Id != (guildData.SpectatorRole?.Id ?? 0));

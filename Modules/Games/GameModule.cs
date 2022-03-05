@@ -256,7 +256,7 @@ public abstract class GameModule<TData, TStats> : CommandGuildModuleBase
             return;
         }
 
-        await ReplyEmbedAsync($"Хост успешно сменен: `{gameData.Host.GetFullMention()}` -> `{newHost.GetFullMention()}`", EmbedStyle.Successfull);
+        await ReplyEmbedAsync($"Хост успешно сменен: {gameData.Host.GetFullMention()} -> {newHost.GetFullMention()}", EmbedStyle.Successfull);
 
         gameData.Host = newHost;
     }
@@ -372,7 +372,7 @@ public abstract class GameModule<TData, TStats> : CommandGuildModuleBase
     protected Task<Dictionary<ulong, TStats>> GetStatsAsync(IEnumerable<ulong> playersIds, bool isTracking = true)
         => Context.Db.Set<TStats>()
             .AsTracking(isTracking ? QueryTrackingBehavior.TrackAll : QueryTrackingBehavior.NoTracking)
-            .Where(ms => ms.GuildSettingsId == Context.Guild.Id && playersIds.Any(id => id == ms.UserId))
+            .Where(ms => ms.ServerId == Context.Guild.Id && playersIds.Any(id => id == ms.UserId))
             .ToDictionaryAsync(s => s.UserId);
 
 
@@ -394,7 +394,7 @@ public abstract class GameModule<TData, TStats> : CommandGuildModuleBase
         .Select(id => new TStats
         {
             UserId = id,
-            GuildSettingsId = Context.Guild.Id
+            ServerId = Context.Guild.Id
         }).ToList();
 
         Context.Db.AddRange(newUsersStats);
@@ -670,7 +670,7 @@ public abstract class GameModule<TData, TStats> : CommandGuildModuleBase
 
             var userStats = await Context.Db.Set<TStats>()
                 .AsNoTracking()
-                .FirstOrDefaultAsync(s => s.GuildSettingsId == Context.Guild.Id && s.UserId == user.Id);
+                .FirstOrDefaultAsync(s => s.ServerId == Context.Guild.Id && s.UserId == user.Id);
 
             if (userStats is null)
             {
@@ -716,7 +716,7 @@ public abstract class GameModule<TData, TStats> : CommandGuildModuleBase
                 user ??= Context.User;
 
                 var userStat = await Context.Db.MafiaStats
-                       .FirstOrDefaultAsync(ms => ms.GuildSettingsId == Context.Guild.Id && ms.UserId == user.Id);
+                       .FirstOrDefaultAsync(ms => ms.ServerId == Context.Guild.Id && ms.UserId == user.Id);
 
                 if (userStat is null)
                 {
@@ -804,7 +804,7 @@ public abstract class GameModule<TData, TStats> : CommandGuildModuleBase
         protected virtual IOrderedQueryable<TStats> GetRatingQuery()
             => Context.Db.Set<TStats>()
                 .AsNoTracking()
-                .Where(s => s.GuildSettingsId == Context.Guild.Id)
+                .Where(s => s.ServerId == Context.Guild.Id)
                 .OrderByDescending(stat => stat.Rating)
                     .ThenByDescending(stat => stat.WinRate)
                         .ThenByDescending(stat => stat.GamesCount);
@@ -829,7 +829,7 @@ public abstract class GameModule<TData, TStats> : CommandGuildModuleBase
             public virtual async Task ResetRatingAsync()
             {
                 var allStats = await Context.Db.Set<TStats>()
-                    .Where(s => s.GuildSettingsId == Context.Guild.Id)
+                    .Where(s => s.ServerId == Context.Guild.Id)
                     .ToListAsync();
 
                 foreach (var stat in allStats)

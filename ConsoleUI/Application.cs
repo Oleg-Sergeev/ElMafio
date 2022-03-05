@@ -52,14 +52,14 @@ public static class Application
                             .WriteTo.Async(wt => wt.Console(outputTemplate: OutputConsoleTemplate)))
                     .WriteTo.Logger(lc => lc
                             .Filter.ByExcluding(Matching.WithProperty(PropertyGuildName))
-                            .WriteTo.Async(wt => wt.File(Path.Combine(LogsDirectory, "log.txt"),
+                            .WriteTo.Async(wt => wt.File(Path.Combine(AppContext.BaseDirectory, LogsDirectory, "log.txt"),
                                           restrictedToMinimumLevel: LogEventLevel.Verbose,
                                           outputTemplate: OutputFileTemplate,
                                           shared: true)))
                     .WriteTo.Logger(lc => lc.
                             Filter.ByIncludingOnly(Matching.WithProperty(PropertyGuildName))
                             .WriteTo.Map(PropertyGuildName, GuildLogsDefaultName, (guildName, writeTo)
-                                 => writeTo.Async(wt => wt.File(Path.Combine(GuildLogsDirectory, guildName, "log_.txt"),
+                                 => writeTo.Async(wt => wt.File(Path.Combine(AppContext.BaseDirectory, GuildLogsDirectory, guildName, "log_.txt"),
                                                  restrictedToMinimumLevel: LogEventLevel.Verbose,
                                                  outputTemplate: OutputFileTemplate,
                                                  rollingInterval: RollingInterval.Day,
@@ -99,6 +99,7 @@ public static class Application
         })
         .UseInteractionService((context, interactionServiceConfig) =>
         {
+            interactionServiceConfig.DefaultRunMode = InrctRunMode.Async;
             interactionServiceConfig.LogLevel = LogSeverity.Verbose;
             interactionServiceConfig.UseCompiledLambda = true;
         })
@@ -110,6 +111,7 @@ public static class Application
                 options.EnableSensitiveDataLogging();
                 options.EnableDetailedErrors();
             })
+            .AddMemoryCache()
             .AddHostedService<CommandHandlerService>()
             .AddHostedService<InteractionHandlerService>()
             .AddSingleton<InteractiveService>()

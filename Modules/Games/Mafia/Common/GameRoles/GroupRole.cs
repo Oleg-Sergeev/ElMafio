@@ -33,7 +33,7 @@ public abstract class GroupRole : GameRole
 
 
 
-    public virtual async Task<VoteGroup> VoteManyAsync(MafiaContext context, IMessageChannel? voteChannel = null, IMessageChannel? voteResultChannel = null, bool waitAfterVote = true)
+    public virtual async Task<VoteGroup> VoteManyAsync(MafiaContext context, IMessageChannel? voteChannel = null, IMessageChannel? voteResultChannel = null)
     {
         var votes = new Dictionary<IGuildUser, Vote>();
 
@@ -307,8 +307,8 @@ public abstract class GroupRole : GameRole
     protected virtual IEnumerable<GameRole> GetVoters() => AliveRoles.Where(r => !r.BlockedByHooker);
 
 
-    public override async Task<Vote> VoteAsync(MafiaContext context, IMessageChannel? voteChannel = null, IMessageChannel? voteResultChannel = null, bool waitAfterVote = true)
-        => (await VoteManyAsync(context, voteChannel, voteResultChannel, waitAfterVote)).Choice;
+    public override async Task<Vote> VoteAsync(MafiaContext context, IMessageChannel? voteChannel = null, IMessageChannel? voteResultChannel = null)
+        => (await VoteManyAsync(context, voteChannel, voteResultChannel)).Choice;
 
     public override void HandleChoice(IGuildUser? choice)
     {

@@ -25,4 +25,6 @@ public class MafiaSettingsViewModel
 
 
     public bool? ClearChannelsOnStart { get; init; }
+
+    public bool? DisbandPartyAfterGameEnd { get; init; }
 }

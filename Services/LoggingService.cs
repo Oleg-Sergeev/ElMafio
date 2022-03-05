@@ -103,11 +103,11 @@ public class LoggingService
                                      context.Message.Content,
                                      result.ToString());
 
-                var guildSettings = await _db.GuildSettings.FindAsync(context.Guild.Id);
+                var server = await _db.Servers.FindAsync(context.Guild.Id);
 
-                if (guildSettings is not null)
+                if (server is not null)
                 {
-                    var errorInfo = guildSettings.DebugMode switch
+                    var errorInfo = server.DebugMode switch
                     {
                         DebugMode.ErrorMessages => $"\n{result.ErrorReason}",
                         DebugMode.StackTrace => $"\n{exeResult?.Exception.ToString() ?? result.ErrorReason}",

@@ -5,7 +5,7 @@ using Discord.Commands;
 using Discord.WebSocket;
 using Infrastructure.Data;
 using Infrastructure.Data.Models.Games.Settings;
-using Infrastructure.Data.Models.Guild;
+using Infrastructure.Data.Models.ServerInfo;
 using Microsoft.EntityFrameworkCore;
 
 namespace Services;
@@ -22,13 +22,13 @@ public class DbSocketCommandContext : SocketCommandContext
 
 
 
-    public async Task<GuildSettings> GetGuildSettingsAsync()
+    public async Task<Server> GetServerAsync()
     {
-        var guildSettings = await Db.GuildSettings.FindAsync(Guild.Id);
+        var server = await Db.Servers.FindAsync(Guild.Id);
 
-        if (guildSettings is null)
+        if (server is null)
             throw new InvalidOperationException($"Guild with id {Guild.Id} was not found in database");
 
-        return guildSettings;
+        return server;
     }
 }

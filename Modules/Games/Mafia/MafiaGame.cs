@@ -189,7 +189,7 @@ public class MafiaGame
             await _guildData.SpectatorTextChannel.SendEmbedAsync("Утро", $"День {_chronology.CurrentDay}");
 
 
-        await ChangeMurdersPermsAsync(_denyWrite, _denyView);
+        await _context.ChangeMurdersPermsAsync(_denyWrite, _denyView);
 
         await _guildData.GeneralTextChannel.SendMessageAsync($"{_guildData.MafiaRole.Mention} Доброе утро, жители города! Самое время пообщаться всем вместе.");
 
@@ -270,7 +270,7 @@ public class MafiaGame
 
         await _guildData.GeneralTextChannel.SendEmbedAsync($"Обсуждайте ({dayTime}с)");
 
-        await ChangeCitizenPermsAsync(_allowWrite, _allowSpeak);
+        await _context.ChangeCitizenPermsAsync(_allowWrite, _allowSpeak);
 
 
         var timer = WaitForTimerAsync(dayTime, _guildData.GeneralTextChannel);
@@ -303,7 +303,7 @@ public class MafiaGame
 
         await timer;
 
-        await ChangeCitizenPermsAsync(_denyWrite, _denyView);
+        await _context.ChangeCitizenPermsAsync(_denyWrite, _denyView);
 
         if (_isZeroDay)
         {
@@ -374,7 +374,7 @@ public class MafiaGame
     {
         var citizen = _rolesData.GroupRoles[nameof(CitizenGroup)];
 
-        var votingResult = await citizen.VoteManyAsync(_context, waitAfterVote: false);
+        var votingResult = await citizen.VoteManyAsync(_context);
 
         return votingResult;
     }
@@ -392,7 +392,7 @@ public class MafiaGame
         //handle specific roles
 
         if (!_template.GameSubSettings.IsCustomGame || _template.RolesExtraInfoSubSettings.MurdersKnowEachOther)
-            await ChangeMurdersPermsAsync(_allowWrite, _allowSpeak);
+            await _context.ChangeMurdersPermsAsync(_allowWrite, _allowSpeak);
 
         if (!_template.GameSubSettings.IsCustomGame || _template.RolesExtraInfoSubSettings.MurdersVoteTogether)
         {
@@ -672,7 +672,7 @@ public class MafiaGame
 
     private async Task EjectPlayerAsync(IGuildUser player, bool isKill = true)
     {
-        if (_rolesData.AllRoles.ContainsKey(player))
+        if (!_rolesData.AllRoles.ContainsKey(player))
         {
             await _context.CommandContext.Channel.SendEmbedAsync($"Игрок {player.GetFullMention()} не найден", EmbedStyle.Error);
 
@@ -680,9 +680,6 @@ public class MafiaGame
         }
 
         if (_rolesData.AliveRoles.ContainsKey(player))
-        {
-            Console.WriteLine("********************\n************************KICK MURDER******************************\n****************************");
-
             try
             {
                 await _guildData.MurderTextChannel.RemovePermissionOverwriteAsync(player);
@@ -695,7 +692,6 @@ public class MafiaGame
                 await _context.CommandContext.Channel
                     .SendEmbedAsync($"Произошла ошибка: {e.Message}.  Не удалось снять переопределения с мафиози {player.GetFullMention()}", EmbedStyle.Error);
             }
-        }
 
         _rolesData.AllRoles[player].GameOver();
         _rolesData.AliveRoles.Remove(player);
@@ -723,7 +719,6 @@ public class MafiaGame
             }
 
         if (_guildData.OverwrittenNicknames.Contains(player.Id))
-        {
             try
             {
                 await player.ModifyAsync(props => props.Nickname = null);
@@ -735,7 +730,6 @@ public class MafiaGame
                 await _context.CommandContext.Channel
                     .SendEmbedAsync($"Произошла ошибка: {e.Message}. Не удалось восстановить изначальный ник игроку {player.GetFullMention()}", EmbedStyle.Error);
             }
-        }
 
 
         if (isKill)
@@ -757,7 +751,7 @@ public class MafiaGame
 
     private async Task IntroduceMurdersAsync(int meetTime)
     {
-        await ChangeMurdersPermsAsync(_allowWrite, _allowSpeak);
+        await _context.ChangeMurdersPermsAsync(_allowWrite, _allowSpeak);
 
 
         await _guildData.MurderTextChannel.SendMessageAsync(
@@ -774,48 +768,7 @@ public class MafiaGame
         await Task.Delay(3000);
     }
 
-    private async Task ChangeMurdersPermsAsync(OverwritePermissions textPerms, OverwritePermissions? voicePerms)
-    {
-        foreach (var murder in _rolesData.Murders.Values)
-        {
-            if (!murder.IsAlive)
-                continue;
-
-            var player = murder.Player;
-
-            await _guildData.MurderTextChannel.AddPermissionOverwriteAsync(player, textPerms);
-
-
-            if (voicePerms is not OverwritePermissions perms)
-                continue;
-
-            if (_guildData.MurderVoiceChannel is not null)
-                await _guildData.MurderVoiceChannel.AddPermissionOverwriteAsync(player, perms);
-
-            if (player.VoiceChannel != null && perms.ViewChannel == PermValue.Deny)
-                await player.ModifyAsync(props => props.Channel = null);
-        }
-    }
-
-    private async Task ChangeCitizenPermsAsync(OverwritePermissions textPerms, OverwritePermissions? voicePerms)
-    {
-        await _guildData.GeneralTextChannel.AddPermissionOverwriteAsync(_guildData.MafiaRole, textPerms);
-
-
-        if (_guildData.GeneralVoiceChannel is null || voicePerms is not OverwritePermissions perms)
-            return;
-
-        await _guildData.GeneralVoiceChannel.AddPermissionOverwriteAsync(_guildData.MafiaRole, perms);
-
-        if (perms.ViewChannel == PermValue.Deny)
-            foreach (var role in _rolesData.AliveRoles.Values)
-            {
-                var player = role.Player;
-
-                if (player.VoiceChannel != null)
-                    await player.ModifyAsync(props => props.Channel = null);
-            }
-    }
+    
 
     private async Task ReturnPlayersDataAsync()
     {
@@ -823,13 +776,26 @@ public class MafiaGame
         {
             var player = role.Player;
 
-
-            await EjectPlayerAsync(player, false);
+            try
+            {
+                await EjectPlayerAsync(player, false);
+            } 
+            catch (Exception e)
+            {
+                await _context.CommandContext.Channel.SendEmbedAsync(e.ToString(), EmbedStyle.Error);
+            }
         }
 
         if (_guildData.SpectatorTextChannel is not null && _guildData.SpectatorRole is not null)
             foreach (var player in _guildData.KilledPlayers)
-                await player.RemoveRoleAsync(_guildData.SpectatorRole);
+                try
+                {
+                    await player.RemoveRoleAsync(_guildData.SpectatorRole);
+                }
+                catch (Exception e)
+                {
+                    await _context.CommandContext.Channel.SendEmbedAsync(e.ToString(), EmbedStyle.Error);
+                }
     }
 
     public async Task WaitForTimerAsync(int seconds, params IMessageChannel[] channels)

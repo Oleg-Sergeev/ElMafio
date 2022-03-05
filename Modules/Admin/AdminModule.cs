@@ -3,14 +3,18 @@ using System.Data;
 using System.Linq;
 using System.Net.Http;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Core.Common;
 using Core.Extensions;
 using Discord;
 using Discord.Commands;
-using Discord.WebSocket;
 using Fergun.Interactive;
+using Fergun.Interactive.Pagination;
+using Infrastructure.Data.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
+using Modules.Common.Preconditions;
 
 namespace Modules.Admin;
 
@@ -76,6 +80,7 @@ public class AdminModule : CommandGuildModuleBase
     }
 
 
+
     [Command("ОчиститьДо")]
     [Alias("Очдо")]
     [Summary("Удалить сообщения до указанного (удаляются сообщения, идущие **после** указанного)")]
@@ -125,6 +130,7 @@ public class AdminModule : CommandGuildModuleBase
     }
 
 
+
     [Command("РольЦвет")]
     [Alias("РЦ")]
     [Summary("Изменить цвет роли на новый")]
@@ -169,8 +175,10 @@ public class AdminModule : CommandGuildModuleBase
 
 
 
-    [Group("Смайл")]
-    [Alias("С")]
+
+
+    [Group("Смайлы")]
+    [Alias("Смайл", "С")]
     [Summary("Добавление и удаление пользовательских смайлов")]
     [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
     [RequireOwner(Group = "perm")]
@@ -189,6 +197,7 @@ public class AdminModule : CommandGuildModuleBase
             "\n**Картинка должна весить не более `256Кб`**")]
         public Task AddEmoteAsync()
             => AddEmoteAsync($"emoji_{Context.Guild.Emotes.Count + 1}");
+
 
         [Command("Добавить")]
         [Alias("+")]
@@ -275,6 +284,7 @@ public class AdminModule : CommandGuildModuleBase
         }
 
 
+
         [Command("Удалить")]
         [Alias("-")]
         [Summary("Удалить указанный смайл с сервера")]
@@ -292,6 +302,154 @@ public class AdminModule : CommandGuildModuleBase
             await Context.Guild.DeleteEmoteAsync(guildEmote);
 
             await ReplyEmbedAsync("Смайл успешно удален", EmbedStyle.Successfull);
+        }
+    }
+
+
+
+
+    [Name("Черный список")]
+    [Group("ЧерныйСписок")]
+    [Alias("ЧС", "Блок")]
+    [Summary("Управление черным списком")]
+    [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
+    [RequireOwner(Group = "perm")]
+    public class BlockList : CommandGuildModuleBase
+    {
+        private readonly IMemoryCache _cache;
+
+        public BlockList(InteractiveService interactiveService, IMemoryCache cache) : base(interactiveService)
+        {
+            _cache = cache;
+        }
+
+        [Name("Черный список")]
+        [Command("Список")]
+        [Alias("Лист")]
+        public async Task GetBlockListAsync(int usersPerPage = 10)
+        {
+            var blockList = await Context.Db.ServerUsers
+                .AsNoTracking()
+                .Where(su => su.IsBlocked && su.ServerId == Context.Guild.Id)
+                .ToListAsync();
+
+            if (blockList.Count == 0)
+            {
+                await ReplyEmbedAsync("Черный список пуст", EmbedStyle.Warning);
+
+                return;
+            }
+
+            var pagesCount = (blockList.Count - 1) / usersPerPage;
+
+            var lazyPaginator = new LazyPaginatorBuilder()
+                .AddUser(Context.User)
+                .WithActionOnCancellation(ActionOnStop.DeleteMessage)
+                .WithActionOnTimeout(ActionOnStop.DeleteMessage)
+                .WithMaxPageIndex(pagesCount)
+                .WithCacheLoadedPages(true)
+                .WithPageFactory(GenerateBlockList)
+                .Build();
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+
+            _ = Interactive.SendPaginatorAsync(lazyPaginator, Context.Channel, cancellationToken: cts.Token);
+
+
+            IPageBuilder GenerateBlockList(int page)
+                => new PageBuilder()
+                {
+                    Title = "Черный список",
+                    Color = Utils.GetRandomColor(),
+                    Description = string.Join('\n', blockList
+                            .Skip(page * usersPerPage)
+                            .Take(usersPerPage)
+                            .Select(x => $"**{Context.Guild.GetMentionFromId(x.UserId)}**"))
+                };
+        }
+
+
+        [Command("Добавить")]
+        [Alias("+")]
+        [RequireConfirmAction(false)]
+        public async Task AddToBlockListAsync(IGuildUser guildUser)
+        {
+            var serverUser = await Context.Db.ServerUsers.FindAsync(guildUser.Id, Context.Guild.Id);
+
+            if (serverUser is null)
+            {
+                await ReplyEmbedAsync($"Пользователь {guildUser.GetFullMention()} не найден", EmbedStyle.Error);
+
+                return;
+            }
+
+            if (serverUser.IsBlocked)
+            {
+                await ReplyEmbedAsync($"Пользователь {guildUser.GetFullMention()} уже добавлен в черный список", EmbedStyle.Warning);
+
+                return;
+            }
+
+            serverUser.IsBlocked = true;
+
+            var n = await Context.Db.SaveChangesAsync();
+
+            if (n > 0)
+            {
+                _cache.Set((guildUser.Id, Context.Guild.Id), serverUser, new MemoryCacheEntryOptions
+                {
+                    SlidingExpiration = TimeSpan.FromMinutes(10),
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(60)
+                });
+
+                await ReplyEmbedStampAsync($"Пользователь {guildUser.GetFullMention()} добавлен в черный список", EmbedStyle.Successfull);
+            }
+            else
+            {
+                await ReplyEmbedStampAsync($"Не удалось добавить пользователя {guildUser.GetFullMention()} в черный список", EmbedStyle.Error);
+            } 
+        }
+
+
+        [Command("Удалить")]
+        [Alias("Убрать", "-")]
+        [RequireConfirmAction(false)]
+        public async Task RemoveFromBlockListAsync(IGuildUser guildUser)
+        {
+            var serverUser = await Context.Db.ServerUsers.FindAsync(guildUser.Id, Context.Guild.Id);
+
+            if (serverUser is null)
+            {
+                await ReplyEmbedAsync($"Пользователь {guildUser.GetFullMention()} не найден", EmbedStyle.Error);
+
+                return;
+            }
+
+            if (!serverUser.IsBlocked)
+            {
+                await ReplyEmbedAsync($"Пользователя {guildUser.GetFullMention()} нет в черном списке", EmbedStyle.Warning);
+
+                return;
+            }
+
+            serverUser.IsBlocked = false;
+
+            var n = await Context.Db.SaveChangesAsync();
+
+            if (n > 0)
+            {
+                _cache.Set((guildUser.Id, Context.Guild.Id), serverUser, new MemoryCacheEntryOptions
+                {
+                    SlidingExpiration = TimeSpan.FromMinutes(10),
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(60)
+                });
+
+                await ReplyEmbedStampAsync($"Пользователь {guildUser.GetFullMention()} удален из черного списка", EmbedStyle.Successfull);
+            }
+            else
+            {
+                await ReplyEmbedStampAsync($"Не удалось удалить пользователя {guildUser.GetFullMention()} из черного списка", EmbedStyle.Error);
+            }
         }
     }
 }

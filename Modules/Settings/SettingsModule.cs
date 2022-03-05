@@ -1,67 +1,154 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.Threading.Tasks;
 using Core.Common;
 using Discord;
-using Discord.Commands;
+using Discord.Interactions;
 using Fergun.Interactive;
+using Infrastructure.Data.Models.ServerInfo;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace Modules.Settings;
 
-[Group("Настройки")]
-[Alias("н")]
+[Group("настройки", "Редактирование настроек сервера")]
 [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
 [RequireOwner(Group = "perm")]
-public class SettingsModule : CommandGuildModuleBase
+public class SettingsModule : InteractionGuildModuleBase
 {
-    public SettingsModule(InteractiveService interactiveService) : base(interactiveService)
+    private readonly IMemoryCache _cache;
+
+    public SettingsModule(InteractiveService interactiveService, IMemoryCache cache) : base(interactiveService)
     {
+        _cache = cache;
     }
 
 
-    [Command("Префикс")]
-    [Alias("преф", "п")]
-    [Summary("Изменить префикс бота")]
-    public async Task UpdatePrefixAsync([Summary("Новый префикс бота")] string newPrefix)
+    [SlashCommand("префикс", "Изменить префикс бота")]
+    public async Task SetPrefixAsync([Summary("Новый_префикс_бота")] string newPrefix)
     {
-        var guildSettings = await Context.GetGuildSettingsAsync();
+        var server = await Context.Db.Servers.FindAsync(Context.Guild.Id);
 
-        var oldPrefix = guildSettings.Prefix;
-        guildSettings.Prefix = newPrefix;
+        ArgumentNullException.ThrowIfNull(server);
 
-        await Context.Db.SaveChangesAsync();
+        var oldPrefix = server.Prefix;
+        server.Prefix = newPrefix;
 
+        var n = await Context.Db.SaveChangesAsync();
 
-        await ReplyEmbedAsync($"Префикс успешно изменен с `{oldPrefix}` на `{newPrefix}`", EmbedStyle.Successfull);
-    }
-
-
-
-    [Command("КаналЛог")]
-    [Summary("Задать канал логгирования бота")]
-    public async Task UpdateLogChannelAsync([Summary("ID канала для логов")] ulong logChannelId)
-    {
-        var logChannel = Context.Guild.GetTextChannel(logChannelId);
-
-        if (logChannel is null)
+        if (n > 0)
         {
-            await ReplyEmbedAsync("Канал с указанным ID не найден", EmbedStyle.Error);
+            _cache.Set((server.Id, "prefix"), newPrefix, new MemoryCacheEntryOptions
+            {
+                SlidingExpiration = TimeSpan.FromMinutes(15),
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(60)
+            });
 
-            return;
+            await RespondEmbedAsync($"Префикс успешно изменен с `{oldPrefix}` на `{newPrefix}`", EmbedStyle.Successfull);
+        }
+        else
+            await RespondEmbedAsync("Не удалось изменить префикс", EmbedStyle.Error);
+    }
+
+
+    [Group("черный_список", "Настройки черного списка")]
+    public class BlockModule : InteractionGuildModuleBase
+    {
+        public BlockModule(InteractiveService interactiveService) : base(interactiveService)
+        {
         }
 
-        await UpdateLogChannelAsync(logChannel);
+
+        [SlashCommand("поведение", "Способ сообщить о блокировке пользователя")]
+        public async Task SetBehaviourAsync(BlockBehaviour blockBehaviour)
+        {
+            var server = await Context.Db.Servers.FindAsync(Context.Guild.Id);
+
+            ArgumentNullException.ThrowIfNull(server);
+
+            var oldBlockBehaviour = server.BlockBehaviour;
+
+            if (blockBehaviour == oldBlockBehaviour)
+            {
+                await RespondEmbedAsync("Данное поведение уже установлено", EmbedStyle.Warning);
+
+                return;
+            }
+
+            server.BlockBehaviour = blockBehaviour;
+
+            var n = await Context.Db.SaveChangesAsync();
+
+            if (n > 0)
+            {
+                await RespondEmbedAsync($"Поведение успешно изменено с `{oldBlockBehaviour}` на `{blockBehaviour}`", EmbedStyle.Successfull);
+            }
+            else
+                await RespondEmbedAsync("Не удалось изменить поведение", EmbedStyle.Error);
+        }
+
+        [SlashCommand("чс_сообщение", "Сообщение об блокировке")]
+        public async Task SetBlockMessageAsync(string blockMessage)
+        {
+            var server = await Context.Db.Servers.FindAsync(Context.Guild.Id);
+
+            ArgumentNullException.ThrowIfNull(server);
+
+
+            var oldBlockMessage = server.BlockMessage;
+
+            if (blockMessage == oldBlockMessage)
+            {
+                await RespondEmbedAsync("Данное сообщение уже установлено", EmbedStyle.Warning);
+
+                return;
+            }
+
+            server.BlockMessage = blockMessage;
+
+            var n = await Context.Db.SaveChangesAsync();
+
+            if (n > 0)
+            {
+                await RespondEmbedAsync($"Сообщение успешно изменено с `{oldBlockMessage}` на `{blockMessage}`", EmbedStyle.Successfull);
+            }
+            else
+                await RespondEmbedAsync("Не удалось изменить сообщение", EmbedStyle.Error);
+        }
     }
 
-    [Command("КаналЛог")]
-    [Summary("Задать канал логгирования бота")]
-    public async Task UpdateLogChannelAsync([Summary("Канал для логов")] ITextChannel logChannel)
+
+
+    [Group("логгирование", "Раздел управления логами")]
+    public class LogsModule : InteractionGuildModuleBase
     {
-        var guildSettings = await Context.GetGuildSettingsAsync();
-
-        guildSettings.LogChannelId = logChannel.Id;
-
-        await Context.Db.SaveChangesAsync();
+        public LogsModule(InteractiveService interactive) : base(interactive)
+        {
+        }
 
 
-        await ReplyEmbedStampAsync($"Канал для логов [{logChannel.Mention}] успешно установлен", EmbedStyle.Successfull);
+
+        [SlashCommand("канал", "Задать/сбросить канал логов")]
+        public async Task SetLogChannelAsync([Summary("Канал_для_логов")] ITextChannel? logChannel = null)
+        {
+            var server = await Context.Db.Servers.FindAsync(Context.Guild.Id);
+
+            ArgumentNullException.ThrowIfNull(server);
+
+
+            server.LogChannelId = logChannel?.Id;
+
+            var n = await Context.Db.SaveChangesAsync();
+
+
+            if (n > 0)
+            {
+                var msg = logChannel is not null
+                    ? $"Канал для логов [{logChannel.Mention}] успешно установлен"
+                    : "Канал для логов успешно сброшен";
+
+                await RespondEmbedAsync(msg, EmbedStyle.Successfull);
+            }
+            else
+                await RespondEmbedAsync("Не удалось изменить канал для логов", EmbedStyle.Error);
+        }
     }
 }

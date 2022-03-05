@@ -36,6 +36,8 @@ public class MafiaSettings : GameSettings
 
     public bool ClearChannelsOnStart { get; set; }
 
+    public bool DisbandPartyAfterGameEnd { get; set; }
+
 
 
     public List<MafiaSettingsTemplate> MafiaSettingsTemplates { get; private set; } = new();

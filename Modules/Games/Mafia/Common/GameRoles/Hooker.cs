@@ -69,9 +69,9 @@ public class Hooker : Neutral, IHooker
 
 
 
-    public override async Task<Vote> VoteAsync(MafiaContext context, IMessageChannel? voteChannel = null, IMessageChannel? voteResultChannel = null, bool waitAfterVote = true)
+    public override async Task<Vote> VoteAsync(MafiaContext context, IMessageChannel? voteChannel = null, IMessageChannel? voteResultChannel = null)
     {
-        var vote = await base.VoteAsync(context, voteChannel, voteResultChannel, waitAfterVote);
+        var vote = await base.VoteAsync(context, voteChannel, voteResultChannel);
 
         if (IsNight && vote.Option is not null && context.RolesData.AliveRoles.TryGetValue(vote.Option, out var blockedRole))
             blockedRole.Block(this);

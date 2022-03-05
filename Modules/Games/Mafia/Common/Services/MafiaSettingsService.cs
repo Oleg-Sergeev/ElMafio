@@ -27,7 +27,7 @@ public class MafiaSettingsService : GameSettingsService<MafiaSettings>
 
 
         var settings = await settingsQuery
-            .FirstOrDefaultAsync(m => m.GuildSettingsId == context.Guild.Id);
+            .FirstOrDefaultAsync(m => m.ServerId == context.Guild.Id);
 
         settings ??= await CreateSettingsAsync(context);
 

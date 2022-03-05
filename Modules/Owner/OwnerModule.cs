@@ -20,23 +20,6 @@ public class OwnerModule : InteractionGuildModuleBase
     }
 
 
-    //[SlashCommand("Лог", "")]
-    //public async Task GetFileLogTodayAsync()
-    //{
-    //    using var filestream = File.OpenRead("");
-
-    //    if (filestream is null)
-    //    {
-    //        await ReplyEmbedAsync("Файл не найден", EmbedStyle.Error);
-
-    //        return;
-    //    }
-
-    //    await ReplyEmbedAsync("Файл успешно отправлен", EmbedStyle.Successfull);
-
-    //    await Context.User.SendFileAsync(filestream, filestream.Name);
-    //}
-
     [SlashCommand("рестарт", "Перезапустить бота")]
     public async Task RestartAsync()
     {
@@ -62,16 +45,7 @@ public class OwnerModule : InteractionGuildModuleBase
     }
 
 
-    [SlashCommand("тест", "жесть тест")]
-    public Task Test()
-    {
-        var a = 0;
-        var b = 5 / a;
-
-        return Task.CompletedTask;
-    }
-
-    [Group("дебаг", "Переключить режим отладки или узнать текущий режим")]
+    [Group("дебаг", "Управление режимом отладки")]
     public class DebugModule : InteractionGuildModuleBase
     {
         public DebugModule(InteractiveService interactive) : base(interactive)
@@ -83,25 +57,25 @@ public class OwnerModule : InteractionGuildModuleBase
         [SlashCommand("переключить", "Переключить режим отладки")]
         public async Task SwitchDebugMode(DebugMode mode)
         {
-            var guildSettings = await Context.Db.GuildSettings.FindAsync(Context.Guild.Id);
+            var server = await Context.Db.Servers.FindAsync(Context.Guild.Id);
 
-            if (guildSettings is null)
+            if (server is null)
             {
                 await RespondEmbedAsync("Сервер не найден", EmbedStyle.Error);
 
                 return;
             }
 
-            if (guildSettings.DebugMode == mode)
+            if (server.DebugMode == mode)
             {
                 await RespondEmbedAsync("Указанный режим уже установлен", EmbedStyle.Warning);
 
                 return;
             }
 
-            var oldMode = guildSettings.DebugMode;
+            var oldMode = server.DebugMode;
 
-            guildSettings.DebugMode = mode;
+            server.DebugMode = mode;
 
             await Context.Db.SaveChangesAsync();
 
@@ -110,19 +84,19 @@ public class OwnerModule : InteractionGuildModuleBase
         }
 
 
-        [SlashCommand("текущий", "Переключить режим отладки")]
+        [SlashCommand("текущий", "Показать текущий режим отладки")]
         public async Task ShowDebugMode()
         {
-            var guildSettings = await Context.Db.GuildSettings.FindAsync(Context.Guild.Id);
+            var server = await Context.Db.Servers.FindAsync(Context.Guild.Id);
 
-            if (guildSettings is null)
+            if (server is null)
             {
                 await RespondEmbedAsync("Сервер не найден", EmbedStyle.Error);
 
                 return;
             }
 
-            await RespondEmbedAsync($"Текущий режим отладки: `{guildSettings.DebugMode}`");
+            await RespondEmbedAsync($"Текущий режим отладки: `{server.DebugMode}`");
         }
     }
 

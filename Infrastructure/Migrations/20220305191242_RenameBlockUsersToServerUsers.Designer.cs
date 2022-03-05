@@ -4,6 +4,7 @@ using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,10 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations
 {
     [DbContext(typeof(BotContext))]
-    partial class GuildContextModelSnapshot : ModelSnapshot
+    [Migration("20220305191242_RenameBlockUsersToServerUsers")]
+    partial class RenameBlockUsersToServerUsers
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -460,17 +462,6 @@ namespace Infrastructure.Migrations
                     b.Property<decimal>("Id")
                         .HasColumnType("decimal(20,0)");
 
-                    b.Property<int>("BlockBehaviour")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(1);
-
-                    b.Property<string>("BlockMessage")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("nvarchar(max)")
-                        .HasDefaultValue("Вам заблокирован доступ к командам. Пожалуйста, обратитесь к администраторам сервера для разблокировки");
-
                     b.Property<int>("DebugMode")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
@@ -654,7 +645,7 @@ namespace Infrastructure.Migrations
             modelBuilder.Entity("Infrastructure.Data.Models.ServerUser", b =>
                 {
                     b.HasOne("Infrastructure.Data.Models.ServerInfo.Server", "Server")
-                        .WithMany("ServerUsers")
+                        .WithMany("BlockUsers")
                         .HasForeignKey("ServerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -692,13 +683,13 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Infrastructure.Data.Models.ServerInfo.Server", b =>
                 {
+                    b.Navigation("BlockUsers");
+
                     b.Navigation("MafiaSettings")
                         .IsRequired();
 
                     b.Navigation("RussianRouletteSettings")
                         .IsRequired();
-
-                    b.Navigation("ServerUsers");
                 });
 #pragma warning restore 612, 618
         }

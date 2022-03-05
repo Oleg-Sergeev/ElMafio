@@ -120,10 +120,10 @@ public class Sheriff : Innocent, IKiller, IChecker
     }
 
 
-    public override async Task<Vote> VoteAsync(MafiaContext context, IMessageChannel? voteChannel = null, IMessageChannel? voteResultChannel = null, bool waitAfterVote = true)
+    public override async Task<Vote> VoteAsync(MafiaContext context, IMessageChannel? voteChannel = null, IMessageChannel? voteResultChannel = null)
     {
         if (!IsNight)
-            return await base.VoteAsync(context, voteChannel, voteResultChannel, waitAfterVote);
+            return await base.VoteAsync(context, voteChannel, voteResultChannel);
 
 
         ShotSelected = false;

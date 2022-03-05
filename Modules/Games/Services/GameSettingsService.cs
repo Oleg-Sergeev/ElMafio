@@ -15,11 +15,11 @@ public class GameSettingsService<TSettings> : IGameSettingsService<TSettings> wh
         if (isTracking)
             settings = await context.Db.Set<TSettings>()
                .AsTracking()
-               .FirstOrDefaultAsync(s => s.GuildSettingsId == context.Guild.Id);
+               .FirstOrDefaultAsync(s => s.ServerId == context.Guild.Id);
         else
             settings = await context.Db.Set<TSettings>()
                .AsNoTracking()
-               .FirstOrDefaultAsync(s => s.GuildSettingsId == context.Guild.Id);
+               .FirstOrDefaultAsync(s => s.ServerId == context.Guild.Id);
 
 
         settings ??= await CreateSettingsAsync(context);
@@ -30,7 +30,7 @@ public class GameSettingsService<TSettings> : IGameSettingsService<TSettings> wh
     {
         TSettings settings = new()
         {
-            GuildSettingsId = context.Guild.Id
+            ServerId = context.Guild.Id
         };
 
         context.Db.Set<TSettings>().Add(settings);

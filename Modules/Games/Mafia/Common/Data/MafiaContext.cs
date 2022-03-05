@@ -1,5 +1,8 @@
 ﻿using System;
+using System.Threading.Tasks;
 using Core.Common.Data;
+using Core.Extensions;
+using Discord;
 using Fergun.Interactive;
 using Infrastructure.Data.Models.Games.Settings.Mafia;
 using Services;
@@ -43,4 +46,67 @@ public class MafiaContext
         CommandContext = commandContext;
         Interactive = interactive;
     }
+
+
+    public async Task ChangeMurdersPermsAsync(OverwritePermissions textPerms, OverwritePermissions? voicePerms)
+    {
+        foreach (var murder in RolesData.Murders.Values)
+        {
+            if (!murder.IsAlive)
+                continue;
+
+            var player = murder.Player;
+
+            var currentTextPerms = GuildData.MurderTextChannel.GetPermissionOverwrite(player);
+
+            if (!currentTextPerms.AreSame(textPerms))
+                await GuildData.MurderTextChannel.AddPermissionOverwriteAsync(player, textPerms);
+
+
+            if (GuildData.MurderVoiceChannel is null || voicePerms is not OverwritePermissions perms)
+                continue;
+
+
+            var currentVoicePerms = GuildData.MurderVoiceChannel.GetPermissionOverwrite(player);
+
+            if (currentVoicePerms.AreSame(voicePerms))
+                continue;
+
+
+            await GuildData.MurderVoiceChannel.AddPermissionOverwriteAsync(player, perms);
+
+            if (player.VoiceChannel != null && perms.ViewChannel == PermValue.Deny)
+                await player.ModifyAsync(props => props.Channel = null);
+        }
+    }
+
+
+    public async Task ChangeCitizenPermsAsync(OverwritePermissions textPerms, OverwritePermissions? voicePerms)
+    {
+        var currentTextPerms = GuildData.GeneralTextChannel.GetPermissionOverwrite(GuildData.MafiaRole);
+
+        if (!currentTextPerms.AreSame(textPerms))
+            await GuildData.GeneralTextChannel.AddPermissionOverwriteAsync(GuildData.MafiaRole, textPerms);
+
+
+        if (GuildData.GeneralVoiceChannel is null || voicePerms is not OverwritePermissions perms)
+            return;
+
+        var currentVoicePerms = GuildData.GeneralVoiceChannel.GetPermissionOverwrite(GuildData.MafiaRole);
+
+        if (currentVoicePerms.AreSame(voicePerms))
+            return;
+
+        await GuildData.GeneralVoiceChannel.AddPermissionOverwriteAsync(GuildData.MafiaRole, perms);
+
+        if (perms.ViewChannel == PermValue.Deny)
+            foreach (var role in RolesData.AliveRoles.Values)
+            {
+                var player = role.Player;
+
+                if (player.VoiceChannel != null)
+                    await player.ModifyAsync(props => props.Channel = null);
+            }
+    }
+
 }

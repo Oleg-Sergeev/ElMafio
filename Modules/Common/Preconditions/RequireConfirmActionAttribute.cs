@@ -88,7 +88,7 @@ public class RequireConfirmActionAttribute : PreconditionAttribute
 
     private static async Task LogAsync(ICommandContext context, CommandInfo command, BotContext db)
     {
-        var logChannelId = await db.GuildSettings
+        var logChannelId = await db.Servers
             .AsNoTracking()
             .Where(gs => gs.Id == context.Guild.Id)
             .Select(gs => gs.LogChannelId)

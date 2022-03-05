@@ -4,16 +4,18 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Core.Common;
 using Core.Extensions;
 using Core.TypeReaders;
 using Discord;
 using Discord.Addons.Hosting;
 using Discord.Commands;
-using Discord.Interactions;
 using Discord.WebSocket;
 using Infrastructure.Data;
-using Infrastructure.Data.Models.Guild;
+using Infrastructure.Data.Models;
+using Infrastructure.Data.Models.ServerInfo;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -23,22 +25,21 @@ public class CommandHandlerService : DiscordClientService
 {
     private const string PrefixSectionPath = "DefaultSettings:Guild:Prefix";
 
-    private static readonly Dictionary<ulong, string> _prefixes = new();
-
-
     private readonly BotContext _db;
     private readonly CommandService _commandService;
     private readonly IServiceProvider _provider;
     private readonly IConfiguration _config;
+    private readonly IMemoryCache _cache;
 
 
     public CommandHandlerService(DiscordSocketClient client, CommandService commandService, BotContext db,
-        IServiceProvider provider, IConfiguration config, ILogger<DiscordClientService> logger) : base(client, logger)
+        IServiceProvider provider, IConfiguration config, ILogger<DiscordClientService> logger, IMemoryCache cache) : base(client, logger)
     {
         _db = db;
         _config = config;
         _provider = provider;
         _commandService = commandService;
+        _cache = cache;
     }
 
 
@@ -59,49 +60,149 @@ public class CommandHandlerService : DiscordClientService
     }
 
 
-    private Task OnMessageReceivedAsync(SocketMessage socketMessage)
+    private async Task OnMessageReceivedAsync(SocketMessage socketMessage)
     {
         if (socketMessage.Author.IsBot)
-            return Task.CompletedTask;
+            return;
 
         if (socketMessage is not SocketUserMessage userMessage)
-            return Task.CompletedTask;
+            return;
 
         if (userMessage.Channel is not IGuildChannel)
-            return Task.CompletedTask;
+            return;
 
         var context = new DbSocketCommandContext(Client, userMessage, _db);
 
+
         int argPos = 0;
-        if (userMessage.HasStringPrefix(_prefixes[context.Guild.Id], ref argPos) || userMessage.HasMentionPrefix(Client.CurrentUser, ref argPos))
+        if (!userMessage.HasMentionPrefix(Client.CurrentUser, ref argPos))
+        {
+            if (!_cache.TryGetValue((context.Guild.Id, "prefix"), out string prefix))
+            {
+                var server = await _db.Servers.FindAsync(context.Guild.Id);
+
+                ArgumentNullException.ThrowIfNull(server);
+
+                prefix = server.Prefix;
+
+                _cache.Set((server.Id, "prefix"), server.Prefix, new MemoryCacheEntryOptions
+                {
+                    SlidingExpiration = TimeSpan.FromHours(4),
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(8)
+                });
+            }
+
+            if (!userMessage.HasStringPrefix(prefix, ref argPos))
+                return;
+        }
+
+
+        Task<int>? saveChangesTask = null;
+        if (!_cache.TryGetValue((context.User.Id, context.Guild.Id), out ServerUser? serverUser))
+        {
+            serverUser = await _db.ServerUsers.FindAsync(context.User.Id, context.Guild.Id);
+
+            if (serverUser is null)
+            {
+                serverUser = new()
+                {
+                    UserId = context.User.Id,
+                    ServerId = context.Guild.Id
+                };
+
+                _db.ServerUsers.Add(serverUser);
+
+                saveChangesTask = _db.SaveChangesAsync();
+            }
+
+            _cache.Set((context.User.Id, context.Guild.Id), serverUser, new MemoryCacheEntryOptions
+            {
+                SlidingExpiration = TimeSpan.FromMinutes(30),
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(120)
+            });
+        }
+
+
+        if (!serverUser!.IsBlocked)
+        {
             _ = Task.Run(async () => await _commandService.ExecuteAsync(context, argPos, _provider));
 
-        return Task.CompletedTask;
+            if (saveChangesTask is not null)
+                await saveChangesTask;
+
+            return;
+        }
+
+
+        await Task.Run(async () =>
+        {
+            var serverSettings = await _db.Servers.FindAsync(context.Guild.Id);
+
+            if (serverSettings is null)
+                throw new InvalidOperationException("Server settings cannot be null");
+
+            var embed = EmbedHelper.CreateEmbed($"{context.User.Mention}\n{serverSettings.BlockMessage}", EmbedStyle.Warning, "Черный список");
+            var key = (serverUser.UserId, serverUser.ServerId, "sendDelay");
+
+            bool canSend = false;
+
+            if (!_cache.TryGetValue(key, out (DateTimeOffset lastExpiredTime, TimeSpan delay) sendDelay))
+            {
+                sendDelay = (DateTimeOffset.UtcNow, TimeSpan.FromSeconds(5));
+
+                _cache.Set(key, sendDelay, new MemoryCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = sendDelay.delay
+                });
+
+                canSend = true;
+            }
+            else if (DateTimeOffset.UtcNow - sendDelay.lastExpiredTime >= sendDelay.delay)
+                canSend = true;
+
+            if (canSend)
+                switch (serverSettings.BlockBehaviour)
+                {
+                    case BlockBehaviour.SendBoth:
+                        await context.Channel.SendMessageAsync(embed: embed);
+                        await context.User.SendMessageAsync(embed: embed);
+                        break;
+
+                    case BlockBehaviour.SendToDM:
+                        await context.User.SendMessageAsync(embed: embed);
+                        break;
+
+                    case BlockBehaviour.SendToServer:
+                        await context.Channel.SendMessageAsync(embed: embed);
+                        break;
+
+                    default:
+                        break;
+                }
+        });
     }
 
 
 
     private async Task OnReadyAsync()
     {
-        var loadGuildSettingsTask = LoadGuildSettingsAsync();
+        var loadServerTask = LoadServerAsync();
 
-        await loadGuildSettingsTask;
+        await loadServerTask;
 
         Client.MessageReceived += OnMessageReceivedAsync;
         Client.JoinedGuild += OnJoinedGuildAsync;
         Client.UserLeft += OnUserLeft;
-
-        _db.SavedChanges += OnDbUpdated;
     }
 
     private async Task OnUserLeft(SocketGuild guild, SocketUser user)
     {
-        var guildSettings = await _db.GuildSettings.FindAsync(guild.Id);
+        var Server = await _db.Servers.FindAsync(guild.Id);
 
-        if (guildSettings is null)
+        if (Server is null)
             throw new InvalidOperationException();
 
-        var logChannelId = guildSettings.LogChannelId;
+        var logChannelId = Server.LogChannelId;
 
         if (logChannelId is not null)
         {
@@ -117,7 +218,7 @@ public class CommandHandlerService : DiscordClientService
 
     private async Task OnJoinedGuildAsync(SocketGuild guild)
     {
-        if (_db.GuildSettings.Any(g => g.Id == guild.Id))
+        if (_db.Servers.Any(g => g.Id == guild.Id))
             return;
 
 
@@ -125,50 +226,33 @@ public class CommandHandlerService : DiscordClientService
     }
 
 
-    private void OnDbUpdated(object? sender, SavedChangesEventArgs args)
+    private async Task LoadServerAsync()
     {
-        if (sender is not BotContext db || args.EntitiesSavedCount != 1)
-            return;
-
-
-        var lastGuildSettingsEntry = db.ChangeTracker.Entries<GuildSettings>().ToList().LastOrDefault();
-
-        if (lastGuildSettingsEntry is not null)
-        {
-            var settings = lastGuildSettingsEntry.Entity;
-
-            if (_prefixes.TryGetValue(settings.Id, out var prefix) && prefix != settings.Prefix)
-            {
-                _prefixes[settings.Id] = settings.Prefix;
-
-                lastGuildSettingsEntry.State = EntityState.Detached;
-            }
-        }
-    }
-
-
-
-    private async Task LoadGuildSettingsAsync()
-    {
-        var guildsCount = await _db.GuildSettings
+        var serversCount = await _db.Servers
             .AsNoTracking()
             .CountAsync();
 
-        var existingGuildsSettings = await _db.GuildSettings
+        var existingServersSettings = await _db.Servers
             .AsNoTracking()
-            .Select(g => new { g.Id, g.Prefix })
+            .Select(s => new { s.Id, s.Prefix })
             .ToListAsync();
 
 
-        foreach (var guildSettings in existingGuildsSettings)
-            _prefixes.Add(guildSettings.Id, guildSettings.Prefix);
+        foreach (var server in existingServersSettings)
+            _cache.Set((server.Id, "prefix"), server.Prefix, new MemoryCacheEntryOptions
+            {
+                SlidingExpiration = TimeSpan.FromHours(4),
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(8)
+            });
 
 
-        if (guildsCount != Client.Guilds.Count)
+        if (serversCount != Client.Guilds.Count)
         {
             var allGuildsId = Client.Guilds.Select(g => g.Id);
 
-            var newGuildsId = allGuildsId.Except(existingGuildsSettings.Select(gs => gs.Id));
+            var newGuildsId = allGuildsId
+                .Except(existingServersSettings
+                .Select(s => s.Id));
 
 
             await AddNewGuildsAsync(newGuildsId);
@@ -178,18 +262,22 @@ public class CommandHandlerService : DiscordClientService
 
     private async Task AddNewGuildAsync(ulong guildId)
     {
-        var guildSettings = new GuildSettings()
+        var server = new Server()
         {
             Id = guildId,
             Prefix = _config[PrefixSectionPath]
         };
 
-        _db.GuildSettings.Add(guildSettings);
+        _db.Servers.Add(server);
 
         await _db.SaveChangesAsync();
 
 
-        _prefixes.Add(guildSettings.Id, guildSettings.Prefix);
+        _cache.Set((server.Id, "prefix"), server.Prefix, new MemoryCacheEntryOptions
+        {
+            SlidingExpiration = TimeSpan.FromHours(4),
+            AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(8)
+        });
     }
 
     private async Task AddNewGuildsAsync(IEnumerable<ulong> newGuildsId)

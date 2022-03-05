@@ -11,7 +11,7 @@ public class GameStatsConfiguration<TEntity> : IEntityTypeConfiguration<TEntity>
 
     public virtual void Configure(EntityTypeBuilder<TEntity> builder)
     {
-        builder.HasKey(nameof(GameStats.UserId), nameof(GameStats.GuildSettingsId));
+        builder.HasKey(nameof(GameStats.UserId), nameof(GameStats.ServerId));
 
         builder.Property(s => s.WinRate)
             .HasComputedColumnSql(
