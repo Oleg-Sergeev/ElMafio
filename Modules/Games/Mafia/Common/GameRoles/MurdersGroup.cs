@@ -24,6 +24,8 @@ public class MurdersGroup : GroupRole
     {
         await context.GuildData.MurderTextChannel.SendEmbedAsync($"Время обсудить вашу следующую жертву. ({DiscussionTime}с)", EmbedStyle.Waiting);
 
+        await Task.Delay(DiscussionTime * 1000);
+
         await context.GuildData.MurderTextChannel.SendEmbedAsync("Голосование начинается...", EmbedStyle.Waiting);
 
         await context.ChangeMurdersPermsAsync(MafiaHelper.DenyWrite, MafiaHelper.DenyView);

@@ -22,6 +22,8 @@ public class Server
 
     public string BlockMessage { get; set; }
 
+    public int SendInterval { get; set; }
+
 
     public MafiaSettings MafiaSettings { get; set; } = null!;
 

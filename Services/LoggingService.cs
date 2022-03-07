@@ -121,7 +121,7 @@ public class LoggingService
 
         try
         {
-            await context.Channel.SendEmbedAsync(msg, EmbedStyle.Error);
+            await context.Channel.SendEmbedAsync(msg.Truncate(EmbedBuilder.MaxDescriptionLength), EmbedStyle.Error);
         } 
         catch (HttpException e1) when (e1.DiscordCode == DiscordErrorCode.InsufficientPermissions)
         {

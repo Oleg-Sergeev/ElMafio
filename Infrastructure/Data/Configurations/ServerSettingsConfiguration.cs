@@ -16,9 +16,14 @@ public class ServerSettingsConfiguration : IEntityTypeConfiguration<Server>
             .HasDefaultValue(BlockBehaviour.SendToDM);
 
         builder.Property(g => g.Prefix)
-            .HasDefaultValue("/")
-            ;
+            .HasDefaultValue("/");
+
         builder.Property(g => g.BlockMessage)
             .HasDefaultValue("Вам заблокирован доступ к командам. Пожалуйста, обратитесь к администраторам сервера для разблокировки");
+
+        builder.Property(g => g.SendInterval)
+            .HasDefaultValue(60);
+
+        builder.HasCheckConstraint($"CK_{nameof(Server)}s_{nameof(Server.SendInterval)}", $"[{nameof(Server.SendInterval)}] BETWEEN 1 AND 600");
     }
 }

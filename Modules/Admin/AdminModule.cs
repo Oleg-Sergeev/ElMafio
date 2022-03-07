@@ -390,6 +390,13 @@ public class AdminModule : CommandGuildModuleBase
                 return;
             }
 
+            if (serverUser.UserId == BotOwner.Id)
+            {
+                await ReplyEmbedAsync($"Невозможно добавить в черный список пользователя {guildUser.GetFullMention()}", EmbedStyle.Error);
+
+                return;
+            }
+
             serverUser.IsBlocked = true;
 
             var n = await Context.Db.SaveChangesAsync();

@@ -56,7 +56,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
 
     protected override MafiaData CreateGameData(IGuildUser host)
-        => new("Мафия", 3, host, new());
+        => new("Мафия", 3, host);
 
 
     [RequireBotPermission(GuildPermission.ManageChannels)]
@@ -78,6 +78,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
         var data = GetGameData();
         data.IsPlaying = true;
         data.Players.Shuffle(3);
+        data.RefreshToken();
 
         await task;
 
@@ -132,11 +133,17 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
             else
                 data.IsPlaying = false;
         }
+        catch (OperationCanceledException)
+        {
+            await ReplyEmbedAsync("Игра была остановлена вручную", EmbedStyle.Warning);
+
+            data.IsPlaying = false;
+        }
         catch (GameSetupAbortedException e)
         {
             var msg = server.DebugMode switch
             {
-                DebugMode.ErrorMessages => e.Message,
+                DebugMode.ErrorMessages => $"{e.Message}\n{e.InnerException?.Message}",
                 DebugMode.StackTrace => e.ToString(),
                 _ => null
             };
@@ -153,7 +160,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
                 DebugMode.StackTrace => e.ToString(),
                 _ => null
             };
-            await ReplyEmbedAsync($"**Игра была аварийно прервана из-за непредвиненной ошибки:**\n{msg}", EmbedStyle.Error, "Ошибка во время игры");
+            await ReplyEmbedAsync($"**Игра была аварийно прервана:**\n{msg}", EmbedStyle.Error, "Ошибка во время игры");
 
             if (settings.DisbandPartyAfterGameEnd)
                 DeleteGameData();

@@ -23,7 +23,7 @@ public class SettingsModule : InteractionGuildModuleBase
 
 
     [SlashCommand("префикс", "Изменить префикс бота")]
-    public async Task SetPrefixAsync([Summary("Новый_префикс_бота")] string newPrefix)
+    public async Task SetPrefixAsync(string newPrefix)
     {
         var server = await Context.Db.Servers.FindAsync(Context.Guild.Id);
 
@@ -49,7 +49,7 @@ public class SettingsModule : InteractionGuildModuleBase
     }
 
 
-    [Group("черный_список", "Настройки черного списка")]
+    [Group("черный-список", "Настройки черного списка")]
     public class BlockModule : InteractionGuildModuleBase
     {
         public BlockModule(InteractiveService interactiveService) : base(interactiveService)
@@ -57,7 +57,7 @@ public class SettingsModule : InteractionGuildModuleBase
         }
 
 
-        [SlashCommand("поведение", "Способ сообщить о блокировке пользователя")]
+        [SlashCommand("поведение", "Задает режим, в котором будет отправляться сообщение")]
         public async Task SetBehaviourAsync(BlockBehaviour blockBehaviour)
         {
             var server = await Context.Db.Servers.FindAsync(Context.Guild.Id);
@@ -85,7 +85,8 @@ public class SettingsModule : InteractionGuildModuleBase
                 await RespondEmbedAsync("Не удалось изменить поведение", EmbedStyle.Error);
         }
 
-        [SlashCommand("чс_сообщение", "Сообщение об блокировке")]
+
+        [SlashCommand("сообщение", "Изменить сообщение о блокировке")]
         public async Task SetBlockMessageAsync(string blockMessage)
         {
             var server = await Context.Db.Servers.FindAsync(Context.Guild.Id);
@@ -112,6 +113,44 @@ public class SettingsModule : InteractionGuildModuleBase
             }
             else
                 await RespondEmbedAsync("Не удалось изменить сообщение", EmbedStyle.Error);
+        }
+
+
+
+        [SlashCommand("интервал", "Задать интервал отправки (в секундах) сообщения о блокировке")]
+        public async Task SetSendMessageIntervalAsync([Summary("интервал", "диапазон значений: `1-600`")]int interval)
+        {
+            if (interval < 1 || interval > 600)
+            {
+                await RespondEmbedAsync("Интервал должен быть в диапазоне `1-600`", EmbedStyle.Error);
+
+                return;
+            }
+
+            var server = await Context.Db.Servers.FindAsync(Context.Guild.Id);
+
+            ArgumentNullException.ThrowIfNull(server);
+
+
+            var oldInterval = server.SendInterval;
+
+            if (interval == oldInterval)
+            {
+                await RespondEmbedAsync("Данный интервал уже установлен", EmbedStyle.Warning);
+
+                return;
+            }
+
+            server.SendInterval = interval;
+
+            var n = await Context.Db.SaveChangesAsync();
+
+            if (n > 0)
+            {
+                await RespondEmbedAsync($"Интервал успешно изменен с `{oldInterval}с` на `{interval}с`", EmbedStyle.Successfull);
+            }
+            else
+                await RespondEmbedAsync("Не удалось изменить интервал", EmbedStyle.Error);
         }
     }
 

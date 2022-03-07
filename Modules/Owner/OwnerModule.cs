@@ -3,27 +3,28 @@ using System.Reflection;
 using System.Threading.Tasks;
 using Core.Common;
 using Core.Extensions;
-using Discord.Interactions;
+using Discord.Commands;
 using Fergun.Interactive;
 using Infrastructure.Data.Models.Guild;
+using Microsoft.Extensions.Caching.Memory;
 using Serilog;
 
 namespace Modules.Owner;
 
 [RequireContext(ContextType.Guild)]
 [RequireOwner]
-[Group("разработка", "Раздел для разработчиков")]
-public class OwnerModule : InteractionGuildModuleBase
+[Group]
+public class OwnerModule : CommandGuildModuleBase
 {
     public OwnerModule(InteractiveService interactiveService) : base(interactiveService)
     {
     }
 
 
-    [SlashCommand("рестарт", "Перезапустить бота")]
+    [Command("Рестарт")]
     public async Task RestartAsync()
     {
-        await RespondEmbedAsync("Перезапуск...", EmbedStyle.Debug);
+        await ReplyEmbedAsync("Перезапуск...", EmbedStyle.Debug);
 
         Log.Debug("({0:l}): Restart request received from server {1} by user {2}",
                   nameof(RestartAsync),
@@ -34,7 +35,7 @@ public class OwnerModule : InteractionGuildModuleBase
 
         if (asm is null)
         {
-            await RespondEmbedAsync("Не удалось найти входную сборку", EmbedStyle.Error);
+            await ReplyEmbedAsync("Не удалось найти входную сборку", EmbedStyle.Error);
 
             return;
         }
@@ -45,8 +46,9 @@ public class OwnerModule : InteractionGuildModuleBase
     }
 
 
-    [Group("дебаг", "Управление режимом отладки")]
-    public class DebugModule : InteractionGuildModuleBase
+    [Group("Дебаг")]
+    [Alias("Д")]
+    public class DebugModule : CommandGuildModuleBase
     {
         public DebugModule(InteractiveService interactive) : base(interactive)
         {
@@ -54,21 +56,22 @@ public class OwnerModule : InteractionGuildModuleBase
 
 
 
-        [SlashCommand("переключить", "Переключить режим отладки")]
+        [Command("Отладка")]
+        [Alias("о")]
         public async Task SwitchDebugMode(DebugMode mode)
         {
             var server = await Context.Db.Servers.FindAsync(Context.Guild.Id);
 
             if (server is null)
             {
-                await RespondEmbedAsync("Сервер не найден", EmbedStyle.Error);
+                await ReplyEmbedAsync("Сервер не найден", EmbedStyle.Error);
 
                 return;
             }
 
             if (server.DebugMode == mode)
             {
-                await RespondEmbedAsync("Указанный режим уже установлен", EmbedStyle.Warning);
+                await ReplyEmbedAsync("Указанный режим уже установлен", EmbedStyle.Warning);
 
                 return;
             }
@@ -80,24 +83,58 @@ public class OwnerModule : InteractionGuildModuleBase
             await Context.Db.SaveChangesAsync();
 
 
-            await RespondEmbedAsync($"Режим отладки успешно изменен: `{oldMode} -> {mode}`", EmbedStyle.Successfull);
+            await ReplyEmbedAsync($"Режим отладки успешно изменен: `{oldMode} -> {mode}`", EmbedStyle.Successfull);
         }
 
 
-        [SlashCommand("текущий", "Показать текущий режим отладки")]
+        [Command("Текущий")]
+        [Alias("Тек", "Т")]
         public async Task ShowDebugMode()
         {
             var server = await Context.Db.Servers.FindAsync(Context.Guild.Id);
 
             if (server is null)
             {
-                await RespondEmbedAsync("Сервер не найден", EmbedStyle.Error);
+                await ReplyEmbedAsync("Сервер не найден", EmbedStyle.Error);
 
                 return;
             }
 
-            await RespondEmbedAsync($"Текущий режим отладки: `{server.DebugMode}`");
+            await ReplyEmbedAsync($"Текущий режим отладки: `{server.DebugMode}`");
         }
     }
 
+
+    [Group("Кэш")]
+    [Alias("К")]
+    public class CacheModule : CommandGuildModuleBase
+    {
+        private readonly IMemoryCache _cache;
+
+
+        public CacheModule(InteractiveService interactiveService, IMemoryCache cache) : base(interactiveService)
+        {
+            _cache = cache;
+        }
+
+
+
+        [Command("Бд")]
+        public async Task ClearDbLocalCacheAsync()
+        {
+            Context.Db.ChangeTracker.Clear();
+
+            await ReplyEmbedAsync("Кэш бд успешно очищен", EmbedStyle.Successfull);
+        }
+
+
+        [Command("Память")]
+        [Alias("П")]
+        public async Task ClearInMemoryCacheAsync()
+        {
+            _cache.Clear();
+
+            await ReplyEmbedAsync("Кэш памяти успешно очищен", EmbedStyle.Successfull);
+        }
+    }
 }

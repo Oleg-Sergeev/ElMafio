@@ -297,7 +297,7 @@ public abstract class GroupRole : GameRole
 
             return new EmbedBuilder()
             .WithTitle("Дневное голосование")
-            .AddField("Игрок", string.Join('\n', showNicknames ? playersNames : Enumerable.Repeat("********", playersVotes.Count)), true)
+            .AddField("Игрок", string.Join('\n', showNicknames ? playersNames : Enumerable.Repeat("||**Anonymous**||", playersVotes.Count)), true)
             .AddField("Голос", string.Join('\n', playersVotes.Values.Select(v => $"{n++} {(v is null ? "None" : v.IsSkip ? "Skip" : v.Option?.GetFullName() ?? "None")}")), true)
             .Build();
         }

@@ -30,20 +30,9 @@ public class FunModule : CommandGuildModuleBase
     }
 
 
-    [Command("Эхо")]
-    [Summary("Напишите от лица бота любую вещь")]
-    [RequireBotPermission(GuildPermission.ManageMessages)]
-    public async Task Echo([Remainder][Summary("Текст")] string text)
-    {
-        await Context.Message.DeleteAsync();
-
-        await ReplyAsync(text, messageReference: Context.Message.Reference);
-    }
-
-
     [Command("Данет")]
     [Summary("Да, или нет")]
-    public async Task SayYesOrNo()
+    public async Task SayYesOrNoAsync()
     {
         bool answer = Random.Next(2) > 0;
 
@@ -56,7 +45,7 @@ public class FunModule : CommandGuildModuleBase
 
     [Command("Кто")]
     [Summary("Узнайте, кто сделал это")]
-    public async Task SayWhoIs([Remainder][Summary("Событие, которое кто-то сделал")] string? message = null)
+    public async Task SayWhoIsAsync([Remainder][Summary("Событие, которое кто-то сделал")] string? message = null)
     {
         int num = Random.Next(0, Context.Guild.Users.Count);
 
@@ -66,6 +55,42 @@ public class FunModule : CommandGuildModuleBase
         await ReplyAsync(embed: EmbedHelper.CreateEmbed($"**{nickname}** {message}"),
             messageReference: new(Context.Message.Id));
     }
+
+
+    [Command("Рулетка")]
+    [Alias("Колесо")]
+    [Summary("Укажите набор слов, из которых бот выберет одно" +
+        "\nПример: `Рулетка Арбуз, Дыня, Груша и яблоко, Что-нибудь еще вкусное`")]
+    public async Task RouletteAsync([Remainder][Summary("Набор слов, участвующих в рулетке")] string text)
+    {
+        var arr = text.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (arr.Length == 0)
+        {
+            await ReplyEmbedAsync("Пожалуйста, укажите набор слов через запятую");
+
+            return;
+        }
+
+        int num = Random.Next(0, arr.Length);
+
+        await ReplyEmbedAsync($"На рулетке выпадает ЭТО - **`{arr[num]}`**");
+    }
+
+
+    [Command("Рулетка")]
+    [Alias("Колесо")]
+    [Priority(1)]
+    public async Task RouletteAsync(int min, int max)
+    {
+        if (min > max)
+            (min, max) = (max, min);
+
+        int num = Random.Next(min, max + 1);
+
+        await ReplyEmbedAsync($"На рулетке выпадает ЭТО - **`{num}`**");
+    }
+
 
     [Command("Голосование")]
     [Alias("голос", "гс")]
@@ -112,6 +137,19 @@ public class FunModule : CommandGuildModuleBase
         await response.AddReactionsAsync(emotes.ToArray());
     }
 
+
+
+    [Command("Эхо")]
+    [Summary("Напишите от лица бота любую вещь")]
+    [RequireBotPermission(GuildPermission.ManageMessages)]
+    public async Task EchoAsync([Remainder][Summary("Текст")] string text)
+    {
+        await Context.Message.DeleteAsync();
+
+        await ReplyAsync(text, messageReference: Context.Message.Reference);
+    }
+
+
     [Command("Буквы")]
     [Summary("Выведите сообщение огромными буквами, чтобы его точно заметили")]
     [Remarks("Команда поддерживает перевод кириллицы в латиницу" +
@@ -135,13 +173,14 @@ public class FunModule : CommandGuildModuleBase
             await ReplyAsync(letters, messageReference: Context.Message.Reference);
     }
 
+
     [Command("Эхобуквы")]
     [Summary("Выведите сообщение огромными буквами от лица бота, чтобы его точно заметили")]
     [Remarks("Команда поддерживает перевод кириллицы в латиницу" +
         "\nСпец. символы, а также некоторые символы кириллицы не переводятся в буквы и заменяются пробелом" +
         "\nМаксимальная длина сообщения - **30 символов**")]
     [RequireBotPermission(GuildPermission.ManageMessages)]
-    public async Task TransferToLetterSmilesAsyncAndEcho([Remainder][Summary("Текст, который нужно перевести в большие буквы")] string text)
+    public async Task TransferToLetterSmilesAsyncAndEchoAsync([Remainder][Summary("Текст, который нужно перевести в большие буквы")] string text)
     {
         await TransferToLetterSmilesAsync(text);
 
@@ -183,6 +222,7 @@ public class FunModule : CommandGuildModuleBase
 
 
     [Command("Смайл")]
+    [Alias("Эмодзи", "Эмоция")]
     [Summary("Получить картинку указанного смайла")]
     [Remarks("Если смайл имеет анимацию, то будет получена анимированная версия. При отсутствии анимированной версии, будет получена картинка")]
     [RequireBotPermission(GuildPermission.AttachFiles)]
@@ -191,6 +231,7 @@ public class FunModule : CommandGuildModuleBase
 
 
     [Command("СмайлАйди")]
+    [Alias("ЭмодзиАйди", "ЭмоцияАйди")]
     [Summary("Получить смайл по его ID")]
     [Remarks("Для получения ID смайла, поставьте `\\` и затем укажите сам смайл. Смайл будет преобразован в вид `<:smileName:smileId>`. " +
         "Для команды необходим ID, т.е. часть `smileId`")]

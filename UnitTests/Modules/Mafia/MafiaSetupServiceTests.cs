@@ -37,7 +37,7 @@ public class MafiaSetupServiceTests
             }
         };
 
-        var mafiaData = new MafiaData("Мафия", 3, null!, null!);
+        var mafiaData = new MafiaData("Мафия", 3, null!);
         mafiaData.Players.AddRange(TestsHelper.GetPlayers(3));
 
 
@@ -65,7 +65,7 @@ public class MafiaSetupServiceTests
             }
         };
 
-        var mafiaData = new MafiaData("Мафия", 3, null!, null!);
+        var mafiaData = new MafiaData("Мафия", 3, null!);
         mafiaData.Players.AddRange(TestsHelper.GetPlayers(players));
 
 

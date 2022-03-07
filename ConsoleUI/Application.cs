@@ -74,6 +74,7 @@ public static class Application
             .AddJsonFile("ContactsConfig.json", false, true)
             .AddJsonFile("CommandExamples.json", true, true)
             .AddJsonFile("Manuals.json", true, true)
+            .AddJsonFile("Favorites.json", true, true)
             .AddUserSecrets<Program>(false)
             .Build();
         })

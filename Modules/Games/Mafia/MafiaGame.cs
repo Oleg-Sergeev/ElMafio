@@ -99,6 +99,10 @@ public class MafiaGame
             {
                 throw;
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (AggregateException ae)
             {
                 var e = ae.Flatten();
@@ -106,7 +110,7 @@ public class MafiaGame
             }
             catch (Exception e)
             {
-                throw new GameSetupAbortedException($"Ошибка во время подготовки игры\n{e}", e);
+                throw new GameSetupAbortedException($"Ошибка во время подготовки игры", e);
             }
 
             var msg = $"{_context.MafiaData.Name} успешно запущена";
@@ -168,10 +172,6 @@ public class MafiaGame
             await Task.Delay(3000);
 
             return new(winner, _chronology);
-        }
-        catch (OperationCanceledException)
-        {
-            return new(Winner.None, _chronology);
         }
         finally
         {

@@ -4,11 +4,22 @@ namespace Core.Common.Data;
 
 public class MafiaData : GameData
 {
-    public CancellationTokenSource TokenSource { get; }
+    public CancellationTokenSource TokenSource { get; private set; }
 
 
-    public MafiaData(string name, int minPlayersCount, IGuildUser host, CancellationTokenSource tokenSource) : base(name, minPlayersCount, host)
+    public MafiaData(string name, int minPlayersCount, IGuildUser host) : base(name, minPlayersCount, host)
     {
-        TokenSource = tokenSource;
+        TokenSource = new();
+    }
+
+
+    public void RefreshToken()
+    {
+        if (!TokenSource.IsCancellationRequested)
+            return;
+
+        TokenSource.Dispose();
+
+        TokenSource = new();
     }
 }

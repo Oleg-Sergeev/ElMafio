@@ -100,6 +100,8 @@ public class CommandHandlerService : DiscordClientService
         Task<int>? saveChangesTask = null;
         if (!_cache.TryGetValue((context.User.Id, context.Guild.Id), out ServerUser? serverUser))
         {
+            await context.Channel.SendEmbedAsync("Not found in cache", EmbedStyle.Debug);
+
             serverUser = await _db.ServerUsers.FindAsync(context.User.Id, context.Guild.Id);
 
             if (serverUser is null)
@@ -142,28 +144,24 @@ public class CommandHandlerService : DiscordClientService
                 throw new InvalidOperationException("Server settings cannot be null");
 
             var embed = EmbedHelper.CreateEmbed($"{context.User.Mention}\n{serverSettings.BlockMessage}", EmbedStyle.Warning, "Черный список");
-            var key = (serverUser.UserId, serverUser.ServerId, "sendDelay");
 
-            bool canSend = false;
 
-            if (!_cache.TryGetValue(key, out (DateTimeOffset lastExpiredTime, TimeSpan delay) sendDelay))
+            var key = (serverUser.UserId, serverUser.ServerId, "canSendMessage");
+
+            if (!_cache.TryGetValue(key, out bool canSend))
             {
-                sendDelay = (DateTimeOffset.UtcNow, TimeSpan.FromSeconds(5));
+                canSend = true;
 
-                _cache.Set(key, sendDelay, new MemoryCacheEntryOptions
+                _cache.Set(key, false, new MemoryCacheEntryOptions
                 {
-                    AbsoluteExpirationRelativeToNow = sendDelay.delay
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(serverSettings.SendInterval)
                 });
-
-                canSend = true;
             }
-            else if (DateTimeOffset.UtcNow - sendDelay.lastExpiredTime >= sendDelay.delay)
-                canSend = true;
 
             if (canSend)
                 switch (serverSettings.BlockBehaviour)
                 {
-                    case BlockBehaviour.SendBoth:
+                    case BlockBehaviour.SendEverywhere:
                         await context.Channel.SendMessageAsync(embed: embed);
                         await context.User.SendMessageAsync(embed: embed);
                         break;

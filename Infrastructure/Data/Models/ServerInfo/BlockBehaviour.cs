@@ -1,12 +1,20 @@
 ﻿using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace Infrastructure.Data.Models.ServerInfo;
 
 [Flags]
 public enum BlockBehaviour
 {
-    Silent = 0,
+    [Display(Name = "Не отправлять сообщения")]
+    DoNotSend = 0,
+
+    [Display(Name = "Отправлять в ЛС")]
     SendToDM = 1 << 0,
+
+    [Display(Name = "Отправлять на Сервер")]
     SendToServer = 1 << 1,
-    SendBoth = SendToDM | SendToServer
+
+    [Display(Name = "Отправлять везде")]
+    SendEverywhere = SendToDM | SendToServer
 }
