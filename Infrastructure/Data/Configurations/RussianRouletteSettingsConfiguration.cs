@@ -1,4 +1,4 @@
-﻿using Infrastructure.Data.Models.Games.Settings;
+﻿using Infrastructure.Data.Entities.Games.Settings;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 

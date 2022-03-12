@@ -4,7 +4,7 @@ using Core.Common.Data;
 using Core.Extensions;
 using Discord;
 using Fergun.Interactive;
-using Infrastructure.Data.Models.Games.Settings.Mafia;
+using Infrastructure.Data.Entities.Games.Settings.Mafia;
 using Services;
 
 namespace Modules.Games.Mafia.Common.Data;

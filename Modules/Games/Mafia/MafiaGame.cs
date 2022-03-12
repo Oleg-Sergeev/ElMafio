@@ -2,23 +2,18 @@
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
-using System.Runtime;
 using System.Threading;
 using System.Threading.Tasks;
 using Core.Common;
-using Core.Common.Data;
 using Core.Exceptions;
 using Core.Extensions;
 using Discord;
-using Discord.Net;
 using Fergun.Interactive;
-using Infrastructure.Data.Models.Games.Settings.Mafia;
-using Microsoft.VisualBasic;
+using Infrastructure.Data.Entities.Games.Settings.Mafia;
 using Modules.Games.Mafia.Common;
 using Modules.Games.Mafia.Common.Data;
 using Modules.Games.Mafia.Common.GameRoles;
 using Modules.Games.Mafia.Common.Services;
-using static System.Collections.Specialized.BitVector32;
 
 namespace Modules.Games.Mafia;
 
@@ -84,14 +79,18 @@ public class MafiaGame
 
                 _mafiaService.SetupRoles(_context);
 
-                var tasks = new List<Task>
-                {
-                    _mafiaService.SendRolesInfoAsync(_context),
-                    _mafiaService.SetupGuildAsync(_context),
-                    _mafiaService.SetupUsersAsync(_context)
-                };
+                await _mafiaService.SetupGuildAsync(_context);
+                await _mafiaService.SetupUsersAsync(_context);
+                await _mafiaService.SendRolesInfoAsync(_context);
 
-                Task.WaitAll(tasks.ToArray());
+                //var tasks = new List<Task>
+                //{
+                //    _mafiaService.SendRolesInfoAsync(_context),
+                //    _mafiaService.SetupGuildAsync(_context),
+                //    _mafiaService.SetupUsersAsync(_context)
+                //};
+
+                //Task.WaitAll(tasks.ToArray());
 
                 await Task.Delay(3000);
             }
@@ -392,7 +391,7 @@ public class MafiaGame
         //handle specific roles
 
         if (!_template.GameSubSettings.IsCustomGame || _template.RolesExtraInfoSubSettings.MurdersKnowEachOther)
-            await _context.ChangeMurdersPermsAsync(_allowWrite, _allowSpeak);
+            await Task.Delay(1);
 
         if (!_template.GameSubSettings.IsCustomGame || _template.RolesExtraInfoSubSettings.MurdersVoteTogether)
         {
@@ -435,19 +434,26 @@ public class MafiaGame
             {
                 while (tasksSingle.Count > 0)
                 {
-                    var task = await Task.WhenAny(tasksSingle);
+                    try
+                    {
+                        var task = await Task.WhenAny(tasksSingle);
 
-                    var vote = await task;
+                        var vote = await task;
 
-                    tasksSingle.Remove(task);
+                        tasksSingle.Remove(task);
 
-                    if (!vote.VotedRole.IsAlive)
-                        continue;
+                        if (!vote.VotedRole.IsAlive)
+                            continue;
 
-                    var action = _chronology.AddAction($"Голосование - {(vote.IsSkip ? "Пропуск" : vote.Option?.GetFullName() ?? "Нет данных")}", vote.VotedRole);
+                        var action = _chronology.AddAction($"Голосование - {(vote.IsSkip ? "Пропуск" : vote.Option?.GetFullName() ?? "Нет данных")}", vote.VotedRole);
 
-                    if (_guildData.SpectatorTextChannel is not null)
-                        await _guildData.SpectatorTextChannel.SendEmbedAsync(action, "Ночь");
+                        if (_guildData.SpectatorTextChannel is not null)
+                            await _guildData.SpectatorTextChannel.SendEmbedAsync(action, "Ночь");
+                    }
+                    catch (Exception e)
+                    {
+                        _context.CommandContext.Channel.SendEmbedAsync(e.ToString(), EmbedStyle.Error, "Ошибка").Wait();
+                    }
                 }
             });
 
@@ -455,37 +461,50 @@ public class MafiaGame
             {
                 while (tasksGroup.Count > 0)
                 {
-                    var task = await Task.WhenAny(tasksGroup);
-
-                    var voteGroup = await task;
-
-                    var choice = voteGroup.Choice;
-
-                    tasksGroup.Remove(task);
-
-                    if (!voteGroup.Choice.VotedRole.IsAlive)
-                        continue;
-
-                    _chronology.AddAction($"Групповое голосование - {(choice.IsSkip ? "Пропуск" : choice.Option?.GetFullName() ?? "Нет данных")}", choice.VotedRole);
-
-                    if (_guildData.SpectatorTextChannel is not null)
+                    try
                     {
-                        var embed = new EmbedBuilder()
-                            .WithTitle("Ночь")
-                            .WithDescription($"Голосование [{voteGroup.Choice.VotedRole}]")
-                            .WithInformationMessage()
-                            .AddField("Игрок", string.Join('\n', voteGroup.PlayersVote.Values.Select(vote => $"{vote.VotedRole} [{vote.VotedRole.Player.GetFullName()}]")), true)
-                            .AddField("Голос", string.Join('\n', voteGroup.PlayersVote.Values.Select(vote => $"{(vote.IsSkip ? "Пропуск" : vote.Option?.GetFullName() ?? "Нет данных")}")), true)
-                            .AddField("Результат", voteGroup.Choice.IsSkip ? "Пропуск" : voteGroup.Choice.Option?.GetFullName() ?? "Нет данных")
-                            .Build();
+                        var task = await Task.WhenAny(tasksGroup);
 
-                        await _guildData.SpectatorTextChannel.SendMessageAsync(embed: embed);
+                        var voteGroup = await task;
+
+                        var choice = voteGroup.Choice;
+
+                        tasksGroup.Remove(task);
+
+                        if (!voteGroup.Choice.VotedRole.IsAlive)
+                            continue;
+
+                        _chronology.AddAction($"Групповое голосование - {(choice.IsSkip ? "Пропуск" : choice.Option?.GetFullName() ?? "Нет данных")}", choice.VotedRole);
+
+                        if (_guildData.SpectatorTextChannel is not null)
+                        {
+                            var embed = new EmbedBuilder()
+                                .WithTitle("Ночь")
+                                .WithDescription($"Голосование [{voteGroup.Choice.VotedRole}]")
+                                .WithInformationMessage()
+                                .AddField("Игрок", string.Join('\n', voteGroup.PlayersVote.Values.Select(vote => $"{vote.VotedRole} [{vote.VotedRole.Player.GetFullName()}]")), true)
+                                .AddField("Голос", string.Join('\n', voteGroup.PlayersVote.Values.Select(vote => $"{(vote.IsSkip ? "Пропуск" : vote.Option?.GetFullName() ?? "Нет данных")}")), true)
+                                .AddField("Результат", voteGroup.Choice.IsSkip ? "Пропуск" : voteGroup.Choice.Option?.GetFullName() ?? "Нет данных")
+                                .Build();
+
+                            await _guildData.SpectatorTextChannel.SendMessageAsync(embed: embed);
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        _context.CommandContext.Channel.SendEmbedAsync(e.ToString(), EmbedStyle.Error, "Ошибка").Wait();
                     }
                 }
             });
 
-
-            await Task.WhenAll(taskSingle, taskGroup);
+            try
+            {
+                await Task.WhenAll(taskSingle, taskGroup);
+            }
+            catch (Exception e)
+            {
+                _context.CommandContext.Channel.SendEmbedAsync(e.ToString(), EmbedStyle.Error, "Ошибка").Wait();
+            }
 
 
             await _guildData.GeneralTextChannel.SendEmbedAsync("Игроки сделали свои ходы", EmbedStyle.Successfull, $"Очередь #{i}");
@@ -686,7 +705,7 @@ public class MafiaGame
 
                 if (_guildData.MurderVoiceChannel is not null)
                     await _guildData.MurderVoiceChannel.RemovePermissionOverwriteAsync(player);
-            } 
+            }
             catch (Exception e)
             {
                 await _context.CommandContext.Channel
@@ -768,7 +787,7 @@ public class MafiaGame
         await Task.Delay(3000);
     }
 
-    
+
 
     private async Task ReturnPlayersDataAsync()
     {
@@ -779,7 +798,7 @@ public class MafiaGame
             try
             {
                 await EjectPlayerAsync(player, false);
-            } 
+            }
             catch (Exception e)
             {
                 await _context.CommandContext.Channel.SendEmbedAsync(e.ToString(), EmbedStyle.Error);

@@ -1,6 +1,4 @@
-﻿using System.Collections;
-
-namespace Core.Common.Chronology;
+﻿namespace Core.Common.Chronology;
 
 public class Chronology<T>
 {

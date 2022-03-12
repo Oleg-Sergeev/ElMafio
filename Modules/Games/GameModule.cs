@@ -12,11 +12,12 @@ using Discord;
 using Discord.Commands;
 using Fergun.Interactive;
 using Fergun.Interactive.Pagination;
-using Infrastructure.Data.Models;
-using Infrastructure.Data.Models.Games.Stats;
+using Infrastructure.Data.Entities.Games.Stats;
+using Infrastructure.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using Modules.Common.Preconditions;
+using Modules.Common.Preconditions.Commands;
+using Infrastructure.Data.Entities.ServerInfo;
 
 namespace Modules.Games;
 
@@ -58,7 +59,8 @@ public abstract class GameModule<TData, TStats> : CommandGuildModuleBase
         await JoinAsync(guildUser);
     }
 
-    [RequireOwner]
+    [RequireOwner(Group = "perm")]
+    [RequireStandartAccessLevel(StandartAccessLevel.Developer, Group = "perm")]
     [Command("Играть")]
     [Alias("игра")]
     public async Task JoinAsync(IGuildUser player)
@@ -151,7 +153,9 @@ public abstract class GameModule<TData, TStats> : CommandGuildModuleBase
             return;
         }
 
-        if (gameData.Host.Id != Context.User.Id && !Context.User.HasGuildPermission(GuildPermission.Administrator))
+        var res = await CheckUserPermsAsync(gameData.Host.Id);
+
+        if (!res.IsSuccess)
         {
             await ReplyEmbedAsync("Остановить игру может только хост или администратор", EmbedStyle.Error);
 
@@ -252,6 +256,13 @@ public abstract class GameModule<TData, TStats> : CommandGuildModuleBase
         if (!res.IsSuccess)
         {
             await ReplyEmbedAsync("Сменить хоста может только текущий хост или администратор", EmbedStyle.Error);
+
+            return;
+        }
+
+        if (!gameData.Players.Contains(newHost))
+        {
+            await ReplyEmbedAsync("Новый хост должен быть участником текущей игры", EmbedStyle.Error);
 
             return;
         }
@@ -482,7 +493,9 @@ public abstract class GameModule<TData, TStats> : CommandGuildModuleBase
             && !Context.User.HasGuildPermission(GuildPermission.Administrator)
             && Context.User.Id != Context.Guild.OwnerId 
             && Context.User.Id != BotOwner.Id)
-                return Task.FromResult(PreconditionResult.FromError("Вы не являетесь хостом игры. Запустить игру может только хост"));
+        {
+            return Task.FromResult(PreconditionResult.FromError("Вы не являетесь хостом игры. Запустить игру может только хост"));
+        }
 
         return Task.FromResult(PreconditionResult.FromSuccess());
     }
@@ -696,6 +709,7 @@ public abstract class GameModule<TData, TStats> : CommandGuildModuleBase
 
 
         [Group]
+        [RequireStandartAccessLevel(StandartAccessLevel.Administrator, Group = "perm")]
         [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
         [RequireOwner(Group = "perm")]
         [Summary("Данный раздел предназначен для управления статистикой и рейтингом игроков")]
@@ -812,6 +826,7 @@ public abstract class GameModule<TData, TStats> : CommandGuildModuleBase
 
 
         [Group]
+        [RequireStandartAccessLevel(StandartAccessLevel.Administrator, Group = "perm")]
         [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
         [RequireOwner(Group = "perm")]
         public abstract class GameAdminModule : CommandGuildModuleBase

@@ -1,4 +1,4 @@
-﻿using Infrastructure.Data.Models.Games.Stats;
+﻿using Infrastructure.Data.Entities.Games.Stats;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 

@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using Discord;
 using Modules.Games.Mafia.Common.GameRoles;
 
 namespace Modules.Games.Mafia;

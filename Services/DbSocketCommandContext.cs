@@ -1,12 +1,9 @@
 ﻿using System;
-using System.Linq;
 using System.Threading.Tasks;
 using Discord.Commands;
 using Discord.WebSocket;
 using Infrastructure.Data;
-using Infrastructure.Data.Models.Games.Settings;
-using Infrastructure.Data.Models.ServerInfo;
-using Microsoft.EntityFrameworkCore;
+using Infrastructure.Data.Entities.ServerInfo;
 
 namespace Services;
 

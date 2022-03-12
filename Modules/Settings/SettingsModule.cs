@@ -4,13 +4,14 @@ using Core.Common;
 using Discord;
 using Discord.Interactions;
 using Fergun.Interactive;
-using Infrastructure.Data.Models.ServerInfo;
+using Infrastructure.Data.Entities.ServerInfo;
 using Microsoft.Extensions.Caching.Memory;
+using Modules.Common.Preconditions.Interactions;
 
 namespace Modules.Settings;
 
 [Group("настройки", "Редактирование настроек сервера")]
-[RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
+[RequireStandartAccessLevel(StandartAccessLevel.Administrator, Group = "perm")]
 [RequireOwner(Group = "perm")]
 public class SettingsModule : InteractionGuildModuleBase
 {

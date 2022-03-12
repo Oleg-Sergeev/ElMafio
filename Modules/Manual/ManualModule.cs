@@ -7,9 +7,10 @@ using Core.Extensions;
 using Discord;
 using Discord.Commands;
 using Fergun.Interactive;
-using Fergun.Interactive.Selection;
+using Infrastructure.Data.Entities.ServerInfo;
 using Microsoft.Extensions.Configuration;
 using Modules.Common.MultiSelect;
+using Modules.Common.Preconditions.Commands;
 
 namespace Modules.Manual;
 
@@ -95,6 +96,7 @@ public class ManualModule : CommandGuildModuleBase
     [Command("Администрирование")]
     [Alias("Админ", "а")]
     [Summary("Руководство для администраторов поможет разобраться с первичной настройкой бота и дальнейшей работой с ним")]
+    [RequireStandartAccessLevel(StandartAccessLevel.Administrator, Group = "perm")]
     [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
     [RequireOwner(Group = "perm")]
     public async Task ShowAdminManualList()

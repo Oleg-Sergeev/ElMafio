@@ -1,10 +1,10 @@
 ﻿using System.Reflection;
 using Infrastructure.Data.Configurations;
-using Infrastructure.Data.Models;
-using Infrastructure.Data.Models.Games.Settings;
-using Infrastructure.Data.Models.Games.Settings.Mafia;
-using Infrastructure.Data.Models.Games.Stats;
-using Infrastructure.Data.Models.ServerInfo;
+using Infrastructure.Data.Entities;
+using Infrastructure.Data.Entities.Games.Settings;
+using Infrastructure.Data.Entities.Games.Settings.Mafia;
+using Infrastructure.Data.Entities.Games.Stats;
+using Infrastructure.Data.Entities.ServerInfo;
 using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Data;
@@ -25,6 +25,8 @@ public class BotContext : DbContext
     public DbSet<QuizStats> QuizStats => Set<QuizStats>();
 
     public DbSet<ServerUser> ServerUsers => Set<ServerUser>();
+
+    public DbSet<AccessLevel> AccessLevels => Set<AccessLevel>();
 
 
     public BotContext()

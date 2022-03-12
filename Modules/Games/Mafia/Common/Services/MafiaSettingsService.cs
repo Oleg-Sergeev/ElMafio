@@ -1,6 +1,6 @@
 ﻿using System.Linq;
 using System.Threading.Tasks;
-using Infrastructure.Data.Models.Games.Settings.Mafia;
+using Infrastructure.Data.Entities.Games.Settings.Mafia;
 using Microsoft.EntityFrameworkCore;
 using Modules.Games.Services;
 using Services;

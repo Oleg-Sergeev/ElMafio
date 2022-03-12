@@ -12,8 +12,8 @@ using Discord.Addons.Hosting;
 using Discord.Commands;
 using Discord.WebSocket;
 using Infrastructure.Data;
-using Infrastructure.Data.Models;
-using Infrastructure.Data.Models.ServerInfo;
+using Infrastructure.Data.Entities;
+using Infrastructure.Data.Entities.ServerInfo;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
@@ -79,7 +79,9 @@ public class CommandHandlerService : DiscordClientService
         {
             if (!_cache.TryGetValue((context.Guild.Id, "prefix"), out string prefix))
             {
-                var server = await _db.Servers.FindAsync(context.Guild.Id);
+                var server = await _db.Servers
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == context.Guild.Id);
 
                 ArgumentNullException.ThrowIfNull(server);
 
@@ -96,13 +98,12 @@ public class CommandHandlerService : DiscordClientService
                 return;
         }
 
-
         Task<int>? saveChangesTask = null;
         if (!_cache.TryGetValue((context.User.Id, context.Guild.Id), out ServerUser? serverUser))
         {
-            await context.Channel.SendEmbedAsync("Not found in cache", EmbedStyle.Debug);
-
-            serverUser = await _db.ServerUsers.FindAsync(context.User.Id, context.Guild.Id);
+            serverUser = await _db.ServerUsers
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.UserId == context.User.Id && x.ServerId == context.Guild.Id);
 
             if (serverUser is null)
             {
@@ -120,21 +121,19 @@ public class CommandHandlerService : DiscordClientService
             _cache.Set((context.User.Id, context.Guild.Id), serverUser, new MemoryCacheEntryOptions
             {
                 SlidingExpiration = TimeSpan.FromMinutes(30),
-                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(120)
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(4)
             });
         }
 
-
         if (!serverUser!.IsBlocked)
         {
-            _ = Task.Run(async () => await _commandService.ExecuteAsync(context, argPos, _provider));
-
             if (saveChangesTask is not null)
                 await saveChangesTask;
 
+            _ = Task.Run(async () => await _commandService.ExecuteAsync(context, argPos, _provider));
+
             return;
         }
-
 
         await Task.Run(async () =>
         {

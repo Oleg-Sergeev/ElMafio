@@ -5,7 +5,6 @@ using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Reflection;
-using System.Reflection.PortableExecutable;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -22,13 +21,13 @@ using Discord.Net;
 using Discord.WebSocket;
 using Fergun.Interactive;
 using Fergun.Interactive.Pagination;
-using Infrastructure.Data.Models.Games.Settings.Mafia;
-using Infrastructure.Data.Models.Games.Stats;
-using Infrastructure.Data.Models.Guild;
+using Infrastructure.Data.Entities.Games.Settings.Mafia;
+using Infrastructure.Data.Entities.Games.Stats;
+using Infrastructure.Data.Entities.ServerInfo;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Modules.Common.MultiSelect;
-using Modules.Common.Preconditions;
+using Modules.Common.Preconditions.Commands;
 using Modules.Games.Mafia.Common;
 using Modules.Games.Mafia.Common.Data;
 using Modules.Games.Mafia.Common.GameRoles;
@@ -420,6 +419,8 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
         [Group]
         [RequireConfirmAction(false)]
+        [RequireStandartAccessLevel(StandartAccessLevel.Administrator, Group = "perm")]
+        [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
         [RequireOwner(Group = "perm")]
         public class ScoresModule : CommandGuildModuleBase
         {
@@ -527,6 +528,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
     [Group("Шаблоны")]
     [Alias("Ш")]
     [Summary("Раздел для управления шаблонами: добавление, удаление, изменение имени и прочее")]
+    [RequireStandartAccessLevel(StandartAccessLevel.Moderator, Group = "perm")]
     [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
     [RequireOwner(Group = "perm")]
     public class TemplatesModule : CommandGuildModuleBase
@@ -759,6 +761,7 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
     [Group("Настройки")]
     [Alias("Н")]
+    [RequireStandartAccessLevel(StandartAccessLevel.Moderator, Group = "perm")]
     [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
     [RequireOwner(Group = "perm")]
     [Summary("Настройки для мафии включают в себя настройки сервера(используемые роли, каналы и категорию каналов) и настройки самой игры. " +

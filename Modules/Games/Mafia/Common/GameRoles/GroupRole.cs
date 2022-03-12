@@ -17,6 +17,9 @@ public abstract class GroupRole : GameRole
 {
     protected bool EarlyVotingTermination { get; init; }
 
+    protected bool? AllowAnnonymousVoting { get; init; }
+
+
     protected IReadOnlyList<GameRole> Roles { get; }
 
     protected IEnumerable<GameRole> AliveRoles => Roles.Where(r => r.IsAlive);
@@ -35,6 +38,8 @@ public abstract class GroupRole : GameRole
 
     public virtual async Task<VoteGroup> VoteManyAsync(MafiaContext context, IMessageChannel? voteChannel = null, IMessageChannel? voteResultChannel = null)
     {
+        var showNicknames = AllowAnnonymousVoting ?? !context.SettingsTemplate.GameSubSettings.IsAnonymousVoting;
+
         var votes = new Dictionary<IGuildUser, Vote>();
 
         if (voteChannel is null)
@@ -43,9 +48,8 @@ public abstract class GroupRole : GameRole
             voteResultChannel = voteChannel;
         }
 
-        var voters = GetVoters();
+        var voters = GetVoters().Shuffle().ToList();
         var playersVotes = new Dictionary<IGuildUser, Vote?>();
-        //var votesCount = new Dictionary<IGuildUser, int>();
 
         var playersNames = new List<string>();
 
@@ -109,7 +113,7 @@ public abstract class GroupRole : GameRole
 
         while (notEntriedRoles.Count > 0 && timeout.TotalSeconds > 0 && !token.IsCancellationRequested)
         {
-            var res = await context.Interactive.NextMessageComponentAsync(m => m.Message.Id == entryVoteMsg.Id && notEntriedRoles.ContainsKey(m.User.Id),
+            var res = await context.Interactive.NextMessageComponentAsync(m => notEntriedRoles.ContainsKey(m.User.Id),
                 timeout: timeout,
                 cancellationToken: token);
 
@@ -291,8 +295,6 @@ public abstract class GroupRole : GameRole
 
         Embed GetVotingInfoEmbed()
         {
-            var showNicknames = !context.SettingsTemplate.GameSubSettings.IsAnonymousVoting;
-
             int n = 1;
 
             return new EmbedBuilder()

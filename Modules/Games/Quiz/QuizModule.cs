@@ -9,7 +9,7 @@ using Discord;
 using Discord.Commands;
 using Fergun.Interactive;
 using Fergun.Interactive.Selection;
-using Infrastructure.Data.Models.Games.Stats;
+using Infrastructure.Data.Entities.Games.Stats;
 using Trivia4NET;
 using Trivia4NET.Entities;
 

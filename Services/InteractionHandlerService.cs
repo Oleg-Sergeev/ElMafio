@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -8,10 +7,12 @@ using Core.Common;
 using Discord;
 using Discord.Addons.Hosting;
 using Discord.Interactions;
+using Discord.Rest;
 using Discord.WebSocket;
 using Infrastructure.Data;
-using Infrastructure.Data.Models;
-using Infrastructure.Data.Models.ServerInfo;
+using Infrastructure.Data.Entities;
+using Infrastructure.Data.Entities.ServerInfo;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -60,6 +61,29 @@ public class InteractionHandlerService : DiscordClientService
                 try
                 {
                     await _interactionService.RegisterCommandsToGuildAsync(guildId, true);
+
+                    var developersIds = await _db.ServerUsers
+                        .AsNoTracking()
+                        .Where(su => su.ServerId == guildId && su.StandartAccessLevel == StandartAccessLevel.Developer)
+                        .Select(su => su.UserId)
+                        .ToListAsync();
+
+                    if (developersIds.Count == 0)
+                        continue;
+
+                    var guild = Client.GetGuild(guildId);
+
+                    var developerSlashCommands = _interactionService.SlashCommands
+                        .Where(sl => sl.IsTopLevelCommand && !sl.DefaultPermission)
+                        .ToList();
+
+                    foreach (var slashCommand in developerSlashCommands)
+                        foreach (var developerId in developersIds)
+                        {
+                            var perm = new ApplicationCommandPermission(developerId, ApplicationCommandPermissionTarget.User, true);
+
+                            await _interactionService.ModifySlashCommandPermissionsAsync(slashCommand, guild, perm);
+                        }
                 }
                 catch (Exception e)
                 {
@@ -72,7 +96,7 @@ public class InteractionHandlerService : DiscordClientService
     {
         var context = new DbInteractionContext(Client, arg, _db);
 
-        if (context.Guild is null || context.Interaction.Type == InteractionType.MessageComponent)
+        if (context.Guild is null || context.Interaction.Type is InteractionType.MessageComponent)
             return;
 
         Task<int>? saveChangesTask = null;

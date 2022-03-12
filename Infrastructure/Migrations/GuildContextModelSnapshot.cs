@@ -22,7 +22,38 @@ namespace Infrastructure.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder, 1L, 1);
 
-            modelBuilder.Entity("Infrastructure.Data.Models.Games.Settings.Mafia.MafiaSettings", b =>
+            modelBuilder.Entity("Infrastructure.Data.Entities.AccessLevel", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .IsUnicode(true)
+                        .HasColumnType("nvarchar(450)")
+                        .HasDefaultValue("Developer");
+
+                    b.Property<int>("Priority")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(2147483647);
+
+                    b.Property<decimal>("ServerId")
+                        .HasColumnType("decimal(20,0)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ServerId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("AccessLevels");
+                });
+
+            modelBuilder.Entity("Infrastructure.Data.Entities.Games.Settings.Mafia.MafiaSettings", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -79,7 +110,7 @@ namespace Infrastructure.Migrations
                     b.ToTable("MafiaSettings");
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.Games.Settings.Mafia.MafiaSettingsTemplate", b =>
+            modelBuilder.Entity("Infrastructure.Data.Entities.Games.Settings.Mafia.MafiaSettingsTemplate", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -104,7 +135,7 @@ namespace Infrastructure.Migrations
                     b.ToTable("MafiaSettingsTemplates");
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.Games.Settings.Mafia.SubSettings.GameSubSettings", b =>
+            modelBuilder.Entity("Infrastructure.Data.Entities.Games.Settings.Mafia.SubSettings.GameSubSettings", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -153,7 +184,7 @@ namespace Infrastructure.Migrations
                     b.ToTable("GameSubSettings");
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.Games.Settings.Mafia.SubSettings.RoleAmountSubSettings", b =>
+            modelBuilder.Entity("Infrastructure.Data.Entities.Games.Settings.Mafia.SubSettings.RoleAmountSubSettings", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -193,7 +224,7 @@ namespace Infrastructure.Migrations
                     b.ToTable("RoleAmountSubSettings");
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.Games.Settings.Mafia.SubSettings.RolesExtraInfoSubSettings", b =>
+            modelBuilder.Entity("Infrastructure.Data.Entities.Games.Settings.Mafia.SubSettings.RolesExtraInfoSubSettings", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -233,7 +264,7 @@ namespace Infrastructure.Migrations
                     b.ToTable("RolesExtraInfoSubSettings");
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.Games.Settings.Mafia.SubSettings.ServerSubSettings", b =>
+            modelBuilder.Entity("Infrastructure.Data.Entities.Games.Settings.Mafia.SubSettings.ServerSubSettings", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -270,7 +301,7 @@ namespace Infrastructure.Migrations
                     b.ToTable("ServerSubSettings");
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.Games.Settings.RussianRouletteSettings", b =>
+            modelBuilder.Entity("Infrastructure.Data.Entities.Games.Settings.RussianRouletteSettings", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -307,7 +338,7 @@ namespace Infrastructure.Migrations
                     b.ToTable("RussianRouletteSettings");
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.Games.Stats.MafiaStats", b =>
+            modelBuilder.Entity("Infrastructure.Data.Entities.Games.Stats.MafiaStats", b =>
                 {
                     b.Property<decimal>("UserId")
                         .HasColumnType("decimal(20,0)");
@@ -393,7 +424,7 @@ namespace Infrastructure.Migrations
                     b.ToTable("MafiaStats");
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.Games.Stats.QuizStats", b =>
+            modelBuilder.Entity("Infrastructure.Data.Entities.Games.Stats.QuizStats", b =>
                 {
                     b.Property<decimal>("UserId")
                         .HasColumnType("decimal(20,0)");
@@ -424,7 +455,7 @@ namespace Infrastructure.Migrations
                     b.ToTable("QuizStats");
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.Games.Stats.RussianRouletteStats", b =>
+            modelBuilder.Entity("Infrastructure.Data.Entities.Games.Stats.RussianRouletteStats", b =>
                 {
                     b.Property<decimal>("UserId")
                         .HasColumnType("decimal(20,0)");
@@ -455,7 +486,7 @@ namespace Infrastructure.Migrations
                     b.ToTable("RussianRouletteStats");
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.ServerInfo.Server", b =>
+            modelBuilder.Entity("Infrastructure.Data.Entities.ServerInfo.Server", b =>
                 {
                     b.Property<decimal>("Id")
                         .HasColumnType("decimal(20,0)");
@@ -497,7 +528,7 @@ namespace Infrastructure.Migrations
                     b.HasCheckConstraint("CK_Servers_SendInterval", "[SendInterval] BETWEEN 1 AND 600");
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.ServerUser", b =>
+            modelBuilder.Entity("Infrastructure.Data.Entities.ServerUser", b =>
                 {
                     b.Property<decimal>("UserId")
                         .HasColumnType("decimal(20,0)");
@@ -505,17 +536,25 @@ namespace Infrastructure.Migrations
                     b.Property<decimal>("ServerId")
                         .HasColumnType("decimal(20,0)");
 
+                    b.Property<int?>("AccessLevelId")
+                        .HasColumnType("int");
+
                     b.Property<bool>("IsBlocked")
                         .HasColumnType("bit");
 
+                    b.Property<int?>("StandartAccessLevel")
+                        .HasColumnType("int");
+
                     b.HasKey("UserId", "ServerId");
+
+                    b.HasIndex("AccessLevelId");
 
                     b.HasIndex("ServerId");
 
                     b.ToTable("ServerUsers");
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.User", b =>
+            modelBuilder.Entity("Infrastructure.Data.Entities.User", b =>
                 {
                     b.Property<decimal>("Id")
                         .HasColumnType("decimal(20,0)");
@@ -528,15 +567,24 @@ namespace Infrastructure.Migrations
                     b.ToTable("Users");
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.Games.Settings.Mafia.MafiaSettings", b =>
+            modelBuilder.Entity("Infrastructure.Data.Entities.AccessLevel", b =>
                 {
-                    b.HasOne("Infrastructure.Data.Models.Games.Settings.Mafia.MafiaSettingsTemplate", "CurrentTemplate")
+                    b.HasOne("Infrastructure.Data.Entities.ServerInfo.Server", null)
+                        .WithMany("AccessLevels")
+                        .HasForeignKey("ServerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Infrastructure.Data.Entities.Games.Settings.Mafia.MafiaSettings", b =>
+                {
+                    b.HasOne("Infrastructure.Data.Entities.Games.Settings.Mafia.MafiaSettingsTemplate", "CurrentTemplate")
                         .WithMany()
                         .HasForeignKey("CurrentTemplateId");
 
-                    b.HasOne("Infrastructure.Data.Models.ServerInfo.Server", "Server")
+                    b.HasOne("Infrastructure.Data.Entities.ServerInfo.Server", "Server")
                         .WithOne("MafiaSettings")
-                        .HasForeignKey("Infrastructure.Data.Models.Games.Settings.Mafia.MafiaSettings", "ServerId")
+                        .HasForeignKey("Infrastructure.Data.Entities.Games.Settings.Mafia.MafiaSettings", "ServerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -545,71 +593,71 @@ namespace Infrastructure.Migrations
                     b.Navigation("Server");
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.Games.Settings.Mafia.MafiaSettingsTemplate", b =>
+            modelBuilder.Entity("Infrastructure.Data.Entities.Games.Settings.Mafia.MafiaSettingsTemplate", b =>
                 {
-                    b.HasOne("Infrastructure.Data.Models.Games.Settings.Mafia.MafiaSettings", null)
+                    b.HasOne("Infrastructure.Data.Entities.Games.Settings.Mafia.MafiaSettings", null)
                         .WithMany("MafiaSettingsTemplates")
                         .HasForeignKey("MafiaSettingsId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.Games.Settings.Mafia.SubSettings.GameSubSettings", b =>
+            modelBuilder.Entity("Infrastructure.Data.Entities.Games.Settings.Mafia.SubSettings.GameSubSettings", b =>
                 {
-                    b.HasOne("Infrastructure.Data.Models.Games.Settings.Mafia.MafiaSettingsTemplate", null)
+                    b.HasOne("Infrastructure.Data.Entities.Games.Settings.Mafia.MafiaSettingsTemplate", null)
                         .WithOne("GameSubSettings")
-                        .HasForeignKey("Infrastructure.Data.Models.Games.Settings.Mafia.SubSettings.GameSubSettings", "MafiaSettingsTemplateId")
+                        .HasForeignKey("Infrastructure.Data.Entities.Games.Settings.Mafia.SubSettings.GameSubSettings", "MafiaSettingsTemplateId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.Games.Settings.Mafia.SubSettings.RoleAmountSubSettings", b =>
+            modelBuilder.Entity("Infrastructure.Data.Entities.Games.Settings.Mafia.SubSettings.RoleAmountSubSettings", b =>
                 {
-                    b.HasOne("Infrastructure.Data.Models.Games.Settings.Mafia.MafiaSettingsTemplate", null)
+                    b.HasOne("Infrastructure.Data.Entities.Games.Settings.Mafia.MafiaSettingsTemplate", null)
                         .WithOne("RoleAmountSubSettings")
-                        .HasForeignKey("Infrastructure.Data.Models.Games.Settings.Mafia.SubSettings.RoleAmountSubSettings", "MafiaSettingsTemplateId")
+                        .HasForeignKey("Infrastructure.Data.Entities.Games.Settings.Mafia.SubSettings.RoleAmountSubSettings", "MafiaSettingsTemplateId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.Games.Settings.Mafia.SubSettings.RolesExtraInfoSubSettings", b =>
+            modelBuilder.Entity("Infrastructure.Data.Entities.Games.Settings.Mafia.SubSettings.RolesExtraInfoSubSettings", b =>
                 {
-                    b.HasOne("Infrastructure.Data.Models.Games.Settings.Mafia.MafiaSettingsTemplate", null)
+                    b.HasOne("Infrastructure.Data.Entities.Games.Settings.Mafia.MafiaSettingsTemplate", null)
                         .WithOne("RolesExtraInfoSubSettings")
-                        .HasForeignKey("Infrastructure.Data.Models.Games.Settings.Mafia.SubSettings.RolesExtraInfoSubSettings", "MafiaSettingsTemplateId")
+                        .HasForeignKey("Infrastructure.Data.Entities.Games.Settings.Mafia.SubSettings.RolesExtraInfoSubSettings", "MafiaSettingsTemplateId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.Games.Settings.Mafia.SubSettings.ServerSubSettings", b =>
+            modelBuilder.Entity("Infrastructure.Data.Entities.Games.Settings.Mafia.SubSettings.ServerSubSettings", b =>
                 {
-                    b.HasOne("Infrastructure.Data.Models.Games.Settings.Mafia.MafiaSettingsTemplate", null)
+                    b.HasOne("Infrastructure.Data.Entities.Games.Settings.Mafia.MafiaSettingsTemplate", null)
                         .WithOne("ServerSubSettings")
-                        .HasForeignKey("Infrastructure.Data.Models.Games.Settings.Mafia.SubSettings.ServerSubSettings", "MafiaSettingsTemplateId")
+                        .HasForeignKey("Infrastructure.Data.Entities.Games.Settings.Mafia.SubSettings.ServerSubSettings", "MafiaSettingsTemplateId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.Games.Settings.RussianRouletteSettings", b =>
+            modelBuilder.Entity("Infrastructure.Data.Entities.Games.Settings.RussianRouletteSettings", b =>
                 {
-                    b.HasOne("Infrastructure.Data.Models.ServerInfo.Server", "Server")
+                    b.HasOne("Infrastructure.Data.Entities.ServerInfo.Server", "Server")
                         .WithOne("RussianRouletteSettings")
-                        .HasForeignKey("Infrastructure.Data.Models.Games.Settings.RussianRouletteSettings", "ServerId")
+                        .HasForeignKey("Infrastructure.Data.Entities.Games.Settings.RussianRouletteSettings", "ServerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Server");
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.Games.Stats.MafiaStats", b =>
+            modelBuilder.Entity("Infrastructure.Data.Entities.Games.Stats.MafiaStats", b =>
                 {
-                    b.HasOne("Infrastructure.Data.Models.ServerInfo.Server", "Server")
+                    b.HasOne("Infrastructure.Data.Entities.ServerInfo.Server", "Server")
                         .WithMany()
                         .HasForeignKey("ServerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("Infrastructure.Data.Models.User", "User")
+                    b.HasOne("Infrastructure.Data.Entities.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -620,15 +668,15 @@ namespace Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.Games.Stats.QuizStats", b =>
+            modelBuilder.Entity("Infrastructure.Data.Entities.Games.Stats.QuizStats", b =>
                 {
-                    b.HasOne("Infrastructure.Data.Models.ServerInfo.Server", "Server")
+                    b.HasOne("Infrastructure.Data.Entities.ServerInfo.Server", "Server")
                         .WithMany()
                         .HasForeignKey("ServerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("Infrastructure.Data.Models.User", "User")
+                    b.HasOne("Infrastructure.Data.Entities.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -639,15 +687,15 @@ namespace Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.Games.Stats.RussianRouletteStats", b =>
+            modelBuilder.Entity("Infrastructure.Data.Entities.Games.Stats.RussianRouletteStats", b =>
                 {
-                    b.HasOne("Infrastructure.Data.Models.ServerInfo.Server", "Server")
+                    b.HasOne("Infrastructure.Data.Entities.ServerInfo.Server", "Server")
                         .WithMany()
                         .HasForeignKey("ServerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("Infrastructure.Data.Models.User", "User")
+                    b.HasOne("Infrastructure.Data.Entities.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -658,31 +706,37 @@ namespace Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.ServerUser", b =>
+            modelBuilder.Entity("Infrastructure.Data.Entities.ServerUser", b =>
                 {
-                    b.HasOne("Infrastructure.Data.Models.ServerInfo.Server", "Server")
+                    b.HasOne("Infrastructure.Data.Entities.AccessLevel", "AccessLevel")
+                        .WithMany()
+                        .HasForeignKey("AccessLevelId");
+
+                    b.HasOne("Infrastructure.Data.Entities.ServerInfo.Server", "Server")
                         .WithMany("ServerUsers")
                         .HasForeignKey("ServerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("Infrastructure.Data.Models.User", "User")
+                    b.HasOne("Infrastructure.Data.Entities.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("AccessLevel");
 
                     b.Navigation("Server");
 
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.Games.Settings.Mafia.MafiaSettings", b =>
+            modelBuilder.Entity("Infrastructure.Data.Entities.Games.Settings.Mafia.MafiaSettings", b =>
                 {
                     b.Navigation("MafiaSettingsTemplates");
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.Games.Settings.Mafia.MafiaSettingsTemplate", b =>
+            modelBuilder.Entity("Infrastructure.Data.Entities.Games.Settings.Mafia.MafiaSettingsTemplate", b =>
                 {
                     b.Navigation("GameSubSettings")
                         .IsRequired();
@@ -697,8 +751,10 @@ namespace Infrastructure.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Infrastructure.Data.Models.ServerInfo.Server", b =>
+            modelBuilder.Entity("Infrastructure.Data.Entities.ServerInfo.Server", b =>
                 {
+                    b.Navigation("AccessLevels");
+
                     b.Navigation("MafiaSettings")
                         .IsRequired();
 

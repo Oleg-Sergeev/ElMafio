@@ -1,5 +1,4 @@
-﻿using Infrastructure.Data.Models.Guild;
-using Infrastructure.Data.Models.ServerInfo;
+﻿using Infrastructure.Data.Entities.ServerInfo;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 

@@ -1,5 +1,5 @@
 ﻿using Discord;
-using Infrastructure.Data.Models.Games.Stats;
+using Infrastructure.Data.Entities.Games.Stats;
 using Microsoft.Extensions.Options;
 using Modules.Games.Mafia.Common.GameRoles.Data;
 

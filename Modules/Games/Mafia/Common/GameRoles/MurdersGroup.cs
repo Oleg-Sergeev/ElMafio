@@ -16,12 +16,16 @@ public class MurdersGroup : GroupRole
 
     public MurdersGroup(IReadOnlyList<Murder> roles, IOptionsSnapshot<GameRoleData> options) : base(roles, options)
     {
-        DiscussionTime = Roles.Count * 30;
+        DiscussionTime = Roles.Count * 20;
+
+        AllowAnnonymousVoting = false;
     }
 
 
     public override async Task<VoteGroup> VoteManyAsync(MafiaContext context, IMessageChannel? voteChannel = null, IMessageChannel? voteResultchannel = null)
     {
+        await context.ChangeMurdersPermsAsync(MafiaHelper.AllowWrite, MafiaHelper.AllowSpeak);
+
         await context.GuildData.MurderTextChannel.SendEmbedAsync($"Время обсудить вашу следующую жертву. ({DiscussionTime}с)", EmbedStyle.Waiting);
 
         await Task.Delay(DiscussionTime * 1000);

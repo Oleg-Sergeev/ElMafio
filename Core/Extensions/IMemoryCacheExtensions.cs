@@ -1,4 +1,5 @@
-﻿using System.Reflection;
+﻿using System.Collections;
+using System.Reflection;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace Core.Extensions;
@@ -48,4 +49,10 @@ public static class IMemoryCacheExtensions
 
         throw new InvalidOperationException($"Unable to clear memory cache instance of type {cache.GetType().FullName}");
     }
+
+
+    public static IDictionary GetCacheDictionary(this IMemoryCache cache)
+        => (IDictionary)cache.GetType()
+            .GetProperty("EntriesCollection", BindingFlags.Instance | BindingFlags.GetProperty | BindingFlags.NonPublic | BindingFlags.Public)!
+            .GetValue(cache)!;
 }

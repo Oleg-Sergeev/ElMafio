@@ -1,8 +1,8 @@
 ﻿using System.Collections.Generic;
 using Core.Common.Data;
 using Core.Exceptions;
-using Infrastructure.Data.Models.Games.Settings.Mafia;
-using Infrastructure.Data.Models.Games.Settings.Mafia.SubSettings;
+using Infrastructure.Data.Entities.Games.Settings.Mafia.SubSettings;
+using Infrastructure.Data.Entities.Games.Settings.Mafia;
 using Microsoft.Extensions.Configuration;
 using Modules.Games.Mafia.Common.Data;
 using Modules.Games.Mafia.Common.Services;

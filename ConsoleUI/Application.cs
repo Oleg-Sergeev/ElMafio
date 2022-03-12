@@ -2,16 +2,15 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using Core.Common;
 using Core.Extensions;
 using Discord;
 using Discord.Addons.Hosting;
-using Discord.Interactions;
 using Discord.WebSocket;
 using Fergun.Interactive;
 using Infrastructure.Data;
-using Infrastructure.Data.Models.Games.Settings.Mafia;
+using Infrastructure.Data.Entities.Games.Settings.Mafia;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -106,13 +105,14 @@ public static class Application
         })
         .ConfigureServices((context, services) =>
         {
-            services.AddDbContext<BotContext>(options =>
+            services
+            .AddMemoryCache()
+            .AddDbContext<BotContext>(options =>
             {
                 options.UseSqlServer(context.Configuration.GetConnectionStringProductionDb());
                 options.EnableSensitiveDataLogging();
                 options.EnableDetailedErrors();
             })
-            .AddMemoryCache()
             .AddHostedService<CommandHandlerService>()
             .AddHostedService<InteractionHandlerService>()
             .AddSingleton<InteractiveService>()

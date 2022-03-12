@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Channels;
 using System.Threading.Tasks;
 using Core.Common;
 using Core.Exceptions;
@@ -184,6 +183,22 @@ public class MafiaSetupService : IMafiaSetupService
                     catch (HttpException e)
                     {
                         await HandleHttpExceptionAsync($"Не удалось убрать роль {role.Mention} с пользователя {guildPlayer.GetFullMention()}", e, context);
+                    }
+                    catch (KeyNotFoundException e)
+                    {
+                        await guildData.GeneralTextChannel.SendEmbedAsync($"Насрано\n{e}", EmbedStyle.Warning);
+
+                        if (!guildData.PlayerRoleIds.ContainsKey(player.Id))
+                        {
+                            guildData.PlayerRoleIds[player.Id] = new();
+
+                            guildData.PlayerRoleIds[player.Id].Add(role.Id);
+
+                            await guildData.GeneralTextChannel.SendEmbedAsync($"Реально ключа не было" +
+                                $"\nТекущий список ключей:\n" +
+                                $"{string.Join('\n', guildData.PlayerRoleIds.Select(x => $"{context.CommandContext.Guild.GetMentionFromId(x.Key)} - {x.Value.Count}"))}",
+                                EmbedStyle.Debug);
+                        }
                     }
                 }
             }

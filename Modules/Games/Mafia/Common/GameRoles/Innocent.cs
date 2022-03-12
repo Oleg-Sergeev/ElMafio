@@ -1,7 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using Discord;
-using Infrastructure.Data.Models.Games.Stats;
 using Microsoft.Extensions.Options;
 using Modules.Games.Mafia.Common.Data;
 using Modules.Games.Mafia.Common.GameRoles.Data;

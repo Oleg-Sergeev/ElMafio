@@ -1,6 +1,6 @@
 ﻿using System.Linq;
 using System.Threading.Tasks;
-using Infrastructure.Data.Models.Games.Settings;
+using Infrastructure.Data.Entities.Games.Settings;
 using Microsoft.EntityFrameworkCore;
 using Services;
 

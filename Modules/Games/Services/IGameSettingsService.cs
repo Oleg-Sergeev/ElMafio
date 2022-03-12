@@ -1,5 +1,5 @@
 ﻿using System.Threading.Tasks;
-using Infrastructure.Data.Models.Games.Settings;
+using Infrastructure.Data.Entities.Games.Settings;
 using Services;
 
 namespace Modules.Games.Services;

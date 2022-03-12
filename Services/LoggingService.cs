@@ -1,5 +1,4 @@
-﻿    using System;
-using System.IO;
+﻿using System;
 using System.Threading.Tasks;
 using Core.Common;
 using Core.Extensions;
@@ -8,7 +7,7 @@ using Discord.Commands;
 using Discord.Net;
 using Discord.WebSocket;
 using Infrastructure.Data;
-using Infrastructure.Data.Models.Guild;
+using Infrastructure.Data.Entities.ServerInfo;
 using Serilog;
 using Serilog.Events;
 
