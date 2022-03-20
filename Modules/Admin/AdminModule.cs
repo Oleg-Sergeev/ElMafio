@@ -5,7 +5,6 @@ using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Xml.Linq;
 using Core.Common;
 using Core.Extensions;
 using Discord;
@@ -22,6 +21,8 @@ namespace Modules.Admin;
 [Group("Админ")]
 [Alias("а")]
 [Summary("Набор команд для управления сервером и получения полезной информации")]
+[RequireOwner(Group = "perm")]
+[RequireUserPermission(GuildPermission.ManageChannels, Group = "perm")]
 [RequireStandartAccessLevel(StandartAccessLevel.Moderator, Group = "perm")]
 public class AdminModule : CommandGuildModuleBase
 {
@@ -416,7 +417,7 @@ public class AdminModule : CommandGuildModuleBase
             else
             {
                 await ReplyEmbedStampAsync($"Не удалось добавить пользователя {guildUser.GetFullMention()} в черный список", EmbedStyle.Error);
-            } 
+            }
         }
 
 
@@ -458,203 +459,6 @@ public class AdminModule : CommandGuildModuleBase
             else
             {
                 await ReplyEmbedStampAsync($"Не удалось удалить пользователя {guildUser.GetFullMention()} из черного списка", EmbedStyle.Error);
-            }
-        }
-    }
-
-
-    [Name("Уровни доступа")]
-    [Group("УровниДоступа")]
-    [Alias("УД", "Роли")]
-    [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
-    [RequireStandartAccessLevel(StandartAccessLevel.Administrator, Group = "perm")]
-    [RequireOwner(Group = "perm")]
-    public class AccessLevelsModule : CommandGuildModuleBase
-    {
-        public AccessLevelsModule(InteractiveService interactiveService) : base(interactiveService)
-        {
-        }
-
-
-        [Command("Текущий")]
-        public async Task ShowAccessLevel(IGuildUser guildUser)
-        {
-            var serverUser = await Context.Db.ServerUsers.FindAsync(guildUser.Id, Context.Guild.Id);
-
-            if (serverUser is null)
-            {
-                await ReplyEmbedAsync($"Пользователь {guildUser.Mention} не найден", EmbedStyle.Error);
-
-                return;
-            }
-
-            await ReplyEmbedAsync($"Текущий уровень доступа у пользователя {guildUser.Mention}: **`{serverUser.StandartAccessLevel?.ToString() ?? "уровень доступа отсутствует"}`**");
-        }
-
-
-        [Command("Назначить")]
-        [RequireConfirmAction]
-        public async Task SetAccessLevel(IGuildUser guildUser, StandartAccessLevel accessLevel)
-        {
-            var serverUser = await Context.Db.ServerUsers.FindAsync(guildUser.Id, Context.Guild.Id);
-
-            if (serverUser is null)
-            {
-                await ReplyEmbedAsync($"Пользователь {guildUser.Mention} не найден", EmbedStyle.Error);
-
-                return;
-            }
-
-            if (serverUser.StandartAccessLevel == accessLevel)
-            {
-                await ReplyEmbedAsync($"Пользователь {guildUser.Mention} уже имеет данный уровень доступа", EmbedStyle.Error);
-
-                return;
-            }
-
-            serverUser.StandartAccessLevel = accessLevel;
-
-
-            var n = await Context.Db.SaveChangesAsync();
-
-            if (n > 0)
-                await ReplyEmbedAsync($"Уровень доступа у пользователя {guildUser.Mention} успешно изменен", EmbedStyle.Successfull);
-            else
-                await ReplyEmbedAsync($"Не удалось иземнить уровень доступа у пользователя {guildUser.Mention}", EmbedStyle.Error);
-        }
-
-
-        [Command("Сбросить")]
-        [RequireConfirmAction]
-        public async Task ResetAccessLevel(IGuildUser guildUser)
-        {
-            var serverUser = await Context.Db.ServerUsers.FindAsync(guildUser.Id, Context.Guild.Id);
-
-            if (serverUser is null)
-            {
-                await ReplyEmbedAsync($"Пользователь {guildUser.Mention} не найден", EmbedStyle.Error);
-
-                return;
-            }
-
-            if (serverUser.StandartAccessLevel is null)
-            {
-                await ReplyEmbedAsync($"Пользователь {guildUser.Mention} отсутствует уровень доступа", EmbedStyle.Error);
-
-                return;
-            }
-
-            serverUser.StandartAccessLevel = null;
-
-
-            var n = await Context.Db.SaveChangesAsync();
-
-            if (n > 0)
-                await ReplyEmbedAsync($"Уровень доступа у пользователя {guildUser.Mention} успешно изменен", EmbedStyle.Successfull);
-            else
-                await ReplyEmbedAsync($"Не удалось иземнить уровень доступа у пользователя {guildUser.Mention}", EmbedStyle.Error);
-        }
-
-
-
-        [Group("Расширенные")]
-        [Alias("Экстра", "Доп")]
-        public class ExtendedAccessLevelsModule : CommandGuildModuleBase
-        {
-            public ExtendedAccessLevelsModule(InteractiveService interactiveService) : base(interactiveService)
-            {
-            }
-
-
-            [Command("Список")]
-            public async Task ShowListAsync()
-            {
-                var accessLevels = await Context.Db.AccessLevels
-                    .AsNoTracking()
-                    .Where(al => al.ServerId == Context.Guild.Id)
-                    .OrderByDescending(al => al.Priority)
-                    .ToListAsync();
-
-
-                if (accessLevels.Count == 0)
-                {
-                    await ReplyEmbedAsync("Уровни доступа отсутствуют", EmbedStyle.Error);
-
-                    return;
-                }
-
-
-                var msg = string.Join('\n', accessLevels.Select(al => $"`{al.Name} ({al.Priority})`"));
-
-                await ReplyEmbedAsync(msg);
-            }
-
-
-            [Command("Добавить")]
-            [Alias("Доб", "+")]
-            [RequireConfirmAction(false)]
-            public async Task AddAccessLevelAsync(string name, int priority)
-            {
-                if (priority == int.MaxValue && Context.User.Id != BotOwner.Id)
-                {
-                    await ReplyEmbedAsync("Наивысший приоритет не может быть задан вручную", EmbedStyle.Error);
-
-                    return;
-                }
-
-                var accessLevel = await Context.Db.AccessLevels
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(al => al.ServerId == Context.Guild.Id && al.Name == name);
-
-                if (accessLevel is not null)
-                {
-                    await ReplyEmbedAsync("Уровень доступа с таким именем уже существует", EmbedStyle.Error);
-
-                    return;
-                }
-
-
-                accessLevel = new(name)
-                {
-                    ServerId = Context.Guild.Id,
-                    Priority = priority
-                };
-
-                Context.Db.AccessLevels.Add(accessLevel);
-
-                var n = await Context.Db.SaveChangesAsync();
-
-                if (n > 0)
-                    await ReplyEmbedAsync($"Уровень доступа **`{name} ({priority})`** успешно создан", EmbedStyle.Successfull);
-                else
-                    await ReplyEmbedAsync($"Не удалось создать уровень доступа **`{name} ({priority})`**", EmbedStyle.Error);
-            }
-
-
-            [Command("Удалить")]
-            [Alias("Уд", "-")]
-            [RequireConfirmAction(false)]
-            public async Task RemoveAccessLevelAsync(string name)
-            {
-                var accessLevel = await Context.Db.AccessLevels
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(al => al.ServerId == Context.Guild.Id && al.Name == name);
-
-                if (accessLevel is null)
-                {
-                    await ReplyEmbedAsync("Уровень доступа с таким именем не существует", EmbedStyle.Error);
-
-                    return;
-                }
-
-                Context.Db.AccessLevels.Remove(accessLevel);
-
-                var n = await Context.Db.SaveChangesAsync();
-
-                if (n > 0)
-                    await ReplyEmbedAsync($"Уровень доступа **`{accessLevel.Name} ({accessLevel.Priority})`** успешно удален", EmbedStyle.Successfull);
-                else
-                    await ReplyEmbedAsync($"Не удалось удалить уровень доступа **`{accessLevel.Name} ({accessLevel.Priority})`**", EmbedStyle.Error);
             }
         }
     }

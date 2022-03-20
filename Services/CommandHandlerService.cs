@@ -107,6 +107,23 @@ public class CommandHandlerService : DiscordClientService
 
             if (serverUser is null)
             {
+                var user = await _db.Users
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.Id == context.User.Id);
+
+                if (user is null)
+                {
+                    user = new()
+                    {
+                        Id = context.User.Id,
+                        JoinedAt = context.User.CreatedAt.DateTime
+                    };
+
+                    _db.Users.Add(user);
+
+                    await _db.SaveChangesAsync();
+                }
+
                 serverUser = new()
                 {
                     UserId = context.User.Id,

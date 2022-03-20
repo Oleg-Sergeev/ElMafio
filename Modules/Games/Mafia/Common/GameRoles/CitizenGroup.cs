@@ -1,7 +1,5 @@
 ﻿using System.Collections.Generic;
 using System.Threading.Tasks;
-using Core.Common;
-using Core.Extensions;
 using Discord;
 using Microsoft.Extensions.Options;
 using Modules.Games.Mafia.Common.Data;
@@ -16,9 +14,12 @@ public class CitizenGroup : GroupRole
         EarlyVotingTermination = true;
     }
 
+
+    protected override IEnumerable<GameRole> GetVoters() => AliveRoles;
+
     public override async Task<VoteGroup> VoteManyAsync(MafiaContext context, IMessageChannel? voteChannel = null, IMessageChannel? voteResultchannel = null)
     {
-        await context.GuildData.GeneralTextChannel.SendEmbedAsync($"{context.GuildData.MafiaRole.Mention} Голосование начинается...", EmbedStyle.Waiting);
+        await context.GuildData.GeneralTextChannel.SendMessageAsync($"{context.GuildData.MafiaRole.Mention} Голосование начинается...");
 
         await Task.Delay(3000);
 

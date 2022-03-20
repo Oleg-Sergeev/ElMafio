@@ -19,12 +19,14 @@ public static class MafiaHelper
                 speak: PermValue.Allow);
 
     public static readonly OverwritePermissions AllowWrite = new(
+               addReactions: PermValue.Deny,
                attachFiles: PermValue.Deny,
                viewChannel: PermValue.Allow,
                readMessageHistory: PermValue.Allow,
                sendMessages: PermValue.Allow);
 
     public static readonly OverwritePermissions DenyWrite = new(
+               addReactions: PermValue.Deny,
                viewChannel: PermValue.Allow,
                readMessageHistory: PermValue.Allow,
                sendMessages: PermValue.Deny);

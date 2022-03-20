@@ -6,10 +6,13 @@ public class MafiaData : GameData
 {
     public CancellationTokenSource TokenSource { get; private set; }
 
+    public List<IGuildUser> Spectators { get; }
 
     public MafiaData(string name, int minPlayersCount, IGuildUser host) : base(name, minPlayersCount, host)
     {
         TokenSource = new();
+
+        Spectators = new();
     }
 
 

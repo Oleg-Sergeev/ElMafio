@@ -38,7 +38,7 @@ public abstract class GroupRole : GameRole
 
     public virtual async Task<VoteGroup> VoteManyAsync(MafiaContext context, IMessageChannel? voteChannel = null, IMessageChannel? voteResultChannel = null)
     {
-        var showNicknames = AllowAnnonymousVoting ?? !context.SettingsTemplate.GameSubSettings.IsAnonymousVoting;
+        var hideNicknames = AllowAnnonymousVoting ?? context.SettingsTemplate.GameSubSettings.IsAnonymousVoting;
 
         var votes = new Dictionary<IGuildUser, Vote>();
 
@@ -299,7 +299,7 @@ public abstract class GroupRole : GameRole
 
             return new EmbedBuilder()
             .WithTitle("Дневное голосование")
-            .AddField("Игрок", string.Join('\n', showNicknames ? playersNames : Enumerable.Repeat("||**Anonymous**||", playersVotes.Count)), true)
+            .AddField("Игрок", string.Join('\n', hideNicknames ? Enumerable.Repeat("||**Anonymous**||", playersVotes.Count) : playersNames), true)
             .AddField("Голос", string.Join('\n', playersVotes.Values.Select(v => $"{n++} {(v is null ? "None" : v.IsSkip ? "Skip" : v.Option?.GetFullName() ?? "None")}")), true)
             .Build();
         }

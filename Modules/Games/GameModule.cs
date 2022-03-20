@@ -63,7 +63,7 @@ public abstract class GameModule<TData, TStats> : CommandGuildModuleBase
     [RequireStandartAccessLevel(StandartAccessLevel.Developer, Group = "perm")]
     [Command("Играть")]
     [Alias("игра")]
-    public async Task JoinAsync(IGuildUser player)
+    public virtual async Task JoinAsync(IGuildUser player)
     {
         if (!TryGetGameData(out var gameData))
         {
@@ -291,7 +291,7 @@ public abstract class GameModule<TData, TStats> : CommandGuildModuleBase
         {
             var player = gameData.Players[i];
 
-            text += $"[{i + 1}] {player.Mention} - {(gameData.Host.Id == player.Id ? "**создатель**" : "участник")}\n";
+            text += $"[{i + 1}] {player.Mention} - {(gameData.Host.Id == player.Id ? "**Создатель**" : "Участник")}\n";
         }
 
         await ReplyEmbedAsync(text, "Список игроков");
@@ -348,6 +348,33 @@ public abstract class GameModule<TData, TStats> : CommandGuildModuleBase
             await ReplyEmbedStampAsync($"{player.GetFullMention()} выгнан из игры. Количество участников: {gameData.Players.Count}", EmbedStyle.Successfull);
         else
             await ReplyEmbedStampAsync($"Не удалось выгнать {player.GetFullName()}", EmbedStyle.Error);
+    }
+
+
+    [Command("Таймер")]
+    [Alias("Афк", "Обновить")]
+    public async Task UpdateAfkTimer()
+    {
+        if (!TryGetGameData(out var gameData))
+        {
+            await ReplyEmbedAsync("Игра еще не создана", EmbedStyle.Error);
+
+            return;
+        }
+
+        var res = await CheckUserPermsAsync(gameData.Host.Id);
+
+        if (!res.IsSuccess)
+        {
+            await ReplyEmbedAsync("Вы не можете обновить афк-таймер игры", EmbedStyle.Error);
+
+            return;
+        }
+
+        if (UpdateAfk())
+            await ReplyEmbedAsync("Таймер успешно обновлен", EmbedStyle.Successfull);
+        else
+            await ReplyEmbedAsync("Не удалось обновить таймер", EmbedStyle.Error);
     }
 
 
@@ -538,7 +565,8 @@ public abstract class GameModule<TData, TStats> : CommandGuildModuleBase
         }, null, AfkTimeout, -1);
     }
 
-    private bool UpdateAfk() => _afkTimers.TryGetValue(Context.Guild.Id, out var timers)
+    private bool UpdateAfk()
+        => _afkTimers.TryGetValue(Context.Guild.Id, out var timers)
         && timers.TryGetValue(GetType(), out var timer)
         && timer.Change(AfkTimeout, -1);
 

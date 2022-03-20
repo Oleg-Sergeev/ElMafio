@@ -148,7 +148,7 @@ public class FunModule : CommandGuildModuleBase
     {
         await Context.Message.DeleteAsync();
 
-        await ReplyAsync(text, messageReference: Context.Message.Reference);
+        await ReplyAsync(text, allowedMentions: AllowedMentions.None, messageReference: Context.Message.Reference);
     }
 
 

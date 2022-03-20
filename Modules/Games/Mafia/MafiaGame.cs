@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
 using Core.Common;
@@ -75,9 +76,12 @@ public class MafiaGame
             {
                 await _context.CommandContext.Channel.SendEmbedAsync("Подготовка к игре...", EmbedStyle.Waiting);
 
-                await _mafiaService.SendWelcomeMessageAsync(_context);
-
                 _mafiaService.SetupRoles(_context);
+
+                _context.MafiaData.Players.Shuffle(3);
+
+                if (_context.SettingsTemplate.ServerSubSettings.SendWelcomeMessage)
+                    await _mafiaService.SendWelcomeMessageAsync(_context);
 
                 await _mafiaService.SetupGuildAsync(_context);
                 await _mafiaService.SetupUsersAsync(_context);
@@ -241,14 +245,10 @@ public class MafiaGame
 
             for (int i = 0; i < corpses.Count; i++)
             {
-                await EjectPlayerAsync(corpses[i]);
-
                 if (lastWordNightCount > 0)
-                {
-                    var task = SendLastWordMessageAsync(corpses[i]);
-
-                    lastWordTasks.Add(task);
-                }
+                    lastWordTasks.Add(SendLastMessageAndEjectPlayerAsync(corpses[i]));
+                else
+                    await EjectPlayerAsync(corpses[i]);
 
                 var action = _chronology.AddAction("Труп", _rolesData.AllRoles[corpses[i]]);
 
@@ -261,6 +261,18 @@ public class MafiaGame
 
             if (winner is not null)
                 return winner;
+
+
+            async Task<string> SendLastMessageAndEjectPlayerAsync(IGuildUser player)
+            {
+                await _context.CommandContext.Channel.SendEmbedAsync($"Corpse: {player.GetFullName()}", EmbedStyle.Debug);
+
+                var res = await SendLastWordMessageAsync(player);
+
+                await EjectPlayerAsync(player);
+
+                return res;
+            }
         }
 
 
@@ -313,11 +325,30 @@ public class MafiaGame
             if (_guildData.SpectatorTextChannel is not null)
                 await _guildData.SpectatorTextChannel.SendEmbedAsync($"Голосование", $"День {_chronology.CurrentDay}");
 
-            var citizenVotingResult = await DoCitizenVotingAsync();
+            var voteGroup = await DoCitizenVotingAsync();
 
-            if (citizenVotingResult.Choice.Option is not null)
+            var choice = voteGroup.Choice;
+
+            _chronology.AddAction($"Групповое голосование - {(choice.IsSkip ? "Пропуск" : choice.Option?.GetFullName() ?? "Нет данных")}", choice.VotedRole);
+
+            if (_guildData.SpectatorTextChannel is not null)
             {
-                var role = _rolesData.AliveRoles[citizenVotingResult.Choice.Option];
+                var embed = new EmbedBuilder()
+                    .WithTitle("День")
+                    .WithDescription($"Голосование [{voteGroup.Choice.VotedRole}]")
+                    .WithInformationMessage()
+                    .AddField("Игрок", string.Join('\n', voteGroup.PlayersVote.Values.Select(vote => $"{vote.VotedRole} [{vote.VotedRole.Player.GetFullName()}]")), true)
+                    .AddField("Голос", string.Join('\n', voteGroup.PlayersVote.Values.Select(vote => $"{(vote.IsSkip ? "Пропуск" : vote.Option?.GetFullName() ?? "Нет данных")}")), true)
+                    .AddField("Результат", voteGroup.Choice.IsSkip ? "Пропуск" : voteGroup.Choice.Option?.GetFullName() ?? "Нет данных")
+                    .Build();
+
+                await _guildData.SpectatorTextChannel.SendMessageAsync(embed: embed);
+            }
+
+
+            if (voteGroup.Choice.Option is not null)
+            {
+                var role = _rolesData.AliveRoles[voteGroup.Choice.Option];
 
                 string action;
 
@@ -332,19 +363,11 @@ public class MafiaGame
                     await _guildData.GeneralTextChannel.SendEmbedAsync($"{role.Player.Mention} не покидает игру из-за наличия алиби", EmbedStyle.Warning);
 
                     action = _chronology.AddAction("Использование алиби", role);
+
+                    if (_guildData.SpectatorTextChannel is not null)
+                        await _guildData.SpectatorTextChannel.SendEmbedAsync(action, "Дневное голосование");
                 }
-
-                if (_guildData.SpectatorTextChannel is not null)
-                    await _guildData.SpectatorTextChannel.SendEmbedAsync(action, "Дневное голосование");
             }
-            else
-            {
-                if (citizenVotingResult.Choice.IsSkip)
-                    _chronology.AddAction("Пропуск", citizenVotingResult.Choice.VotedRole);
-                else
-                    _chronology.AddAction("Не удалось выбрать", citizenVotingResult.Choice.VotedRole);
-            }
-
 
             var winner = DetermineWinner();
 
@@ -389,9 +412,6 @@ public class MafiaGame
 
 
         //handle specific roles
-
-        if (!_template.GameSubSettings.IsCustomGame || _template.RolesExtraInfoSubSettings.MurdersKnowEachOther)
-            await Task.Delay(1);
 
         if (!_template.GameSubSettings.IsCustomGame || _template.RolesExtraInfoSubSettings.MurdersVoteTogether)
         {
@@ -519,7 +539,7 @@ public class MafiaGame
         IGuildUser? murdersKill = null;
 
         if (!_template.GameSubSettings.IsCustomGame || _template.RolesExtraInfoSubSettings.MurdersKnowEachOther)
-            killers = _rolesData.AliveRoles.Values.Where(r => r is IKiller and not Maniac).Cast<IKiller>();
+            killers = _rolesData.AliveRoles.Values.Where(r => !r.BlockedByHooker && r is IKiller and not Maniac).Cast<IKiller>();
         else
         {
             killers = _rolesData.AliveRoles.Values.Where(r => r is IKiller and not Maniac and not Murder).Cast<IKiller>();
@@ -542,6 +562,7 @@ public class MafiaGame
 
         if (innocentsKill is not null)
             kills = kills.Append(innocentsKill);
+
 
         var heals = healers
             .Where(h => h.HealedPlayer is not null)
@@ -610,7 +631,7 @@ public class MafiaGame
                 continue;
 
 
-            if (corpses.Contains(hooker.Player))
+            if (corpses.Contains(hooker.Player) && !heals.Contains(hooker.Player))
                 corpses.Add(hooker.HealedPlayer);
 
             if (_rolesData.Maniacs.ContainsKey(hooker.HealedPlayer))
@@ -649,7 +670,7 @@ public class MafiaGame
 
     private IGuildUser? GetMurdersKill()
     {
-        if (!_template.GameSubSettings.IsCustomGame || !_template.RolesExtraInfoSubSettings.MurdersKnowEachOther)
+        if (!_template.GameSubSettings.IsCustomGame || _template.RolesExtraInfoSubSettings.MurdersKnowEachOther)
             return null;
 
         var murders = _rolesData.Murders.Values.Where(i => i.IsAlive);
@@ -675,16 +696,18 @@ public class MafiaGame
             timeout: TimeSpan.FromSeconds(30),
             cancellationToken: _token);
 
+        var corpseMsg = "";
+
         if (result.IsSuccess)
         {
             await dmChannel.SendEmbedAsync("Сообщение успешно отправлено", EmbedStyle.Successfull);
 
-            return $"{player.GetFullName()} перед смертью сказал следующее:\n{result.Value.Content ?? "*пустое сообщение*"}";
+            corpseMsg = $"{player.GetFullName()} перед смертью сказал следующее:\n{result.Value.Content ?? "*пустое сообщение*"}";
         }
         else
-        {
-            return $"{player.GetFullName()} умер молча";
-        }
+            corpseMsg = $"{player.GetFullName()} умер молча";
+
+        return corpseMsg;
     }
 
 
@@ -723,8 +746,21 @@ public class MafiaGame
         catch (Exception e)
         {
             await _context.CommandContext.Channel
-                .SendEmbedAsync($"Произошла ошибка: {e.Message}. Не удалось снять роль `{_guildData.MafiaRole.Mention}` с игрока {player.GetFullMention()}", EmbedStyle.Error);
+                .SendEmbedAsync($"Произошла ошибка: {e.Message}\n" +
+                $"Не удалось снять роль `{_guildData.MafiaRole.Mention}` с игрока {player.GetFullMention()}", EmbedStyle.Error);
         }
+
+        if (player.VoiceChannel is not null)
+            try
+            {
+                await player.ModifyAsync(props => props.Channel = null);
+            }
+            catch (Exception e)
+            {
+                await _context.CommandContext.Channel
+                    .SendEmbedAsync($"Произошла ошибка: {e.Message}\n" +
+                    $"Не удалось отключить игрока {player.GetFullMention()} от голосового канала `{player.VoiceChannel.Mention}`", EmbedStyle.Error);
+            }
 
         if (_guildData.PlayerRoleIds.TryGetValue(player.Id, out var rolesIds) && rolesIds.Count > 0)
             try
@@ -806,7 +842,10 @@ public class MafiaGame
         }
 
         if (_guildData.SpectatorTextChannel is not null && _guildData.SpectatorRole is not null)
-            foreach (var player in _guildData.KilledPlayers)
+        {
+            var spectators = new List<IGuildUser>(_guildData.KilledPlayers.Concat(_context.MafiaData.Spectators));
+
+            foreach (var player in spectators)
                 try
                 {
                     await player.RemoveRoleAsync(_guildData.SpectatorRole);
@@ -815,6 +854,7 @@ public class MafiaGame
                 {
                     await _context.CommandContext.Channel.SendEmbedAsync(e.ToString(), EmbedStyle.Error);
                 }
+        }
     }
 
     public async Task WaitForTimerAsync(int seconds, params IMessageChannel[] channels)
@@ -877,24 +917,58 @@ public class MafiaGame
 
         if (gameSettings.IsCustomGame)
         {
-            var activeNeutralsCount = _rolesData.Neutrals.Values.Count(n => n.IsAlive && n is IKiller);
+            var aliveNeutrals = _rolesData.Neutrals.Values.Where(n => n.IsAlive);
+
+            var neutralsCount = aliveNeutrals.Count();
+            var neutralKillersCount = aliveNeutrals.Count(n => n is IKiller);
+
+            var totalInnocentCount = gameSettings.ConditionContinueGameWithNeutrals
+                ? innocentsCount + neutralsCount
+                : innocentsCount;
+
+            var totalMurdersCount = gameSettings.ConditionContinueGameWithNeutrals && murdersCount == 0
+                ? neutralKillersCount
+                : murdersCount;
+
+
+            var gameFinished = totalMurdersCount == 0
+                || (gameSettings.ConditionAliveAtLeast1Innocent ? totalInnocentCount == 0 : totalInnocentCount == totalMurdersCount);
+
+            if (!gameFinished)
+                return null;
+
+
+            if (totalMurdersCount == 0)
+            {
+                if (innocentsCount > 0)
+                    return GetCitizen();
+
+                return Winner.None;
+            }
+
+            if (totalInnocentCount == 0 || totalInnocentCount == totalMurdersCount)
+            {
+                if (murdersCount > 0)
+                    return GetMurders();
+
+                return Winner.None;
+            }
+
+
 
 
             if (innocentsCount == 0)
             {
                 if (murdersCount > 0)
                 {
-                    if (!gameSettings.ConditionContinueGameWithNeutrals || activeNeutralsCount == 0)
+                    if (!gameSettings.ConditionContinueGameWithNeutrals || neutralsCount == 0)
                         return GetMurders();
 
-                    //if (murdersCount == 1 && activeNeutralsCount == 1)
                     return Winner.None;
-
-                    //return null;
                 }
                 else
                 {
-                    if (activeNeutralsCount > 0)
+                    if (neutralsCount > 0)
                         return Winner.None; // concrete neutral win
 
                     return Winner.None;
@@ -904,10 +978,10 @@ public class MafiaGame
             {
                 if (murdersCount == 0)
                 {
-                    if (!gameSettings.ConditionContinueGameWithNeutrals || activeNeutralsCount == 0)
+                    if (!gameSettings.ConditionContinueGameWithNeutrals || neutralKillersCount == 0)
                         return GetCitizen();
 
-                    if (innocentsCount == 1 && activeNeutralsCount == 1)
+                    if (innocentsCount == 1 && neutralKillersCount == 1)
                         return Winner.None;
 
                     return null;
@@ -916,6 +990,9 @@ public class MafiaGame
                 {
                     if (!gameSettings.ConditionAliveAtLeast1Innocent && innocentsCount <= murdersCount)
                         return GetMurders();
+
+                    if (gameSettings.ConditionAliveAtLeast1Innocent && innocentsCount == murdersCount)
+                        return GetCitizen();
 
                     return null;
                 }

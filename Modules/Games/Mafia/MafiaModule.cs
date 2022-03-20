@@ -57,6 +57,122 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
     protected override MafiaData CreateGameData(IGuildUser host)
         => new("Мафия", 3, host);
 
+    protected override async Task<PreconditionResult> CheckPreconditionsAsync()
+    {
+        var check = await base.CheckPreconditionsAsync();
+
+        if (!check.IsSuccess)
+            return check;
+
+        var gameData = GetGameData();
+
+        var userDuplicates = gameData.Players.Intersect(gameData.Spectators);
+
+        if (userDuplicates.Any())
+        {
+            var msg = $"Пользователи не могут одновременно находиться в списке игроков и наблюдателей" +
+                $"\n**Список пользователей**" +
+                $"\n{string.Join('\n', userDuplicates.Select(user => user.GetFullMention()))}";
+
+            return PreconditionResult.FromError(msg);
+        }
+
+        var settings = await _settingsService.GetSettingsOrCreateAsync(Context, false);
+
+        ArgumentNullException.ThrowIfNull(settings.CurrentTemplate);
+
+        if (settings.ClearChannelsOnStart && !Bot.HasGuildPermission(GuildPermission.ManageMessages))
+            return PreconditionResult.FromError($"Для очистки сообщений необходимо право {GuildPermission.ManageMessages}");
+
+        if ((settings.GeneralVoiceChannelId is not null || settings.MurdersVoiceChannelId is not null) && !Bot.HasGuildPermission(GuildPermission.MoveMembers))
+            return PreconditionResult.FromError($"Для корректной работы с голосовыми каналами необходимо право {GuildPermission.MoveMembers}");
+
+        if (settings.CurrentTemplate.ServerSubSettings.RenameUsers && !Bot.HasGuildPermission(GuildPermission.ManageNicknames))
+            return PreconditionResult.FromError($"Для возможности менять никнеймы необходимо право {GuildPermission.ManageNicknames}");
+
+
+        if (!settings.CurrentTemplate.GameSubSettings.IsCustomGame)
+            return PreconditionResult.FromSuccess();
+
+        var rolesSettings = settings.CurrentTemplate.RoleAmountSubSettings;
+        var gameSettings = settings.CurrentTemplate.GameSubSettings;
+
+
+        if (gameData.Players.Count < rolesSettings.MinimumPlayersCount)
+            return PreconditionResult.FromError($"Недостаточно игроков." +
+                $"Минимальное количество игроков согласно пользовательским настройкам игры: {rolesSettings.MinimumPlayersCount}");
+
+
+        if (!gameSettings.IsFillWithMurders && rolesSettings.BlackRolesCount == 0)
+            return PreconditionResult.FromError("Для игры необходимо наличие хотя бы одной черной роли. " +
+                "Измените настройки ролей, добавив черную роль, или назначьте автозаполнение ролями мафии");
+
+        if (rolesSettings.RedRolesCount + rolesSettings.NeutralRolesCount == gameData.Players.Count)
+            return PreconditionResult.FromError("Невозможно добавить черную роль на стол: не хватает места." +
+                "Уберите мирную или нейтральную роль, или добавьте еще хотя бы одного игрока");
+
+
+        if (gameSettings.IsFillWithMurders && rolesSettings.RedRolesCount == 0)
+            return PreconditionResult.FromError("Для игры необходимо наличие хотя бы одной красной роли. " +
+                "Измените настройки ролей, добавив красную роль, или назначьте автозаполнение ролями мирных жителей");
+
+        if (rolesSettings.BlackRolesCount + rolesSettings.NeutralRolesCount == gameData.Players.Count)
+            return PreconditionResult.FromError("Невозможно добавить красную роль на стол: не хватает места." +
+                "Уберите черную или нейтральную роль, или добавьте еще хотя бы одного игрока");
+
+        return PreconditionResult.FromSuccess();
+    }
+
+
+    public override async Task JoinAsync(IGuildUser player)
+    {
+        await base.JoinAsync(player);
+
+        if (!TryGetGameData(out var gameData))
+            return;
+
+        if (gameData.Spectators.Contains(player))
+        {
+            if (gameData.Spectators.Remove(player))
+                await ReplyEmbedAsync($"{player.GetFullMention()} удален наблюдателей");
+            else
+            {
+                await ReplyEmbedAsync($"Не удалось убрать из наблюдателей пользователя {player.GetFullMention()}", EmbedStyle.Error);
+
+                if (gameData.Players.Remove(player))
+                    await ReplyEmbedAsync($"{player.GetFullMention()} удаляется из игры из-за ошибки при выходе из наблюдателей" +
+                        $"\n(*Пользователь не может находиться в игроках и наблюдателях одновременно*)", EmbedStyle.Warning);
+                else
+                    await ReplyEmbedAsync($"Не удалось убрать из списка игроков пользователя {player.GetFullMention()}" +
+                        $"\n**Игра не сможет начаться, пока есть хотя бы 1 пользователь, находящийся одновременно в игроках и наблюдателях**", EmbedStyle.Error);
+            }
+        }
+    }
+
+
+    public override async Task ShowPlayerListAsync()
+    {
+        if (!TryGetGameData(out var gameData))
+        {
+            await ReplyEmbedAsync("Игра еще не создана", EmbedStyle.Error);
+
+            return;
+        }
+
+        var text = "";
+
+        for (int i = 0; i < gameData.Players.Count; i++)
+        {
+            var player = gameData.Players[i];
+
+            text += $"[{i + 1}] {player.Mention} - {(gameData.Host.Id == player.Id ? "**Создатель**" : "Участник")}\n";
+        }
+
+        text += $"*Наблюдатели*\n{string.Join('\n', gameData.Spectators.Select(x => x.Mention))}";
+
+        await ReplyEmbedAsync(text, "Список игроков");
+    }
+
 
     [RequireBotPermission(GuildPermission.ManageChannels)]
     [RequireBotPermission(GuildPermission.ManageRoles)]
@@ -178,60 +294,65 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
     }
 
 
-    protected override async Task<PreconditionResult> CheckPreconditionsAsync()
+
+    [Command("Наблюдатель")]
+    [Alias("Зритель", "Набл")]
+    public Task JoinSpectatorAsync()
+        => SetSpectatorAsync((IGuildUser)Context.User, true);
+
+    [Command("НаблюдательВыход")]
+    [Alias("ЗрительВыход", "НаблВыход")]
+    public Task LeaveSpectatorAsync()
+        => SetSpectatorAsync((IGuildUser)Context.User, false);
+
+
+    [RequireOwner(Group = "perm")]
+    [RequireStandartAccessLevel(StandartAccessLevel.Developer, Group = "perm")]
+    [Command("Наблюдатель")]
+    [Alias("Зритель", "Набл")]
+    public async Task SetSpectatorAsync(IGuildUser spectator, bool join = true)
     {
-        var check = await base.CheckPreconditionsAsync();
+        if (!TryGetGameData(out var gameData))
+        {
+            await ReplyEmbedAsync("Игра еще не создана", EmbedStyle.Error);
 
-        if (!check.IsSuccess)
-            return check;
+            return;
+        }
 
+        if (gameData.Players.Contains(spectator))
+        {
+            await ReplyEmbedAsync("Невозможно стать наблюдателем будучи участником игры", EmbedStyle.Error);
 
-        var settings = await _settingsService.GetSettingsOrCreateAsync(Context, false);
+            return;
+        }
 
-        ArgumentNullException.ThrowIfNull(settings.CurrentTemplate);
+        if (join)
+        {
+            if (gameData.Spectators.Contains(spectator))
+            {
+                await ReplyEmbedAsync("Вы уже есть в списке наблюдателей", EmbedStyle.Warning);
 
-        if (settings.ClearChannelsOnStart && !Bot.HasGuildPermission(GuildPermission.ManageMessages))
-            return PreconditionResult.FromError($"Для очистки сообщений необходимо право {GuildPermission.ManageMessages}");
+                return;
+            }
 
-        if ((settings.GeneralVoiceChannelId is not null || settings.MurdersVoiceChannelId is not null) && !Bot.HasGuildPermission(GuildPermission.MoveMembers))
-            return PreconditionResult.FromError($"Для корректной работы с голосовыми каналами необходимо право {GuildPermission.MoveMembers}");
+            gameData.Spectators.Add(spectator);
 
-        if (settings.CurrentTemplate.ServerSubSettings.RenameUsers && !Bot.HasGuildPermission(GuildPermission.ManageNicknames))
-            return PreconditionResult.FromError($"Для возможности менять никнеймы необходимо право {GuildPermission.ManageNicknames}");
+            await ReplyEmbedAsync($"{spectator.GetFullMention()} стал наблюдателем", EmbedStyle.Successfull);
+        }
+        else
+        {
+            if (!gameData.Spectators.Contains(spectator))
+            {
+                await ReplyEmbedAsync("Вас нет в списке наблюдателей", EmbedStyle.Warning);
 
+                return;
+            }
 
-        if (!settings.CurrentTemplate.GameSubSettings.IsCustomGame)
-            return PreconditionResult.FromSuccess();
-
-        var data = GetGameData();
-
-        var rolesSettings = settings.CurrentTemplate.RoleAmountSubSettings;
-        var gameSettings = settings.CurrentTemplate.GameSubSettings;
-
-
-        if (data.Players.Count < rolesSettings.MinimumPlayersCount)
-            return PreconditionResult.FromError($"Недостаточно игроков." +
-                $"Минимальное количество игроков согласно пользовательским настройкам игры: {rolesSettings.MinimumPlayersCount}");
-
-
-        if (!gameSettings.IsFillWithMurders && rolesSettings.BlackRolesCount == 0)
-            return PreconditionResult.FromError("Для игры необходимо наличие хотя бы одной черной роли. " +
-                "Измените настройки ролей, добавив черную роль, или назначьте автозаполнение ролями мафии");
-
-        if (rolesSettings.RedRolesCount + rolesSettings.NeutralRolesCount == data.Players.Count)
-            return PreconditionResult.FromError("Невозможно добавить черную роль на стол: не хватает места." +
-                "Уберите мирную или нейтральную роль, или добавьте еще хотя бы одного игрока");
-
-
-        if (gameSettings.IsFillWithMurders && rolesSettings.RedRolesCount == 0)
-            return PreconditionResult.FromError("Для игры необходимо наличие хотя бы одной красной роли. " +
-                "Измените настройки ролей, добавив красную роль, или назначьте автозаполнение ролями мирных жителей");
-
-        if (rolesSettings.BlackRolesCount + rolesSettings.NeutralRolesCount == data.Players.Count)
-            return PreconditionResult.FromError("Невозможно добавить красную роль на стол: не хватает места." +
-                "Уберите черную или нейтральную роль, или добавьте еще хотя бы одного игрока");
-
-        return PreconditionResult.FromSuccess();
+            if (gameData.Spectators.Remove(spectator))
+                await ReplyEmbedAsync($"{spectator.GetFullMention()} вышел из наблюдателей", EmbedStyle.Successfull);
+            else
+                await ReplyEmbedAsync($"Не удалось убрать из наблюдателей пользователя {spectator.GetFullMention()}", EmbedStyle.Error);
+        }
     }
 
 
@@ -1462,8 +1583,6 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
             }
         }
     }
-
-
 
 
 

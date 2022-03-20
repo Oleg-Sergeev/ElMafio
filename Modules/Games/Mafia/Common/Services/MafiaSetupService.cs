@@ -131,18 +131,25 @@ public class MafiaSetupService : IMafiaSetupService
 
         var token = context.MafiaData.TokenSource.Token;
 
+        var guildData = context.GuildData;
+
+
         foreach (var player in context.MafiaData.Players)
             tasks.Add(HandlePlayerAsync(player));
+
+        foreach (var spectator in context.MafiaData.Spectators)
+            tasks.Add(AddSpectatorRoleAsync(spectator));
+
 
         Task.WaitAll(tasks.ToArray(), token);
 
         return Task.CompletedTask;
 
+
+
         async Task HandlePlayerAsync(IGuildUser player)
         {
             var serverSettings = context.SettingsTemplate.ServerSubSettings;
-
-            var guildData = context.GuildData;
 
 
             await guildData.MurderTextChannel.RemovePermissionOverwriteAsync(player, new() { CancelToken = token });
@@ -165,7 +172,6 @@ public class MafiaSetupService : IMafiaSetupService
                     await HandleHttpExceptionAsync($"Не удалось сменить ник пользователю {guildPlayer.GetFullMention()}", e, context);
                 }
             }
-
 
             if (serverSettings.RemoveRolesFromUsers && guildPlayer.Id != context.CommandContext.Guild.OwnerId && guildPlayer.Id != 184316176007036928)
             {
@@ -203,7 +209,21 @@ public class MafiaSetupService : IMafiaSetupService
                 }
             }
 
+
             await player.AddRoleAsync(guildData.MafiaRole, new() { CancelToken = token });
+        }
+
+
+        async Task AddSpectatorRoleAsync(IGuildUser spectator)
+        {
+            try
+            {
+                await spectator.AddRoleAsync(guildData.SpectatorRole, new() { CancelToken = token });
+            }
+            catch (HttpException e)
+            {
+                await HandleHttpExceptionAsync($"Не удалось добавить роль наблюдателя пользователю {spectator.GetFullMention()}", e, context);
+            }
         }
     }
 

@@ -10,7 +10,6 @@ public class MafiaRolesData
 {
     public Dictionary<IGuildUser, GameRole> AliveRoles { get; }
 
-
     public IReadOnlyDictionary<IGuildUser, GameRole> AllRoles => _allRoles;
     private readonly Dictionary<IGuildUser, GameRole> _allRoles;
 
