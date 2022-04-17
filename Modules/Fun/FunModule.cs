@@ -59,8 +59,7 @@ public class FunModule : CommandGuildModuleBase
     }
 
 
-    [Command("Рулетка")]
-    [Alias("Колесо")]
+    [Command("Колесо")]
     [Summary("Укажите набор слов, из которых бот выберет одно" +
         "\nПример: `Рулетка Арбуз, Дыня, Груша и яблоко, Что-нибудь еще вкусное`")]
     public async Task RouletteAsync([Remainder][Summary("Набор слов, участвующих в рулетке")] string text)
@@ -260,6 +259,33 @@ public class FunModule : CommandGuildModuleBase
         }
 
         await ReplyEmbedAsync("Не удалось найти пользовательский смайлик", EmbedStyle.Error);
+    }
+
+
+    [Command("СмайлАйди")]
+    [Alias("ЭмодзиАйди", "ЭмоцияАйди")]
+    [Summary("Получить смайл по его ID")]
+    [Remarks("Для получения ID смайла, поставьте `\\` и затем укажите сам смайл. Смайл будет преобразован в вид `<:smileName:smileId>`")]
+    [RequireBotPermission(GuildPermission.AttachFiles)]
+    public async Task GetSmileByIdAsync([Summary("ID пользовательского смайла")] string smileRawId)
+    {
+        var trimmedRawId = smileRawId.Trim('<', '>', ':');
+
+        var smileStrId = trimmedRawId.Split(':')[^1];
+
+        if (ulong.TryParse(smileStrId, out var smileId))
+        {
+            var msg = "Не удалось найти ID пользовательского смайла." +
+                "\nФормат вводимого ID смайла:" +
+                "\n`<:smileName:smileId>` (`*смайлайди <:mySmile:123456789012345678>`)" +
+                "\n`smileId` (`*смайлайди 123456789012345678`)";
+
+            await ReplyEmbedAsync(msg, EmbedStyle.Error);
+
+            return;
+        }
+
+        await GetSmileByIdAsync(smileId);
     }
 
 }

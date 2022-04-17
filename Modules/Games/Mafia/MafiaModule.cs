@@ -192,7 +192,6 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
 
         var data = GetGameData();
         data.IsPlaying = true;
-        data.Players.Shuffle(3);
         data.RefreshToken();
 
         await task;
@@ -281,6 +280,10 @@ public class MafiaModule : GameModule<MafiaData, MafiaStats>
                 DeleteGameData();
             else
                 data.IsPlaying = false;
+        }
+        finally
+        {
+            await UpdateAfkTimerAsync();
         }
     }
 

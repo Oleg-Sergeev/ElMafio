@@ -13,4 +13,13 @@ public static class DictionaryExtensions
         foreach (var item in otherDict)
             dict.Add(item.Key, item.Value);
     }
+
+    public static Dictionary<TKey, TValue> Shuffle<TKey, TValue>(
+      this Dictionary<TKey, TValue> dictionary) where TKey : notnull
+    {
+        Random r = new();
+
+        return dictionary.OrderBy(x => r.Next())
+           .ToDictionary(item => item.Key, item => item.Value);
+    }
 }

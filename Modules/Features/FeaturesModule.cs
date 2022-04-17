@@ -1,10 +1,18 @@
 ﻿using System;
 using System.Globalization;
+using System.IO;
+using System.IO.Compression;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Reflection;
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using System.Threading.Tasks;
 using Core.Common;
 using Core.Resources;
 using Discord;
+using Discord.Audio.Streams;
 using Discord.Commands;
 using Fergun.Interactive;
 
@@ -136,6 +144,66 @@ public class FeaturesModule : CommandGuildModuleBase
         Resource.Culture = CultureInfo.GetCultureInfo(t);
 
         await ReplyAsync("Success");
+    }
+
+
+    [Command("с")]
+    public async Task CompressImageAsync(IUser? user = null)
+    {
+        user ??= Context.User;
+
+        var request = user.GetAvatarUrl(size: 2048);
+
+        var avatarResponse = await new HttpClient().GetAsync(request);
+
+        if (avatarResponse is null)
+        {
+            await ReplyEmbedAsync("Не удалось загрузить аватар", EmbedStyle.Error);
+
+            return;
+        }
+
+        var avatarExtension = avatarResponse.Content.Headers.ContentType?.MediaType?.Split('/')?[1];
+
+        if (avatarExtension is null)
+        {
+            await ReplyEmbedAsync("Не удалось загрузить аватар: не найдено расширение картинки", EmbedStyle.Error);
+
+            return;
+        }
+
+
+        using HttpClient client = new();
+
+        var avatarStream = await avatarResponse.Content.ReadAsStreamAsync();
+
+        MultipartFormDataContent form = new();
+        form.Add(new StreamContent(avatarStream), "uploadfile", "avatar.png");
+        form.Add(new StringContent("1"), "sizeperc");
+        form.Add(new StringContent("256"), "kbmbsize");
+        form.Add(new StringContent("1"), "kbmb");
+        form.Add(new StringContent("1"), "mpxopt");
+        form.Add(new StringContent("1"), "jpegtype");
+        form.Add(new StringContent("1"), "jpegmeta");
+
+        var result = await client.PostAsync("https://www.imgonline.com.ua/compress-image-size-result.php", form);
+
+        var htmlStream= await result.Content.ReadAsStreamAsync();
+
+        string content;
+
+        using (StreamReader reader = new(htmlStream))
+            content = reader.ReadToEnd();
+
+        var href = content[content.IndexOf("https")..];
+
+        var imgUrl = href[..(href.IndexOf(".jpg") + 4)];
+
+        var compressedAvatar = await new HttpClient().GetAsync(imgUrl);
+
+        var compressedAvatarStream = await compressedAvatar.Content.ReadAsStreamAsync();
+
+        await Context.Channel.SendFileAsync(compressedAvatarStream, $"compressed_avatar.jpg");
     }
 }
 

@@ -48,6 +48,9 @@ public class CommandHandlerService : DiscordClientService
     {
         Client.Ready += OnReadyAsync;
 
+        Client.MessageReceived += OnMessageReceivedAsync;
+        Client.UserLeft += OnUserLeft;
+
         _commandService.AddTypeReader<bool>(new BooleanTypeReader(), true);
         _commandService.AddTypeReader<Emoji>(new EmojiTypeReader());
         _commandService.AddTypeReader<Emote>(new EmoteTypeReader());
@@ -204,9 +207,9 @@ public class CommandHandlerService : DiscordClientService
 
         await loadServerTask;
 
-        Client.MessageReceived += OnMessageReceivedAsync;
+
+        Client.JoinedGuild -= OnJoinedGuildAsync;
         Client.JoinedGuild += OnJoinedGuildAsync;
-        Client.UserLeft += OnUserLeft;
     }
 
     private async Task OnUserLeft(SocketGuild guild, SocketUser user)

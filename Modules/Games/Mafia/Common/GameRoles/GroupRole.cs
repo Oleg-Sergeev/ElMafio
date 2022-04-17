@@ -48,7 +48,10 @@ public abstract class GroupRole : GameRole
             voteResultChannel = voteChannel;
         }
 
-        var voters = GetVoters().Shuffle().ToList();
+        var voters = GetVoters()
+            .Shuffle()
+            .ToList();
+
         var playersVotes = new Dictionary<IGuildUser, Vote?>();
 
         var playersNames = new List<string>();
@@ -222,13 +225,16 @@ public abstract class GroupRole : GameRole
                 .WithColor(Color.Gold)
                 .Build();
 
+            var playersToVote = context.RolesData.AliveRoles.Keys
+                .Except(GetExceptList())
+                .ToList()
+                .Shuffle(context.RolesData.AliveRoles.Keys.Count / 2);
+
             while (timeout.TotalSeconds > 0)
             {
-                var playersToVote = context.RolesData.AliveRoles.Keys.Except(GetExceptList());
-
                 var options = playersToVote
-                    .Select(p => new SelectMenuOptionBuilder(p.GetFullName(), p.Id.ToString(), isDefault: selectedPlayer?.Id == p.Id))
-                    .ToList();
+                    .ConvertAll(p => new SelectMenuOptionBuilder(p.GetFullName(), p.Id.ToString(), isDefault: selectedPlayer?.Id == p.Id));
+                    
 
                 var select = new SelectMenuBuilder()
                     .WithCustomId("select")

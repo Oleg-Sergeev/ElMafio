@@ -9,6 +9,11 @@ public static class EmbedHelper
         => CreateEmbed(description, EmbedStyle.Information, title, innerEmbedBuilder);
     public static Embed CreateEmbed(string description, EmbedStyle embedStyle, string? title = null, EmbedBuilder? innerEmbedBuilder = null)
     {
+        description = description.Truncate(EmbedBuilder.MaxDescriptionLength);
+
+        title = title.Truncate(EmbedBuilder.MaxTitleLength);
+
+
         innerEmbedBuilder ??= new EmbedBuilder();
 
         innerEmbedBuilder.WithDescription(description);

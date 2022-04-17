@@ -1,8 +1,10 @@
-﻿namespace Core.Extensions;
+﻿using System.Collections.Generic;
+
+namespace Core.Extensions;
 
 public static class ListExtensions
 {
-    public static IList<T> Shuffle<T>(this IList<T> list, int iterations = 1)
+    public static List<T> Shuffle<T>(this List<T> list, int iterations = 1)
     {
         if (iterations < 0)
             throw new ArgumentOutOfRangeException(nameof(iterations), "the value must be at least zero");
@@ -12,6 +14,7 @@ public static class ListExtensions
         for (int i = 0; i < iterations; i++)
         {
             int n = list.Count;
+
             while (n > 1)
             {
                 n--;
@@ -32,11 +35,11 @@ public static class ListExtensions
     {
         var rnd = new Random();
 
-        var buffer = source.ToList();
+        var buffer = source.ToArray();
 
-        for (int i = 0; i < buffer.Count; i++)
+        for (int i = 0; i < buffer.Length; i++)
         {
-            int j = rnd.Next(i, buffer.Count);
+            int j = rnd.Next(i, buffer.Length);
             yield return buffer[j];
 
             buffer[j] = buffer[i];

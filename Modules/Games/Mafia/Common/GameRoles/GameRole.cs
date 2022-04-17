@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Core.Common;
 using Core.Extensions;
 using Discord;
+using Discord.Net;
 using Infrastructure.Data.Entities.Games.Stats;
 using Microsoft.Extensions.Options;
 using Modules.Games.Mafia.Common.Data;
@@ -187,7 +188,10 @@ public abstract class GameRole
         }
 
 
-        var playersToVote = context.RolesData.AliveRoles.Keys.Except(role.GetExceptList());
+        var playersToVote = context.RolesData.AliveRoles.Keys
+            .Except(role.GetExceptList())
+            .ToList()
+            .Shuffle(context.RolesData.AliveRoles.Keys.Count / 2);
 
         var cts = new CancellationTokenSource();
 
@@ -206,8 +210,7 @@ public abstract class GameRole
         do
         {
             var options = playersToVote
-                .Select(p => new SelectMenuOptionBuilder(p.GetFullName(), p.Id.ToString(), isDefault: selectedPlayer?.Id == p.Id))
-                .ToList();
+                .ConvertAll(p => new SelectMenuOptionBuilder(p.GetFullName(), p.Id.ToString(), isDefault: selectedPlayer?.Id == p.Id));
 
             var select = new SelectMenuBuilder()
                 .WithCustomId("select")
@@ -233,7 +236,14 @@ public abstract class GameRole
 
             if (message is null)
             {
-                message = await voteChannel.SendMessageAsync(embed: embed, components: component);
+                try
+                {
+                    message = await voteChannel.SendMessageAsync(embed: embed, components: component);
+                }
+                catch (HttpException)
+                {
+                    return new Vote(role, null, false);
+                }
             }
             else
             {

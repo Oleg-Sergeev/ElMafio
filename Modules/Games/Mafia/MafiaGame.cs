@@ -9,12 +9,14 @@ using Core.Common;
 using Core.Exceptions;
 using Core.Extensions;
 using Discord;
+using Discord.Net;
 using Fergun.Interactive;
 using Infrastructure.Data.Entities.Games.Settings.Mafia;
 using Modules.Games.Mafia.Common;
 using Modules.Games.Mafia.Common.Data;
 using Modules.Games.Mafia.Common.GameRoles;
 using Modules.Games.Mafia.Common.Services;
+using Serilog;
 
 namespace Modules.Games.Mafia;
 
@@ -76,9 +78,13 @@ public class MafiaGame
             {
                 await _context.CommandContext.Channel.SendEmbedAsync("Подготовка к игре...", EmbedStyle.Waiting);
 
+                var iterations = _context.MafiaData.Players.Count / 2;
+
+                _context.MafiaData.Players.Shuffle(iterations);
+
                 _mafiaService.SetupRoles(_context);
 
-                _context.MafiaData.Players.Shuffle(3);
+                _context.MafiaData.Players.Shuffle(iterations);
 
                 if (_context.SettingsTemplate.ServerSubSettings.SendWelcomeMessage)
                     await _mafiaService.SendWelcomeMessageAsync(_context);
@@ -246,7 +252,7 @@ public class MafiaGame
             for (int i = 0; i < corpses.Count; i++)
             {
                 if (lastWordNightCount > 0)
-                    lastWordTasks.Add(SendLastMessageAndEjectPlayerAsync(corpses[i]));
+                    lastWordTasks.Add(EjectPlayerAsyncAndSendLastMessage(corpses[i]));
                 else
                     await EjectPlayerAsync(corpses[i]);
 
@@ -263,11 +269,14 @@ public class MafiaGame
                 return winner;
 
 
-            async Task<string> SendLastMessageAndEjectPlayerAsync(IGuildUser player)
+            async Task<string> EjectPlayerAsyncAndSendLastMessage(IGuildUser player)
             {
-                await _context.CommandContext.Channel.SendEmbedAsync($"Corpse: {player.GetFullName()}", EmbedStyle.Debug);
+                await _guildData.GeneralTextChannel.AddPermissionOverwriteAsync(player, _denyWrite);
 
                 var res = await SendLastWordMessageAsync(player);
+
+                await _guildData.GeneralTextChannel.RemovePermissionOverwriteAsync(player);
+
 
                 await EjectPlayerAsync(player);
 
@@ -687,25 +696,42 @@ public class MafiaGame
 
     private async Task<string> SendLastWordMessageAsync(IGuildUser player)
     {
-        var dmChannel = await player.CreateDMChannelAsync();
-
-        var msg = await dmChannel.SendMessageAsync(embed: EmbedHelper.CreateEmbed($"{player.Username}, у вас есть 30с для последнего слова, воспользуйтесь этим временем с умом." +
-            $"\n**Напишите здесь сообщение, которое увидят все игроки Мафии**"));
-
-        var result = await _interactive.NextMessageAsync(m => m.Channel.Id == msg.Channel.Id && m.Author.Id == player.Id,
-            timeout: TimeSpan.FromSeconds(30),
-            cancellationToken: _token);
-
         var corpseMsg = "";
 
-        if (result.IsSuccess)
+        try
         {
-            await dmChannel.SendEmbedAsync("Сообщение успешно отправлено", EmbedStyle.Successfull);
+            var dmChannel = await player.CreateDMChannelAsync();
 
-            corpseMsg = $"{player.GetFullName()} перед смертью сказал следующее:\n{result.Value.Content ?? "*пустое сообщение*"}";
+            var msg = await dmChannel.SendMessageAsync(embed: EmbedHelper.CreateEmbed($"{player.Username}, у вас есть 30с для последнего слова, воспользуйтесь этим временем с умом." +
+                $"\n**Напишите здесь сообщение, которое увидят все игроки Мафии**"));
+
+            var result = await _interactive.NextMessageAsync(m => m.Channel.Id == msg.Channel.Id && m.Author.Id == player.Id,
+                timeout: TimeSpan.FromSeconds(30),
+                cancellationToken: _token);
+
+            if (result.IsSuccess)
+            {
+                await dmChannel.SendEmbedAsync("Сообщение успешно отправлено", EmbedStyle.Successfull);
+
+                corpseMsg = $"{player.GetFullName()} перед смертью сказал следующее:\n{result.Value.Content ?? "*пустое сообщение*"}";
+            }
+            else
+                corpseMsg = $"{player.GetFullName()} умер молча";
         }
-        else
-            corpseMsg = $"{player.GetFullName()} умер молча";
+
+        catch (HttpException he)
+        {
+            Log.Error(he, "error when player {0} sent DM message", player);
+
+            corpseMsg = $"{player.GetFullName()} не смог отправить сообщение";
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "error when player {0} sent DM message", player);
+
+            corpseMsg = $"У {player.GetFullName()} возникли сложности при отправке сообщения";
+        }
+
 
         return corpseMsg;
     }
@@ -917,9 +943,11 @@ public class MafiaGame
 
         if (gameSettings.IsCustomGame)
         {
-            var aliveNeutrals = _rolesData.Neutrals.Values.Where(n => n.IsAlive);
+            var aliveNeutrals = _rolesData.Neutrals.Values
+                .Where(n => n.IsAlive)
+                .ToList();
 
-            var neutralsCount = aliveNeutrals.Count();
+            var neutralsCount = aliveNeutrals.Count;
             var neutralKillersCount = aliveNeutrals.Count(n => n is IKiller);
 
             var totalInnocentCount = gameSettings.ConditionContinueGameWithNeutrals
@@ -932,7 +960,7 @@ public class MafiaGame
 
 
             var gameFinished = totalMurdersCount == 0
-                || (gameSettings.ConditionAliveAtLeast1Innocent ? totalInnocentCount == 0 : totalInnocentCount == totalMurdersCount);
+                || (gameSettings.ConditionAliveAtLeast1Innocent ? totalInnocentCount == 0 : totalInnocentCount <= totalMurdersCount);
 
             if (!gameFinished)
                 return null;

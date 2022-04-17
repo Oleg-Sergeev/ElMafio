@@ -14,6 +14,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Modules.Admin;
 using Modules.Games.Mafia.Common.GameRoles;
 using Modules.Games.Mafia.Common.GameRoles.Data;
 using Modules.Games.Mafia.Common.Services;
@@ -119,7 +120,8 @@ public static class Application
             .AddSingleton<LoggingService>()
             .AddTransient<IMafiaSetupService, MafiaSetupService>()
             .AddTransient(typeof(IGameSettingsService<>), typeof(GameSettingsService<>))
-            .AddTransient<IGameSettingsService<MafiaSettings>, MafiaSettingsService>();
+            .AddTransient<IGameSettingsService<MafiaSettings>, MafiaSettingsService>()
+            .AddTransient<AdminService>();
 
             var sections = typeof(GameRole).GetAllDerivedTypes().Select(t => t.Name);
 

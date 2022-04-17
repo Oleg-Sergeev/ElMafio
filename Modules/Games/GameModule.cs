@@ -59,6 +59,26 @@ public abstract class GameModule<TData, TStats> : CommandGuildModuleBase
         await JoinAsync(guildUser);
     }
 
+
+    [RequireOwner(Group = "perm")]
+    [RequireStandartAccessLevel(StandartAccessLevel.Developer, Group = "perm")]
+    [Command("Играть")]
+    [Alias("игра")]
+    [Priority(1)]
+    public virtual async Task JoinAsync(params IGuildUser[] players)
+    {
+        if (players.Length == 0)
+        {
+            await JoinAsync();
+
+            return;
+        }
+
+        foreach (var player in players)
+            await JoinAsync(player);
+    }
+
+
     [RequireOwner(Group = "perm")]
     [RequireStandartAccessLevel(StandartAccessLevel.Developer, Group = "perm")]
     [Command("Играть")]
@@ -103,6 +123,8 @@ public abstract class GameModule<TData, TStats> : CommandGuildModuleBase
 
         await ReplyEmbedAsync($"{player.GetFullMention()} присоединился к игре! Количество участников: {gameData.Players.Count}", gameData.Name);
     }
+
+
 
 
     [Command("Выход")]
@@ -353,7 +375,7 @@ public abstract class GameModule<TData, TStats> : CommandGuildModuleBase
 
     [Command("Таймер")]
     [Alias("Афк", "Обновить")]
-    public async Task UpdateAfkTimer()
+    public async Task UpdateAfkTimerAsync()
     {
         if (!TryGetGameData(out var gameData))
         {

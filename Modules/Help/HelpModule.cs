@@ -103,7 +103,7 @@ public class HelpModule : CommandGuildModuleBase
     {
         var reset = "[Сбросить]";
 
-        var modulesTree = await GetModuleTreeAsync();
+        var modulesTree = await GetModuleTreesAsync();
 
         IUserMessage? message = null;
         InteractiveMessageResult<MultiSelectionOption<object>?>? result = null;
@@ -169,7 +169,7 @@ public class HelpModule : CommandGuildModuleBase
 
                 description = null;
 
-                var module = selectedModule ?? selectedCommand.Module;
+                var module = selectedCommand.Module;
 
                 foreach (var cmd in module.Commands.Where(cmd => cmd.Name == selectedCommand.Name))
                 {
@@ -591,7 +591,7 @@ public class HelpModule : CommandGuildModuleBase
         return t;
     }
 
-    private async Task<List<ModuleNode>> GetModuleTreeAsync()
+    private async Task<List<ModuleNode>> GetModuleTreesAsync()
     {
         var modules = _commandService.Modules.ToList();
 

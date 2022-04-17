@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Data;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Text.RegularExpressions;
@@ -9,8 +10,10 @@ using Core.Common;
 using Core.Extensions;
 using Discord;
 using Discord.Commands;
+using Discord.Rest;
 using Fergun.Interactive;
 using Fergun.Interactive.Pagination;
+using Infrastructure.Data.Entities;
 using Infrastructure.Data.Entities.ServerInfo;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -21,13 +24,19 @@ namespace Modules.Admin;
 [Group("Админ")]
 [Alias("а")]
 [Summary("Набор команд для управления сервером и получения полезной информации")]
-[RequireOwner(Group = "perm")]
-[RequireUserPermission(GuildPermission.ManageChannels, Group = "perm")]
-[RequireStandartAccessLevel(StandartAccessLevel.Moderator, Group = "perm")]
+[RequireOwner(Group = "user")]
+[RequireUserPermission(ChannelPermission.ManageChannels, Group = "user")]
+[RequireUserPermission(ChannelPermission.ManageMessages, Group = "user")]
+[RequireUserPermission(GuildPermission.ManageRoles, Group = "user")]
+[RequireStandartAccessLevel(StandartAccessLevel.Moderator, Group = "user")]
 public class AdminModule : CommandGuildModuleBase
 {
-    public AdminModule(InteractiveService interactiveService) : base(interactiveService)
+    private readonly AdminService _adminService;
+
+
+    public AdminModule(InteractiveService interactiveService, AdminService adminService) : base(interactiveService)
     {
+        _adminService = adminService;
     }
 
 
@@ -35,18 +44,16 @@ public class AdminModule : CommandGuildModuleBase
     [Alias("смод")]
     [Summary("Установить слоумод в текущем канале")]
     [Remarks("Диапазон интервала: `0-300с`")]
-    [RequireBotPermission(GuildPermission.ManageChannels)]
-    [RequireUserPermission(GuildPermission.ManageChannels, Group = "perm")]
+    [RequireBotPermission(ChannelPermission.ManageChannels)]
+    [RequireUserPermission(ChannelPermission.ManageChannels)]
     public async Task SetSlowMode([Summary("Интервал слоумода")] int secs)
     {
         if (Context.Channel is not ITextChannel textChannel)
             return;
 
-
         secs = Math.Clamp(secs, 0, 300);
 
-
-        await textChannel.ModifyAsync(props => props.SlowModeInterval = secs);
+        await _adminService.SetSlowModeAsync(textChannel, secs);
 
         await ReplyEmbedStampAsync($"Слоумод успешно установлен на {secs}с", EmbedStyle.Successfull);
     }
@@ -54,12 +61,11 @@ public class AdminModule : CommandGuildModuleBase
 
 
     [Command("Очистить")]
-    [Alias("оч")]
+    [Alias("Удалить", "Оч")]
     [Summary("Удалить указанное кол-во сообщений из текущего канала")]
     [Remarks("Максимальное кол-во сообщений, удаляемое за раз: `100`")]
-    [RequireBotPermission(GuildPermission.ManageMessages)]
-    [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
-    [RequireOwner(Group = "perm")]
+    [RequireBotPermission(ChannelPermission.ManageMessages)]
+    [RequireUserPermission(ChannelPermission.ManageMessages)]
     public async Task ClearAsync([Summary("Кол-во удаляемых сообщений")] int count)
     {
         if (Context.Channel is not ITextChannel textChannel)
@@ -71,31 +77,23 @@ public class AdminModule : CommandGuildModuleBase
 
         count = Math.Clamp(count, 0, 100);
 
-        var messagesToDelete = (await textChannel
-            .GetMessagesAsync(count + 1)
-            .FlattenAsync())
-            .Where(msg => (DateTime.UtcNow - msg.Timestamp).TotalDays <= 14);
-
-        await textChannel.DeleteMessagesAsync(messagesToDelete);
-
+        await _adminService.ClearAsync(textChannel, count + 1);
 
         await ReplyEmbedAndDeleteAsync($"Сообщения успешно удалены ({count} шт)", EmbedStyle.Successfull);
     }
 
 
-
     [Command("ОчиститьДо")]
-    [Alias("Очдо")]
-    [Summary("Удалить сообщения до указанного (удаляются сообщения, идущие **после** указанного)")]
+    [Alias("УдалитьДо", "ОчДо")]
+    [Summary("Удалить сообщения до указанного (удаляются сообщения, идущие **`после`** указанного, **`включая`** указанное)")]
     [Remarks("Максимальное кол-во сообщений, удаляемое за раз: `100`\n**Также можно ответить на сообщение, до которого нужно удалить все сообщения**")]
-    [RequireBotPermission(GuildPermission.ManageMessages)]
-    [RequireUserPermission(GuildPermission.Administrator, Group = "perm")]
-    [RequireOwner(Group = "perm")]
-    public async Task ClearToAsync([Summary("ID сообщения, до которого нужно удалить сообщения")] ulong? messageId = null)
+    [RequireBotPermission(ChannelPermission.ManageMessages)]
+    [RequireUserPermission(ChannelPermission.ManageMessages)]
+    public async Task ClearAsync([Summary("ID сообщения, до которого нужно удалить сообщения")] ulong? messageId = null)
     {
         var message = messageId is not null
-            ? await Context.Channel.GetMessageAsync(messageId.Value) ?? Context.Message.ReferencedMessage
-            : Context.Message.ReferencedMessage;
+               ? await Context.Channel.GetMessageAsync(messageId.Value) ?? Context.Message.ReferencedMessage
+               : Context.Message.ReferencedMessage;
 
         if (message is null)
         {
@@ -118,16 +116,49 @@ public class AdminModule : CommandGuildModuleBase
             return;
         }
 
-        var limit = 500;
 
-        var messages = (await textChannel.GetMessagesAsync(message.Id, Direction.After, limit).FlattenAsync())
-            .Where(msg => (DateTime.UtcNow - msg.Timestamp).TotalDays <= 14);
+        var count = await _adminService.ClearAsync(textChannel, message);
 
-        if (!messages.TryGetNonEnumeratedCount(out var count))
-            count = messages.Count();
 
-        await textChannel.DeleteMessagesAsync(messages);
+        await ReplyEmbedAndDeleteAsync($"Сообщения успешно удалены ({count} шт)", EmbedStyle.Successfull);
+    }
 
+
+    [Command("ОчиститьДиапазон")]
+    [Alias("УдалитьДпз", "ОчДпз")]
+    [Summary("Удалить сообщения в указанном диапазоне (удаляются сообщения, находящиеся **`между`** указанными сообщениями, **`включая`** сами границы)")]
+    [Remarks("Максимальное кол-во сообщений, удаляемое за раз: `100`")]
+    [RequireBotPermission(ChannelPermission.ManageMessages)]
+    [RequireUserPermission(ChannelPermission.ManageMessages)]
+    public async Task ClearAsync([Summary("Нижняя граница удаляемых сообщений")] ulong fromId,
+                                   [Summary("Верхняя граница удаляемых сообщений")] ulong toId)
+    {
+        if (Context.Channel is not ITextChannel textChannel)
+        {
+            await ReplyEmbedAndDeleteAsync("Невозможно удалить сообщения из данного канала", EmbedStyle.Error);
+
+            return;
+        }
+
+        if (await textChannel.GetMessageAsync(fromId) is not IMessage from)
+        {
+            await ReplyEmbedAndDeleteAsync("Нижняя граница сообщений не найдена", EmbedStyle.Error);
+
+            return;
+        }
+
+        if (await textChannel.GetMessageAsync(toId) is not IMessage to)
+        {
+            await ReplyEmbedAndDeleteAsync("Верхняя граница сообщений не найдена", EmbedStyle.Error);
+
+            return;
+        }
+
+
+        var count = await _adminService.ClearAsync(textChannel, from, to);
+
+        try { await Context.Message.DeleteAsync(); }
+        catch { }
 
         await ReplyEmbedAndDeleteAsync($"Сообщения успешно удалены ({count} шт)", EmbedStyle.Successfull);
     }
@@ -141,9 +172,8 @@ public class AdminModule : CommandGuildModuleBase
         "\n**0-255:** `(r, g, b)` **Пример:** `(150, 255, 0)`" +
         "\n**0-1:** `(r, g, b)` **Пример:** `(0.4, 0, 1)`" +
         "\n**HEX:** `#RRGGBB` **Пример:** `#280af0`")]
-    [RequireBotPermission(GuildPermission.ManageRoles)]
-    [RequireUserPermission(GuildPermission.ManageRoles, Group = "perm")]
-    [RequireOwner(Group = "perm")]
+    [RequireBotPermission(ChannelPermission.ManageRoles)]
+    [RequireUserPermission(ChannelPermission.ManageRoles)]
     public async Task UpdateRoleColorAsync([Summary("Роль, для которой нужно изменить цвет")] IRole role, [Summary("Новый цвет")] Color color)
     {
         var guildUser = (IGuildUser)Context.User;
@@ -169,7 +199,7 @@ public class AdminModule : CommandGuildModuleBase
 
         var oldColor = role.Color;
 
-        await role.ModifyAsync(r => r.Color = color);
+        await _adminService.UpdateRoleColorAsync(role, color);
 
         await ReplyEmbedStampAsync($"Старый цвет: {oldColor} {oldColor.ToRgbString()}",
             EmbedStyle.Successfull,
@@ -258,16 +288,28 @@ public class AdminModule : CommandGuildModuleBase
                 attachment = file.Attachments.First();
             }
 
+            Stream? compressedAvatar = null;
             if (attachment.Size > 256 * 1024)
             {
-                await ReplyEmbedAsync($"Изображение имеет слишком большой размер. Допустимый размер: 256Кб; Размер изображения: {attachment.Size / 1024}Кб",
-                    EmbedStyle.Error);
+                var attachmentResponse = await new HttpClient().GetAsync(attachment.Url);
 
-                return;
+                var attachmentStream = await attachmentResponse.Content.ReadAsStreamAsync();
+
+                compressedAvatar = await CompressAvatarAsync(attachmentStream);
+
+                ReplyEmbedAsync("Compressing...", EmbedStyle.Debug).Wait();
+
+                if (compressedAvatar.Length > 256 * 1024)
+                {
+                    await ReplyEmbedAsync($"Изображение имеет слишком большой размер. Допустимый размер: 256Кб; Размер изображения: {attachment.Size / 1024}Кб",
+                        EmbedStyle.Error);
+
+                    return;
+                }
             }
 
 
-            var stream = await httpClient.GetStreamAsync(attachment.Url);
+            var stream = compressedAvatar ?? await httpClient.GetStreamAsync(attachment.Url);
 
             if (stream is null)
             {
@@ -305,6 +347,42 @@ public class AdminModule : CommandGuildModuleBase
             await Context.Guild.DeleteEmoteAsync(guildEmote);
 
             await ReplyEmbedAsync("Смайл успешно удален", EmbedStyle.Successfull);
+        }
+
+
+
+
+        private async Task<Stream> CompressAvatarAsync(Stream avatarStream)
+        {
+            using HttpClient client = new();
+
+            MultipartFormDataContent form = new();
+            form.Add(new StreamContent(avatarStream), "uploadfile", "avatar.png");
+            form.Add(new StringContent("1"), "sizeperc");
+            form.Add(new StringContent("256"), "kbmbsize");
+            form.Add(new StringContent("1"), "kbmb");
+            form.Add(new StringContent("1"), "mpxopt");
+            form.Add(new StringContent("1"), "jpegtype");
+            form.Add(new StringContent("1"), "jpegmeta");
+
+            var result = await client.PostAsync("https://www.imgonline.com.ua/compress-image-size-result.php", form);
+
+            var htmlStream = await result.Content.ReadAsStreamAsync();
+
+            string content;
+
+            using (StreamReader reader = new(htmlStream))
+                content = reader.ReadToEnd();
+
+            var href = content[content.IndexOf("https")..];
+
+            var imgUrl = href[..(href.IndexOf(".jpg") + 4)];
+
+            var compressedAvatar = await new HttpClient().GetAsync(imgUrl);
+
+            var compressedAvatarStream = await compressedAvatar.Content.ReadAsStreamAsync();
+
+            return compressedAvatarStream;
         }
     }
 

@@ -30,6 +30,15 @@ public abstract class CommandGuildModuleBase : ModuleBase<DbSocketCommandContext
     protected static readonly IEmote CancelEmote = new Emoji("⏹️");
 
 
+    protected override void BeforeExecute(CommandInfo command)
+    {
+        if (command.Parameters.Count > 0)
+        {
+            var t = command.Parameters[0].Attributes;
+        }
+    }
+
+
     private ILogger? _guildLogger;
     protected ILogger GuildLogger => _guildLogger ??= GetGuildLogger(Context.Guild.Id);
 

@@ -12,6 +12,8 @@ public static class IServiceProviderExtensions
     {
         var context = serviceProvider.GetRequiredService<BotContext>();
 
+        using var scope = serviceProvider.CreateScope();
+
         if (context.Database.IsSqlServer())
             await context.Database.MigrateAsync();
 
