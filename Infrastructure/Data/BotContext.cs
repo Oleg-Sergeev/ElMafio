@@ -31,12 +31,10 @@ public class BotContext : DbContext
 
     public BotContext()
     {
-        Database.EnsureCreated();
     }
 
     public BotContext(DbContextOptions<BotContext> options) : base(options)
     {
-        Database.EnsureCreated();
     }
 
 
