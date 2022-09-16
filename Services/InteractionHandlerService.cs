@@ -43,7 +43,7 @@ public class InteractionHandlerService : DiscordClientService
     {
         Client.Ready += OnReadyAsync;
 
-        await _interactionService.AddModulesAsync(Assembly.LoadFrom("Modules.dll"), _provider);
+        await _interactionService.AddModulesAsync(Assembly.Load("Modules"), _provider);
 
         if (!_interactionService.Modules.Any())
             throw new InvalidOperationException("Interactive modules not loaded");
