@@ -58,7 +58,7 @@ public class CommandHandlerService : DiscordClientService
         _commandService.AddTypeReader<Emote>(new EmoteTypeReader());
         _commandService.AddTypeReader<Color>(new ColorTypeReader());
 
-        var assemblyPath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!, "Modules");
+        var assemblyPath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!, "Modules.dll");
 
         await _commandService.AddModulesAsync(Assembly.LoadFrom(assemblyPath), _provider);
 

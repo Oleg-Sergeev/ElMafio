@@ -45,7 +45,7 @@ public class InteractionHandlerService : DiscordClientService
     {
         Client.Ready += OnReadyAsync;
 
-        var assemblyPath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!, "Modules");
+        var assemblyPath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!, "Modules.dll");
 
         await _interactionService.AddModulesAsync(Assembly.LoadFrom(assemblyPath), _provider);
 
