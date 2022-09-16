@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -10,6 +11,7 @@ using Core.TypeReaders;
 using Discord;
 using Discord.Addons.Hosting;
 using Discord.Commands;
+using Discord.Interactions;
 using Discord.WebSocket;
 using Infrastructure.Data;
 using Infrastructure.Data.Entities;
@@ -56,7 +58,9 @@ public class CommandHandlerService : DiscordClientService
         _commandService.AddTypeReader<Emote>(new EmoteTypeReader());
         _commandService.AddTypeReader<Color>(new ColorTypeReader());
 
-        await _commandService.AddModulesAsync(Assembly.LoadFrom("Modules.dll"), _provider);
+        var assemblyPath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!, "Modules");
+
+        await _commandService.AddModulesAsync(Assembly.LoadFrom(assemblyPath), _provider);
 
         if (!_commandService.Modules.Any())
             throw new InvalidOperationException("Modules not loaded");

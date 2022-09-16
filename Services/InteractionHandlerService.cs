@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -6,6 +7,7 @@ using System.Threading.Tasks;
 using Core.Common;
 using Discord;
 using Discord.Addons.Hosting;
+using Discord.Commands;
 using Discord.Interactions;
 using Discord.Rest;
 using Discord.WebSocket;
@@ -43,7 +45,9 @@ public class InteractionHandlerService : DiscordClientService
     {
         Client.Ready += OnReadyAsync;
 
-        await _interactionService.AddModulesAsync(Assembly.Load("Modules"), _provider);
+        var assemblyPath = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!, "Modules");
+
+        await _interactionService.AddModulesAsync(Assembly.LoadFrom(assemblyPath), _provider);
 
         if (!_interactionService.Modules.Any())
             throw new InvalidOperationException("Interactive modules not loaded");
