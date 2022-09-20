@@ -65,7 +65,7 @@ public static class Application
                                                  rollingInterval: RollingInterval.Day,
                                                  shared: true))));
         })
-        .ConfigureAppConfiguration(builder =>
+        .ConfigureAppConfiguration((context, builder) =>
         {
             builder
             .SetBasePath(Path.Combine(AppContext.BaseDirectory, "Resources"))
@@ -75,8 +75,12 @@ public static class Application
             .AddJsonFile("CommandExamples.json", true, true)
             .AddJsonFile("Manuals.json", true, true)
             .AddJsonFile("Favorites.json", true, true)
-            .AddUserSecrets<Program>(false)
             .Build();
+
+            if (context.HostingEnvironment.IsDevelopment())
+                builder.AddUserSecrets<Program>(false);
+            else
+                builder.AddEnvironmentVariables("BOT_");
         })
         .ConfigureDiscordHost((context, discordConfig) =>
         {
@@ -88,7 +92,10 @@ public static class Application
                 DefaultRetryMode = RetryMode.AlwaysRetry
             };
 
-            discordConfig.Token = context.Configuration["Tokens:DiscordBot"];
+            if (context.HostingEnvironment.IsDevelopment())
+                discordConfig.Token = context.Configuration["Tokens:DiscordBot"];
+            else
+                discordConfig.Token = Environment.GetEnvironmentVariable("DiscordToken") ?? throw new InvalidOperationException("Token not found");
         })
         .UseCommandService((context, commandServicesConfig) =>
         {

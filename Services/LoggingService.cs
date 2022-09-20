@@ -25,14 +25,12 @@ public class LoggingService
 
 
     private readonly BotContext _db;
-    private readonly DiscordSocketClient _client;
     private readonly CommandService _commandService;
     private readonly Discord.Interactions.InteractionService _interactionService;
 
 
-    public LoggingService(DiscordSocketClient client, CommandService commandService, Discord.Interactions.InteractionService interactionService, BotContext db)
+    public LoggingService(CommandService commandService, Discord.Interactions.InteractionService interactionService, BotContext db)
     {
-        _client = client;
         _commandService = commandService;
         _interactionService = interactionService;
 
