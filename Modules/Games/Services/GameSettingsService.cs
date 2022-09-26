@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Infrastructure.Data.Entities.Games.Settings;
 using Microsoft.EntityFrameworkCore;
@@ -28,12 +29,17 @@ public class GameSettingsService<TSettings> : IGameSettingsService<TSettings> wh
 
     protected virtual async Task<TSettings> CreateSettingsAsync(DbSocketCommandContext context)
     {
+        var server = await context.Db.Servers.FindAsync(context.Guild.Id);
+
+        ArgumentNullException.ThrowIfNull(server);
+
         TSettings settings = new()
         {
-            ServerId = context.Guild.Id
+            Server = server,
+            ServerId = server.Id
         };
 
-        context.Db.Set<TSettings>().Add(settings);
+        context.Db.Add(settings);
 
         await context.Db.SaveChangesAsync();
 
